@@ -4,7 +4,7 @@ plugins {
 
 ext {
     // The packageVariant defines the bootstrap variant that will be included in the app APK.
-    // This must be supported by com.termux.shared.termux.TermuxBootstrap.PackageVariant or app will
+    // This must be supported by com.involvex.termux_app.shared.termux.TermuxBootstrap.PackageVariant or app will
     // crash at startup.
     // Bootstrap of a different variant must not be manually installed by the user after app installation
     // by replacing $PREFIX since app code is dependant on the variant used to build the APK.
@@ -13,7 +13,7 @@ ext {
 }
 
 android {
-    namespace "com.termux"
+    namespace "com.involvex.termux_app"
 
     compileSdkVersion project.properties.compileSdkVersion.toInteger()
     ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: project.properties.ndkVersion
@@ -41,6 +41,7 @@ android {
     }
 
     defaultConfig {
+        applicationId "com.involvex.termux_app"
         minSdkVersion project.properties.minSdkVersion.toInteger()
         targetSdkVersion project.properties.targetSdkVersion.toInteger()
         versionCode 118
@@ -51,7 +52,7 @@ android {
 
         buildConfigField "String", "TERMUX_PACKAGE_VARIANT", "\"" + project.ext.packageVariant + "\"" // Used by TermuxApplication class
 
-        manifestPlaceholders.TERMUX_PACKAGE_NAME = "com.termux"
+        manifestPlaceholders.TERMUX_PACKAGE_NAME = "com.involvex.termux_app"
         manifestPlaceholders.TERMUX_APP_NAME = "Termux"
         manifestPlaceholders.TERMUX_API_APP_NAME = "Termux:API"
         manifestPlaceholders.TERMUX_BOOT_APP_NAME = "Termux:Boot"
@@ -128,21 +129,26 @@ android {
         }
     }
 
-    applicationVariants.all { variant ->
-        variant.outputs.all { output ->
-            if (variant.buildType.name == "debug") {
-                def abi = output.getFilter(com.android.build.OutputFile.ABI)
-                outputFileName = new File("termux-app_" + (apkVersionTag ? apkVersionTag : project.ext.packageVariant + "-" + "debug") + "_" + (abi ? abi : "universal") + ".apk")
-            } else if (variant.buildType.name == "release") {
-                def abi = output.getFilter(com.android.build.OutputFile.ABI)
-                outputFileName = new File("termux-app_" + (apkVersionTag ? apkVersionTag : project.ext.packageVariant + "-" + "release") + "_" + (abi ? abi : "universal") + ".apk")
-            }
-        }
-    }
-
     buildFeatures {
         buildConfig true
     }
+}
+
+androidComponents {
+    onVariants(selector().all(), { variant ->
+        def apkVersionTagLocal = System.getenv("TERMUX_APK_VERSION_TAG") ?: ""
+        variant.outputs.forEach { output ->
+            def abi = output.filters.find { it.filterType.name() == 'ABI' }?.identifier
+            def buildTypeName = variant.buildType
+            def packageVariant = project.ext.packageVariant
+            def apkName = "termux-app_" + (apkVersionTagLocal ? apkVersionTagLocal : packageVariant + "-" + buildTypeName) + "_" + (abi ? abi : "universal") + ".apk"
+            output.outputFileName.set(apkName)
+        }
+    })
+}
+
+tasks.withType(JavaCompile).configureEach {
+    dependsOn(downloadBootstraps)
 }
 
 dependencies {
@@ -236,8 +242,4 @@ task downloadBootstraps() {
     }
 }
 
-afterEvaluate {
-    android.applicationVariants.all { variant ->
-        variant.javaCompileProvider.get().dependsOn(downloadBootstraps)
-    }
-}
+// Removed afterEvaluate with applicationVariants migration
