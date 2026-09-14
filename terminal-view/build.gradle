@@ -2,7 +2,7 @@ apply plugin: 'com.android.library'
 apply plugin: 'maven-publish'
 
 android {
-    namespace "com.involvex.termux_app.view"
+    namespace "com.invapp.view"
     compileSdkVersion project.properties.compileSdkVersion.toInteger()
 
     dependencies {
@@ -52,7 +52,7 @@ afterEvaluate {
             // Creates a Maven publication called "release".
             release(MavenPublication) {
                 from components.default
-                groupId = 'com.involvex.termux_app'
+                groupId = 'com.invapp'
                 artifactId = 'terminal-view'
                 version = '0.118.0'
                 artifact(sourceJar)

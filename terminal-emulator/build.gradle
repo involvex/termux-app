@@ -2,7 +2,7 @@ apply plugin: 'com.android.library'
 apply plugin: 'maven-publish'
 
 android {
-    namespace "com.involvex.termux_app.emulator"
+    namespace "com.invapp.emulator"
 
     compileSdkVersion project.properties.compileSdkVersion.toInteger()
     ndkVersion = System.getenv("JITPACK_NDK_VERSION") ?: project.properties.ndkVersion
@@ -75,7 +75,7 @@ afterEvaluate {
             // Creates a Maven publication called "release".
             release(MavenPublication) {
                 from components.default
-                groupId = 'com.involvex.termux_app'
+                groupId = 'com.invapp'
                 artifactId = 'terminal-emulator'
                 version = '0.118.0'
                 artifact(sourceJar)
