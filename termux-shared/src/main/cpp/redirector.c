@@ -27,6 +27,13 @@ static const char* OLD_PKG = "com.termux";
 static const char* NEW_PKG = "com.involvex.termux_app";
 /* Lengths derived at runtime — do not hardcode (easy to get wrong). */
 
+/* Derived paths for SSH/login sessions (sshd clears LD_* in the child env). */
+static const char* NEW_HOME = "/data/data/com.involvex.termux_app/files/home";
+static const char* NEW_USR = "/data/data/com.involvex.termux_app/files/usr";
+static const char* NEW_LIB = "/data/data/com.involvex.termux_app/files/usr/lib";
+static const char* REDIRECTOR_SO =
+    "/data/data/com.involvex.termux_app/files/usr/lib/libinvapp-redirector.so";
+
 __attribute__((constructor))
 static void redirector_init(void) {
     LOGI("loaded; redirecting com.termux → %s", NEW_PREFIX);
@@ -142,6 +149,191 @@ static void rewrite_termux_paths_in_script(const char* path) {
     free(out);
 }
 
+/*
+ * Replace every occurrence of {@code from} with {@code to} in {@code src}.
+ * Caller owns the returned buffer (or gets NULL on OOM / no-op when unchanged
+ * is not requested — always returns a new string when src != NULL).
+ */
+static char* replace_all_alloc(const char* src, const char* from, const char* to) {
+    if (!src) return NULL;
+    size_t from_len = strlen(from);
+    size_t to_len = strlen(to);
+    if (from_len == 0) {
+        char* copy = (char*)malloc(strlen(src) + 1);
+        if (copy) memcpy(copy, src, strlen(src) + 1);
+        return copy;
+    }
+
+    size_t count = 0;
+    for (const char* p = src; (p = strstr(p, from)) != NULL; p += from_len) {
+        count++;
+    }
+    size_t src_len = strlen(src);
+    size_t out_len = src_len + count * (to_len - from_len);
+    char* out = (char*)malloc(out_len + 1);
+    if (!out) return NULL;
+
+    char* dst = out;
+    const char* cursor = src;
+    for (;;) {
+        const char* hit = strstr(cursor, from);
+        if (!hit) {
+            memcpy(dst, cursor, strlen(cursor) + 1);
+            break;
+        }
+        size_t keep = (size_t)(hit - cursor);
+        memcpy(dst, cursor, keep);
+        dst += keep;
+        memcpy(dst, to, to_len);
+        dst += to_len;
+        cursor = hit + from_len;
+    }
+    return out;
+}
+
+static int env_key_is(const char* entry, const char* key) {
+    size_t key_len = strlen(key);
+    return strncmp(entry, key, key_len) == 0 && entry[key_len] == '=';
+}
+
+static int envp_has_key(char* const* envp, const char* key) {
+    if (!envp) return 0;
+    for (size_t i = 0; envp[i]; i++) {
+        if (env_key_is(envp[i], key)) return 1;
+    }
+    return 0;
+}
+
+/*
+ * sshd builds a clean session environment (often without LD_LIBRARY_PATH /
+ * LD_PRELOAD and with HOME=/data/data/com.termux/...). Inject / rewrite those
+ * here so the child linker can resolve Termux libs under our real prefix.
+ * Allocations intentionally leak on success — execve replaces the process image.
+ */
+static char** rewrite_envp_for_exec(char* const envp[]) {
+    size_t count = 0;
+    if (envp) {
+        while (envp[count]) count++;
+    }
+
+    int need_home = !envp_has_key(envp, "HOME");
+    int need_prefix = !envp_has_key(envp, "PREFIX");
+    int need_ld_lib = !envp_has_key(envp, "LD_LIBRARY_PATH");
+    int need_ld_pre = !envp_has_key(envp, "LD_PRELOAD");
+    size_t extra = (size_t)(need_home + need_prefix + need_ld_lib + need_ld_pre);
+
+    char** out = (char**)malloc((count + extra + 1) * sizeof(char*));
+    if (!out) return (char**)envp;
+
+    size_t oi = 0;
+    for (size_t i = 0; i < count; i++) {
+        const char* entry = envp[i];
+        if (env_key_is(entry, "LD_LIBRARY_PATH")) {
+            const char* val = entry + strlen("LD_LIBRARY_PATH=");
+            char* rewritten = replace_all_alloc(val, OLD_PKG, NEW_PKG);
+            if (!rewritten) {
+                out[oi++] = (char*)entry;
+                continue;
+            }
+            int has_new = strstr(rewritten, NEW_LIB) != NULL;
+            size_t nlen = strlen(NEW_LIB) + 1 + strlen(rewritten) + 1
+                + strlen("LD_LIBRARY_PATH=");
+            char* merged = (char*)malloc(nlen + 8);
+            if (!merged) {
+                free(rewritten);
+                out[oi++] = (char*)entry;
+                continue;
+            }
+            if (has_new) {
+                snprintf(merged, nlen + 8, "LD_LIBRARY_PATH=%s", rewritten);
+            } else if (rewritten[0]) {
+                snprintf(merged, nlen + 8, "LD_LIBRARY_PATH=%s:%s", NEW_LIB, rewritten);
+            } else {
+                snprintf(merged, nlen + 8, "LD_LIBRARY_PATH=%s", NEW_LIB);
+            }
+            free(rewritten);
+            out[oi++] = merged;
+            continue;
+        }
+        if (env_key_is(entry, "LD_PRELOAD")) {
+            const char* val = entry + strlen("LD_PRELOAD=");
+            char* rewritten = replace_all_alloc(val, OLD_PKG, NEW_PKG);
+            if (!rewritten) {
+                out[oi++] = (char*)entry;
+                continue;
+            }
+            int has_red = strstr(rewritten, "libinvapp-redirector.so") != NULL;
+            size_t nlen = strlen(REDIRECTOR_SO) + 1 + strlen(rewritten)
+                + strlen("LD_PRELOAD=") + 8;
+            char* merged = (char*)malloc(nlen);
+            if (!merged) {
+                free(rewritten);
+                out[oi++] = (char*)entry;
+                continue;
+            }
+            if (has_red) {
+                snprintf(merged, nlen, "LD_PRELOAD=%s", rewritten);
+            } else if (rewritten[0]) {
+                snprintf(merged, nlen, "LD_PRELOAD=%s:%s", REDIRECTOR_SO, rewritten);
+            } else {
+                snprintf(merged, nlen, "LD_PRELOAD=%s", REDIRECTOR_SO);
+            }
+            free(rewritten);
+            out[oi++] = merged;
+            continue;
+        }
+        if (strstr(entry, OLD_PKG)) {
+            char* rewritten = replace_all_alloc(entry, OLD_PKG, NEW_PKG);
+            out[oi++] = rewritten ? rewritten : (char*)entry;
+            continue;
+        }
+        out[oi++] = (char*)entry;
+    }
+
+    if (need_home) {
+        size_t n = strlen("HOME=") + strlen(NEW_HOME) + 1;
+        char* e = (char*)malloc(n);
+        if (e) {
+            snprintf(e, n, "HOME=%s", NEW_HOME);
+            out[oi++] = e;
+        }
+    }
+    if (need_prefix) {
+        size_t n = strlen("PREFIX=") + strlen(NEW_USR) + 1;
+        char* e = (char*)malloc(n);
+        if (e) {
+            snprintf(e, n, "PREFIX=%s", NEW_USR);
+            out[oi++] = e;
+        }
+    }
+    if (need_ld_lib) {
+        size_t n = strlen("LD_LIBRARY_PATH=") + strlen(NEW_LIB) + 1;
+        char* e = (char*)malloc(n);
+        if (e) {
+            snprintf(e, n, "LD_LIBRARY_PATH=%s", NEW_LIB);
+            out[oi++] = e;
+        }
+    }
+    if (need_ld_pre) {
+        size_t n = strlen("LD_PRELOAD=") + strlen(REDIRECTOR_SO) + 1;
+        char* e = (char*)malloc(n);
+        if (e) {
+            snprintf(e, n, "LD_PRELOAD=%s", REDIRECTOR_SO);
+            out[oi++] = e;
+        }
+    }
+    out[oi] = NULL;
+    return out;
+}
+
+int chdir(const char* path) {
+    char buf[4096];
+    const char* redirected = redirect_path(path, buf, sizeof(buf));
+    static int (*orig_chdir)(const char*);
+    if (!orig_chdir) orig_chdir = dlsym(RTLD_NEXT, "chdir");
+    return orig_chdir(redirected);
+}
+
 int open(const char* path, int flags, ...) {
     char buf[4096];
     const char* redirected = redirect_path(path, buf, sizeof(buf));
@@ -229,18 +421,22 @@ int execve(const char* filename, char* const argv[], char* const envp[]) {
     char buf[4096];
     const char* redirected = redirect_path(filename, buf, sizeof(buf));
     rewrite_termux_paths_in_script(redirected);
+    char** new_envp = rewrite_envp_for_exec(envp);
     static int (*orig_execve)(const char*, char* const[], char* const[]);
     if (!orig_execve) orig_execve = dlsym(RTLD_NEXT, "execve");
-    return orig_execve(redirected, argv, envp);
+    return orig_execve(redirected, argv, new_envp ? new_envp : (char**)envp);
 }
 
 int execv(const char* path, char* const argv[]) {
     char buf[4096];
     const char* redirected = redirect_path(path, buf, sizeof(buf));
     rewrite_termux_paths_in_script(redirected);
-    static int (*orig_execv)(const char*, char* const[]);
-    if (!orig_execv) orig_execv = dlsym(RTLD_NEXT, "execv");
-    return orig_execv(redirected, argv);
+    /* execv uses environ; rewrite via execve so SSH/login get LD_* / HOME. */
+    extern char** environ;
+    char** new_envp = rewrite_envp_for_exec(environ);
+    static int (*orig_execve)(const char*, char* const[], char* const[]);
+    if (!orig_execve) orig_execve = dlsym(RTLD_NEXT, "execve");
+    return orig_execve(redirected, argv, new_envp ? new_envp : environ);
 }
 
 int execvp(const char* file, char* const argv[]) {

@@ -168,8 +168,107 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
         patchBinaryWrapperForRedirector(prefix + "/lib/apt/methods/http", false);
         // Keep redirector loaded in dpkg so execve can rewrite maintainer-script shebangs.
         patchBinaryWrapperForRedirector(prefix + "/bin/dpkg", false);
+        // sshd clears LD_* for sessions; keep preload on the daemon so execve can reinject.
+        patchBinaryWrapperForRedirector(prefix + "/bin/sshd", false);
 
         fixDpkgMaintainerScripts(prefix);
+        fixStockTermuxPathsInPrefixConfigs(prefix);
+        installSshSessionEnvOverrides(prefix);
+    }
+
+    /**
+     * Rewrite leftover {@code com.termux} paths in prefix text configs (profile,
+     * sshd_config, bashrc, …) so login shells and OpenSSH do not reference the
+     * inaccessible stock Termux data directory.
+     */
+    private synchronized static void fixStockTermuxPathsInPrefixConfigs(String prefix) {
+        String[] relativePaths = new String[] {
+            "etc/profile",
+            "etc/bash.bashrc",
+            "etc/ssh/sshd_config",
+            "etc/ssh/ssh_config",
+        };
+        String oldPkg = "com.termux";
+        String newPkg = TermuxConstants.TERMUX_PACKAGE_NAME;
+        int fixed = 0;
+        for (String relative : relativePaths) {
+            File file = new File(prefix + "/" + relative);
+            if (!file.isFile()) {
+                continue;
+            }
+            StringBuilder contents = new StringBuilder();
+            Error readError = FileUtils.readTextFromFile(relative, file.getAbsolutePath(),
+                Charset.defaultCharset(), contents, true);
+            if (readError != null) {
+                continue;
+            }
+            String text = contents.toString();
+            if (!text.contains(oldPkg)) {
+                continue;
+            }
+            String patched = text.replace(oldPkg, newPkg);
+            Error writeError = FileUtils.writeTextToFile(relative, file.getAbsolutePath(),
+                Charset.defaultCharset(), patched, false);
+            if (writeError != null) {
+                Logger.logErrorExtended(LOG_TAG, "Failed to fix " + relative + "\n" + writeError);
+                continue;
+            }
+            fixed++;
+        }
+        // profile.d snippets ship with hardcoded stock paths too.
+        File profileD = new File(prefix + "/etc/profile.d");
+        File[] snippets = profileD.listFiles();
+        if (snippets != null) {
+            for (File file : snippets) {
+                if (!file.isFile() || !file.getName().endsWith(".sh")) {
+                    continue;
+                }
+                StringBuilder contents = new StringBuilder();
+                Error readError = FileUtils.readTextFromFile(file.getName(), file.getAbsolutePath(),
+                    Charset.defaultCharset(), contents, true);
+                if (readError != null) {
+                    continue;
+                }
+                String text = contents.toString();
+                if (!text.contains(oldPkg)) {
+                    continue;
+                }
+                Error writeError = FileUtils.writeTextToFile(file.getName(), file.getAbsolutePath(),
+                    Charset.defaultCharset(), text.replace(oldPkg, newPkg), false);
+                if (writeError == null) {
+                    fixed++;
+                }
+            }
+        }
+        if (fixed > 0) {
+            Logger.logInfo(LOG_TAG, "Rewrote com.termux paths in " + fixed
+                + " prefix config file(s)");
+        }
+    }
+
+    /**
+     * Drop-in sshd config so sessions get a usable HOME/PREFIX even when clients
+     * do not forward environment. LD_* is still reinjected by the redirector on
+     * execve; SetEnv covers HOME/PREFIX for tools that only read those.
+     */
+    private synchronized static void installSshSessionEnvOverrides(String prefix) {
+        String confDir = prefix + "/etc/ssh/sshd_config.d";
+        FileUtils.createDirectoryFile(confDir);
+        String home = TermuxConstants.TERMUX_HOME_DIR_PATH;
+        String usr = TermuxConstants.TERMUX_PREFIX_DIR_PATH;
+        String conf = ""
+            + "# Managed by termux-app fork — OpenSSH session paths for renamed package id\n"
+            + "SetEnv HOME=" + home + "\n"
+            + "SetEnv PREFIX=" + usr + "\n"
+            + "SetEnv PATH=" + usr + "/bin\n"
+            + "SetEnv LD_LIBRARY_PATH=" + usr + "/lib\n"
+            + "SetEnv LD_PRELOAD=" + REDIRECTOR_PREFIX_LIB_PATH + "\n";
+        String confPath = confDir + "/00invapp-session-env.conf";
+        Error err = FileUtils.writeTextToFile("sshd_config.d/00invapp-session-env.conf", confPath,
+            Charset.defaultCharset(), conf, false);
+        if (err != null) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to write sshd session env overrides\n" + err);
+        }
     }
 
     /**
@@ -240,10 +339,14 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
 
         String markerBegin = "# --- invapp-redirector LD_PRELOAD (managed by app) ---";
         String markerEnd = "# --- end invapp-redirector LD_PRELOAD ---";
+        String libDir = TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH;
         String preloadExport = "export LD_PRELOAD=\"" + REDIRECTOR_PREFIX_LIB_PATH
             + "${LD_PRELOAD:+:$LD_PRELOAD}\"\n";
+        String libPathExport = "export LD_LIBRARY_PATH=\"" + libDir
+            + "${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"\n";
         String injectBlock = markerBegin + "\n"
             + "if [ -f \"" + REDIRECTOR_PREFIX_LIB_PATH + "\" ]; then\n"
+            + "\t" + libPathExport
             + "\t" + preloadExport
             + "fi\n"
             + markerEnd + "\n";
@@ -348,9 +451,13 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
 
         String markerBegin = "# --- invapp-redirector LD_PRELOAD (managed by app) ---";
         String markerEnd = "# --- end invapp-redirector LD_PRELOAD ---";
+        String libDir = TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH;
         String injectBlock = markerBegin + "\n"
             + "if [ -f \"" + REDIRECTOR_PREFIX_LIB_PATH + "\" ]; then\n"
+            + "\texport LD_LIBRARY_PATH=\"" + libDir + "${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"\n"
             + "\texport LD_PRELOAD=\"" + REDIRECTOR_PREFIX_LIB_PATH + "${LD_PRELOAD:+:$LD_PRELOAD}\"\n"
+            + "\texport HOME=\"" + TermuxConstants.TERMUX_HOME_DIR_PATH + "\"\n"
+            + "\texport PREFIX=\"" + TermuxConstants.TERMUX_PREFIX_DIR_PATH + "\"\n"
             + "fi\n"
             + markerEnd + "\n";
 
