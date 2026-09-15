@@ -681,6 +681,9 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
                 TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/tls/cert.pem");
             environment.put("NODE_EXTRA_CA_CERTS",
                 TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/tls/cert.pem");
+            // Do NOT set npm_config_platform/os here — npm treats npm_config_* as
+            // config keys and warns "Unknown env config platform". Android platform
+            // hints stay in the Bun wrapper only (TermuxBunInstaller).
         }
 
         return environment;
@@ -690,9 +693,13 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
     @NonNull
     @Override
     public String getDefaultWorkingDirectoryPath() {
-        File shared = new File(TermuxConstants.TERMUX_HOME_DIR_PATH, "storage/shared");
-        if (shared.isDirectory() && shared.canRead()) {
-            return shared.getAbsolutePath();
+        File repos = new File(TermuxConstants.TERMUX_HOME_DIR_PATH, "repos");
+        if (!repos.exists()) {
+            //noinspection ResultOfMethodCallIgnored
+            repos.mkdirs();
+        }
+        if (repos.isDirectory() && repos.canRead()) {
+            return repos.getAbsolutePath();
         }
         return TermuxConstants.TERMUX_HOME_DIR_PATH;
     }

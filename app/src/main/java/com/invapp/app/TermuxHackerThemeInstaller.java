@@ -16,13 +16,16 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Installs the default InvApp hacker theme files under {@code ~/.termux/}
- * when they are missing (does not overwrite user customizations).
+ * Installs / upgrades the InvApp hacker theme under {@code ~/.termux/}.
+ * Overwrites the known-broken v1 palette (blue slots remapped to green, which
+ * made {@code ls} directory names render as solid green bars).
  */
 public final class TermuxHackerThemeInstaller {
 
     private static final String LOG_TAG = "TermuxHackerThemeInstaller";
     private static final String COLORS_ASSET = "colors.properties";
+    /** Marker in asset / installed file for the fixed palette. */
+    private static final String COLORS_VERSION_MARK = "v2: color4/color12";
 
     private TermuxHackerThemeInstaller() {}
 
@@ -38,7 +41,7 @@ public final class TermuxHackerThemeInstaller {
 
     private static void installColorsProperties(@NonNull Context context) {
         File colorsFile = TermuxConstants.TERMUX_COLOR_PROPERTIES_FILE;
-        if (colorsFile.isFile() && colorsFile.length() > 0) {
+        if (colorsFile.isFile() && colorsFile.length() > 0 && !needsColorsUpgrade(colorsFile)) {
             return;
         }
         try (InputStream in = context.getAssets().open(COLORS_ASSET);
@@ -49,9 +52,32 @@ public final class TermuxHackerThemeInstaller {
                 out.write(buffer, 0, read);
             }
             out.flush();
-            Logger.logInfo(LOG_TAG, "Installed default hacker colors.properties");
+            Logger.logInfo(LOG_TAG, "Installed hacker colors.properties");
         } catch (Exception e) {
             Logger.logStackTraceWithMessage(LOG_TAG, "Failed writing colors.properties", e);
+        }
+    }
+
+    /** True for missing v2 mark or the old green-as-blue InvApp palette. */
+    private static boolean needsColorsUpgrade(@NonNull File colorsFile) {
+        try {
+            StringBuilder contents = new StringBuilder();
+            Error readError = FileUtils.readTextFromFile(
+                "colors.properties", colorsFile.getAbsolutePath(), StandardCharsets.UTF_8,
+                contents, false);
+            if (readError != null) {
+                return false;
+            }
+            String text = contents.toString();
+            if (text.contains(COLORS_VERSION_MARK)) {
+                return false;
+            }
+            // Stock InvApp v1 or any file that still maps "blue" to matrix green.
+            return text.contains("InvApp Hacker theme")
+                || text.contains("color4=#00AA55")
+                || text.contains("color12=#39FF14");
+        } catch (Exception e) {
+            return false;
         }
     }
 

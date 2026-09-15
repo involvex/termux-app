@@ -47,6 +47,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="false"
         android:theme="@style/Theme.TermuxApp.DayNight.DarkActionBar"
+        android:networkSecurityConfig="@xml/network_security_config"
         tools:targetApi="m">
 
         <activity
@@ -101,6 +102,15 @@
             android:exported="true"
             android:label="@string/title_activity_termux_settings"
             android:theme="@style/Theme.TermuxApp.DayNight.NoActionBar" />
+
+        <activity
+            android:name=".app.activities.LocalhostPreviewActivity"
+            android:exported="false"
+            android:label="@string/title_localhost_preview"
+            android:parentActivityName=".app.TermuxActivity"
+            android:theme="@style/Theme.TermuxApp.DayNight.DarkActionBar"
+            android:resizeableActivity="true"
+            tools:targetApi="n" />
 
         <activity
             android:name=".shared.activities.ReportActivity"

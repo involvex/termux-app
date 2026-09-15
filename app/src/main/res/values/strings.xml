@@ -86,6 +86,13 @@
     <string name="action_toggle_keep_screen_on">Keep screen on</string>
     <string name="action_open_help">Help</string>
     <string name="action_open_settings">Settings</string>
+    <string name="action_open_preview">Preview</string>
+    <string name="title_localhost_preview">Localhost Preview</string>
+    <string name="hint_localhost_port">Port (e.g. 5000)</string>
+    <string name="action_preview_go">Go</string>
+    <string name="action_preview_reload">Reload</string>
+    <string name="msg_preview_only_localhost">Preview only allows localhost / 127.0.0.1</string>
+    <string name="msg_preview_invalid_port">Enter a port between 1 and 65535</string>
 
     <string name="action_report_issue">Report Issue</string>
     <string name="msg_generating_report">Generating Report</string>

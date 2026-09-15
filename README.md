@@ -7,6 +7,24 @@
 [![Termux library releases at Jitpack](https://jitpack.io/v/termux/termux-app.svg)](https://jitpack.io/#termux/termux-app)
 
 
+## This fork (Involvex / Terminal Dev)
+
+This repository is a **fork** of [termux/termux-app](https://github.com/termux/termux-app) packaged as `com.involvex.termux_app`, aimed at a **phone + PC** terminal workflow: clone under `~/repos`, `bun install` / `bun run`, git push/pull with your desktop, and preview local dev servers in-app.
+
+**Working on this fork:**
+
+- **apt / OpenSSH** — path redirector maps hardcoded `/data/data/com.termux` to this package.
+- **Bun 1.4.2 (Android)** — embedded; real binary at `$PREFIX/libexec/bun`, shim at `$PREFIX/bin/bun` (clears `LD_PRELOAD`, sets OpenSSL + Android npm platform hints).
+- **Default session cwd** — `~/repos` (executable). Prefer this over `~/storage/shared` for Node/Bun projects (shared storage is **noexec**).
+- **Localhost Preview** — left drawer → **Preview** opens `http://127.0.0.1:<port>` (e.g. Vite `3000`, `opencode serve --port 5000`).
+- **Termux:API** — use the matching companion with the same `sharedUserId` / signing as this app.
+
+Do **not** run `curl -fsSL https://bun.sh/install | bash` inside this app — that installs a glibc Linux binary and fails with signal 31 / “required file not found”.
+
+Product roadmap: [ROADMAP.md](ROADMAP.md). Agent notes: [AGENTS.md](AGENTS.md).
+
+***
+
 [Termux](https://termux.dev) is an Android terminal application and Linux environment.
 
 Note that this repository is for the app itself (the user interface and the terminal emulation). For the packages installable inside the app, see [termux/termux-packages](https://github.com/termux/termux-packages).

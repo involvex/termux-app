@@ -25,6 +25,50 @@ The project is organized as follows:
 - **NDK**: Native code using Android NDK for terminal emulation
 - **Dependencies**: Google Material Components, Lifecycle, ViewPager, Guava, Markwon (markdown)
 
+## This fork (`com.involvex.termux_app`)
+
+This tree is a renamed Termux fork for **Terminal Dev**: develop on PC, continue on phone.
+
+### Runtime layout
+
+| Piece | Path / behavior |
+|-------|-----------------|
+| Package id | `com.involvex.termux_app` (`sharedUserId` still `com.invapp`) |
+| Path redirector | `LD_PRELOAD=$PREFIX/lib/libinvapp-redirector.so` for apt/SSH/node hardcoded `com.termux` paths |
+| Bun real binary | `$PREFIX/libexec/bun` (official `bun-linux-*-android.zip`, currently **1.4.2**) |
+| Bun wrapper | `$PREFIX/bin/bun` → `LD_PRELOAD= exec` real binary + OPENSSL + `npm_config_platform=android` |
+| bunx | `$PREFIX/bin/bunx` → `bun x` via the wrapper (no per-package mapping) |
+| Default cwd | `~/repos` (exec-capable). `~/storage/shared` is browse/sync only (**noexec**) |
+| Preview | Drawer **Preview** → `LocalhostPreviewActivity` for `http://127.0.0.1:<port>` |
+
+### Android / Bun pitfalls (do not “fix” with more wrappers)
+
+- **`Unknown signal 31` (SIGSYS)** — usually glibc/Linux Bun, `LD_PRELOAD` + Bun, or optional `linux-*` native bindings (e.g. `@rolldown/binding-linux-arm-gnueabihf`). Use the bundled Android Bun; never `curl … bun.sh/install \| bash`. The `bin/bun` shim injects `--os=android --cpu=arm64` on `install`/`add`/`create`. Windows lockfiles can still pin linux natives — delete `node_modules` + lock and reinstall on phone.
+- **`ls` folder names as solid green bars** — hacker theme v1 remapped ANSI blue→green (same as fg). Fixed in theme v2 (cyan/blue slots). New session after upgrade; or replace `~/.termux/colors.properties`.
+- **`Permission denied` on `tsc` / package bins** — project is under shared storage (`/storage/emulated/0`). Keep runnable projects in `~/repos`.
+- **OpenSSL / node looking at `com.termux`** — shell sets `OPENSSL_CONF` / `SSL_CERT_FILE` to this prefix; redirector covers other hardcoded paths for non-Bun tools.
+
+### Bun build notes
+
+- Gradle task `downloadBunBootstraps` fetches Android zips into `app/src/main/cpp/`.
+- NDK module `libinvapp-bun` embeds the zip via `.incbin`; `TermuxBunInstaller` extracts on app start / bootstrap.
+- Prefer `./gradlew :app:assembleDebug` after changing Bun version or `bun-bootstrap*`.
+
+### Mobile ↔ PC workflow
+
+```bash
+# On phone (new session starts in ~/repos)
+cd ~/repos
+git clone <repo> && cd <repo>
+bun install
+bun run dev          # or bun run android / build
+# Drawer → Preview → port 3000 / 5000 / 8081
+```
+
+On PC: same git remote — push/pull; no special Termux package sync required.
+
+See [ROADMAP.md](ROADMAP.md) for Preview / AI CLI phases.
+
 ## Useful Commands
 
 ### Git Operations

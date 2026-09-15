@@ -41,6 +41,7 @@ import com.invapp.shared.data.DataUtils;
 import com.invapp.shared.termux.TermuxConstants;
 import com.invapp.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY;
 import com.invapp.app.activities.HelpActivity;
+import com.invapp.app.activities.LocalhostPreviewActivity;
 import com.invapp.app.activities.SettingsActivity;
 import com.invapp.shared.termux.crash.TermuxCrashUtils;
 import com.invapp.shared.termux.settings.preferences.TermuxAppSharedPreferences;
@@ -569,6 +570,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         settingsButton.setOnClickListener(v -> {
             ActivityUtils.startActivity(this, new Intent(this, SettingsActivity.class));
         });
+        View previewButton = findViewById(R.id.preview_button);
+        if (previewButton != null) {
+            previewButton.setOnClickListener(v -> {
+                getDrawer().closeDrawers();
+                ActivityUtils.startActivity(this,
+                    new Intent(this, LocalhostPreviewActivity.class));
+            });
+        }
     }
 
     private void setNewSessionButtonView() {

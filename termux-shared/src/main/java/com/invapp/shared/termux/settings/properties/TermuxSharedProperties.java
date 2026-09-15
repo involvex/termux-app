@@ -513,7 +513,7 @@ public abstract class TermuxSharedProperties {
         if (workDir.exists() && workDir.isDirectory() && workDir.canRead()) {
             return preferred;
         }
-        // Prefer ~/storage/shared; fall back to $HOME if setup-storage was never run.
+        // Prefer ~/repos; fall back to $HOME if missing.
         File home = new File(TermuxConstants.TERMUX_HOME_DIR_PATH);
         if (!preferred.equals(TermuxConstants.TERMUX_HOME_DIR_PATH)
                 && home.exists() && home.isDirectory() && home.canRead()) {

@@ -16,10 +16,15 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * Installs the official Android Bun binary into {@code $PREFIX/bin/bun}.
+ * Installs the official Android Bun binary and a single {@code $PREFIX/bin/bun}
+ * wrapper.
  *
- * <p>Uses oven-sh {@code bun-linux-*-android.zip} artifacts (Bionic PIE), not the
- * glibc Linux builds — those die with SIGSYS (signal 31) on Android.
+ * <p>Real binary lives at {@code $PREFIX/libexec/bun}. The {@code bin/bun}
+ * wrapper clears {@code LD_PRELOAD} (path redirector breaks Bun / optional
+ * native installs → SIGSYS 31) and sets OPENSSL + npm/bun platform hints.
+ *
+ * <p>Uses oven-sh {@code bun-linux-*-android.zip} (Bionic PIE), not glibc Linux
+ * builds.
  */
 public final class TermuxBunInstaller {
 
@@ -28,11 +33,13 @@ public final class TermuxBunInstaller {
     /** Must match the zips downloaded in {@code app/build.gradle}. */
     public static final String BUNDLED_BUN_VERSION = "1.4.2";
 
+    private static final String LIBEXEC_REL = "libexec/bun";
+
     private TermuxBunInstaller() {}
 
     /**
      * Extract bundled Bun into the Termux prefix when missing or outdated.
-     * Safe to call on every app start; no-ops when already current.
+     * Safe to call on every app start; refreshes wrappers even when current.
      */
     public static void installIfNeeded(@NonNull Context context) {
         File binDir = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH);
@@ -41,26 +48,29 @@ public final class TermuxBunInstaller {
             return;
         }
 
-        File bunBin = new File(binDir, "bun");
+        File libexecDir = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, "libexec");
+        File bunReal = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, LIBEXEC_REL);
         File stamp = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH,
             "var/lib/invapp/bun.version");
 
-        if (bunBin.isFile() && bunBin.canExecute() && stamp.isFile()
-                && isAndroidBunBinary(bunBin)) {
+        boolean realOk = bunReal.isFile() && bunReal.canExecute()
+            && isAndroidBunBinary(bunReal);
+        if (realOk && stamp.isFile()) {
             try {
-                String installed = readStamp(stamp);
-                if (BUNDLED_BUN_VERSION.equals(installed)) {
+                if (BUNDLED_BUN_VERSION.equals(readStamp(stamp))) {
                     installShellHelpers();
+                    ensureWorkspaceDirs();
                     return;
                 }
             } catch (Exception ignored) {
                 // Reinstall below.
             }
-        } else if (bunBin.isFile() && !isAndroidBunBinary(bunBin)) {
+        }
+
+        if (bunReal.isFile() && !isAndroidBunBinary(bunReal)) {
             Logger.logWarn(LOG_TAG,
-                "Replacing non-Android Bun at " + bunBin
-                    + " (curl|bash installs glibc linux builds which fail with "
-                    + "'required file not found' / SIGSYS 31)");
+                "Replacing non-Android Bun at " + bunReal
+                    + " (curl|bash glibc builds → required file not found / SIGSYS 31)");
         }
 
         byte[] zipBytes;
@@ -77,7 +87,11 @@ public final class TermuxBunInstaller {
         }
 
         try {
-            File staging = new File(binDir, "bun.new");
+            if (!libexecDir.exists() && !libexecDir.mkdirs()) {
+                Logger.logWarn(LOG_TAG, "Could not create " + libexecDir);
+            }
+
+            File staging = new File(libexecDir, "bun.new");
             if (staging.exists() && !staging.delete()) {
                 Logger.logWarn(LOG_TAG, "Could not delete old staging bun");
             }
@@ -92,7 +106,6 @@ public final class TermuxBunInstaller {
                     if (entry.isDirectory()) {
                         continue;
                     }
-                    // Official layout: bun-linux-*-android/bun
                     if (!name.endsWith("/bun") && !name.equals("bun")) {
                         continue;
                     }
@@ -116,11 +129,18 @@ public final class TermuxBunInstaller {
 
             //noinspection OctalInteger
             Os.chmod(staging.getAbsolutePath(), 0700);
-            if (bunBin.exists() && !bunBin.delete()) {
-                Logger.logWarn(LOG_TAG, "Could not replace existing bun");
+            if (bunReal.exists() && !bunReal.delete()) {
+                Logger.logWarn(LOG_TAG, "Could not replace existing libexec bun");
             }
-            if (!staging.renameTo(bunBin)) {
-                throw new RuntimeException("Failed to move bun into place");
+            if (!staging.renameTo(bunReal)) {
+                throw new RuntimeException("Failed to move bun into libexec");
+            }
+
+            // Remove legacy ELF that used to live at $PREFIX/bin/bun.
+            File legacyBin = new File(binDir, "bun");
+            if (legacyBin.isFile() && isAndroidBunBinary(legacyBin)) {
+                //noinspection ResultOfMethodCallIgnored
+                legacyBin.delete();
             }
 
             File stampDir = stamp.getParentFile();
@@ -133,25 +153,28 @@ public final class TermuxBunInstaller {
             }
 
             Logger.logInfo(LOG_TAG,
-                "Installed Bun " + BUNDLED_BUN_VERSION + " → " + bunBin);
+                "Installed Bun " + BUNDLED_BUN_VERSION + " → " + bunReal);
 
-            ensureDir(new File(TermuxConstants.TERMUX_HOME_DIR_PATH,
-                ".bun/install/cache"));
-            ensureDir(new File(TermuxConstants.TERMUX_HOME_DIR_PATH, ".cache"));
-            ensureDir(new File(TermuxConstants.TERMUX_HOME_DIR_PATH, ".npm"));
-            ensureDir(new File(TermuxConstants.TERMUX_HOME_DIR_PATH, "repos"));
+            ensureWorkspaceDirs();
         } catch (Exception e) {
             Logger.logStackTraceWithMessage(LOG_TAG, "Bun install failed", e);
         }
 
-        // Always refresh helpers (cheap) so curl|bash damage and missing
-        // OPENSSL_CONF workarounds stay applied.
         installShellHelpers();
     }
 
+    private static void ensureWorkspaceDirs() {
+        ensureDir(new File(TermuxConstants.TERMUX_HOME_DIR_PATH,
+            ".bun/install/cache"));
+        ensureDir(new File(TermuxConstants.TERMUX_HOME_DIR_PATH, ".bun/bin"));
+        ensureDir(new File(TermuxConstants.TERMUX_HOME_DIR_PATH, ".cache"));
+        ensureDir(new File(TermuxConstants.TERMUX_HOME_DIR_PATH, ".npm"));
+        ensureDir(new File(TermuxConstants.TERMUX_HOME_DIR_PATH, "repos"));
+    }
+
     /**
-     * Writes small shell helpers into {@code $PREFIX/bin} so Expo scaffolding
-     * works without {@code bunx} hitting SIGSYS / noexec shared-storage paths.
+     * Writes {@code $PREFIX/bin/bun} and {@code bunx} wrappers. No per-package
+     * helpers — all CLIs go through the single shim.
      */
     private static void installShellHelpers() {
         File binDir = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH);
@@ -160,111 +183,117 @@ public final class TermuxBunInstaller {
         }
         String prefix = TermuxConstants.TERMUX_PREFIX_DIR_PATH;
         String home = TermuxConstants.TERMUX_HOME_DIR_PATH;
-        // Force Android bun + openssl; run create-expo under bun (not node shebang).
-        String createExpo = ""
-            + "#!/data/data/com.involvex.termux_app/files/usr/bin/bash\n"
-            + "set -e\n"
+        String bash = prefix + "/bin/bash";
+
+        // Drop obsolete per-package helper if present from earlier builds.
+        File oldCreateExpo = new File(binDir, "create-expo");
+        if (oldCreateExpo.isFile()) {
+            //noinspection ResultOfMethodCallIgnored
+            oldCreateExpo.delete();
+        }
+
+        String bunWrapper = ""
+            + "#!" + bash + "\n"
             + "PREFIX=\"" + prefix + "\"\n"
             + "HOME=\"" + home + "\"\n"
-            + "export PATH=\"$PREFIX/bin:$PATH\"\n"
-            + "export LD_LIBRARY_PATH=\"$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"\n"
-            + "export OPENSSL_CONF=\"$PREFIX/etc/tls/openssl.cnf\"\n"
-            + "export SSL_CERT_FILE=\"$PREFIX/etc/tls/cert.pem\"\n"
-            + "export BUN_INSTALL_CACHE_DIR=\"$HOME/.bun/install/cache\"\n"
-            + "export BUN_TMPDIR=\"$PREFIX/tmp\"\n"
-            + "export TMPDIR=\"$PREFIX/tmp\"\n"
-            + "export npm_config_cache=\"$HOME/.npm\"\n"
-            + "mkdir -p \"$BUN_INSTALL_CACHE_DIR\" \"$HOME/repos\" \"$TMPDIR\" "
-            + "\"$HOME/.local/share/create-expo-runner\"\n"
-            + "case \"$PWD\" in\n"
-            + "  /storage/*|/sdcard/*|*/storage/shared/*)\n"
-            + "    echo \"create-expo: refuse shared/noexec storage. Use: cd ~/repos\" >&2\n"
-            + "    exit 1\n"
-            + "    ;;\n"
-            + "esac\n"
-            + "CALLER_PWD=$PWD\n"
-            + "RUNNER=\"$HOME/.local/share/create-expo-runner\"\n"
-            + "ENTRY=\"$RUNNER/node_modules/create-expo/build/index.js\"\n"
-            + "if [ ! -f \"$ENTRY\" ]; then\n"
-            + "  echo \"create-expo: installing CLI into $RUNNER ...\"\n"
-            + "  (cd \"$RUNNER\" && \"$PREFIX/bin/bun\" add create-expo@latest)\n"
-            + "fi\n"
-            + "if ! \"$PREFIX/bin/bun\" --version >/dev/null 2>&1; then\n"
-            + "  echo \"create-expo: bun broken — reopen the app to restore Android bun\" >&2\n"
-            + "  exit 1\n"
-            + "fi\n"
-            + "cd \"$CALLER_PWD\"\n"
-            + "exec \"$PREFIX/bin/bun\" \"$ENTRY\" \"$@\"\n";
-        writeExec(new File(binDir, "create-expo"), createExpo);
-
-        String bunDoctor = ""
-            + "#!/data/data/com.involvex.termux_app/files/usr/bin/bash\n"
-            + "PREFIX=\"" + prefix + "\"\n"
-            + "B=\"$PREFIX/bin/bun\"\n"
-            + "echo \"bun: $B\"\n"
-            + "ls -la \"$B\"\n"
-            + "if command -v readelf >/dev/null; then\n"
-            + "  readelf -l \"$B\" 2>/dev/null | grep -A1 INTERP || true\n"
-            + "fi\n"
-            + "\"$B\" --version\n"
-            + "echo \"OPENSSL_CONF=${OPENSSL_CONF:-unset}\"\n";
-        writeExec(new File(binDir, "bun-doctor"), bunDoctor);
-
-        // Replace bun→bunx symlink: stock bunx hits SIGSYS (signal 31) on Android
-        // when spawning package bins. Install packages under ~/.local/share/bunx-runner
-        // and exec the package bin with Android bun instead.
-        String bunx = ""
-            + "#!/data/data/com.involvex.termux_app/files/usr/bin/bash\n"
-            + "set -e\n"
-            + "PREFIX=\"" + prefix + "\"\n"
-            + "HOME=\"" + home + "\"\n"
+            + "REAL=\"$PREFIX/libexec/bun\"\n"
             + "export PATH=\"$PREFIX/bin:$HOME/.bun/bin:$PATH\"\n"
             + "export LD_LIBRARY_PATH=\"$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"\n"
             + "export OPENSSL_CONF=\"$PREFIX/etc/tls/openssl.cnf\"\n"
             + "export SSL_CERT_FILE=\"$PREFIX/etc/tls/cert.pem\"\n"
+            + "export NODE_EXTRA_CA_CERTS=\"$PREFIX/etc/tls/cert.pem\"\n"
+            + "export BUN_INSTALL=\"$PREFIX\"\n"
+            + "export BUN_INSTALL_BIN=\"$PREFIX/bin\"\n"
             + "export BUN_INSTALL_CACHE_DIR=\"$HOME/.bun/install/cache\"\n"
             + "export BUN_TMPDIR=\"$PREFIX/tmp\"\n"
             + "export TMPDIR=\"$PREFIX/tmp\"\n"
+            + "export XDG_CACHE_HOME=\"$HOME/.cache\"\n"
             + "export npm_config_cache=\"$HOME/.npm\"\n"
-            + "BUN=\"$PREFIX/bin/bun\"\n"
-            + "if [ $# -lt 1 ]; then\n"
-            + "  echo \"usage: bunx <package[@version]> [args...]\" >&2\n"
-            + "  exit 1\n"
+            + "export npm_config_prefix=\"$PREFIX\"\n"
+            + "export npm_config_platform=android\n"
+            + "export npm_config_os=android\n"
+            + "case \"$(uname -m)\" in\n"
+            + "  aarch64|arm64) export npm_config_arch=arm64; export npm_config_cpu=arm64 ;;\n"
+            + "  x86_64|amd64)  export npm_config_arch=x64;   export npm_config_cpu=x64 ;;\n"
+            + "  *)             export npm_config_arch=arm64; export npm_config_cpu=arm64 ;;\n"
+            + "esac\n"
+            + "mkdir -p \"$BUN_INSTALL_CACHE_DIR\" \"$HOME/.bun/bin\" \"$HOME/repos\" \"$TMPDIR\"\n"
+            + "if [ ! -x \"$REAL\" ]; then\n"
+            + "  echo \"bun: missing Android binary at $REAL (reopen the app)\" >&2\n"
+            + "  exit 127\n"
             + "fi\n"
-            + "PKG=\"$1\"; shift\n"
-            + "while [ \"$PKG\" = \"--bun\" ] || [ \"$PKG\" = \"-b\" ] || [ \"$PKG\" = \"--package\" ] || [ \"$PKG\" = \"-p\" ]; do\n"
-            + "  if [ \"$PKG\" = \"--package\" ] || [ \"$PKG\" = \"-p\" ]; then PKG=\"$1\"; shift; else PKG=\"$1\"; shift || true; fi\n"
-            + "done\n"
-            + "if [ -z \"$PKG\" ] || [ \"${PKG#-}\" != \"$PKG\" ]; then\n"
-            + "  echo \"bunx: missing package name\" >&2\n"
-            + "  exit 1\n"
-            + "fi\n"
-            + "SAFE=$(printf '%s' \"$PKG\" | sed 's/[^A-Za-z0-9._@+-]/_/g')\n"
-            + "RUNNER=\"$HOME/.local/share/bunx-runner/$SAFE\"\n"
-            + "mkdir -p \"$RUNNER\" \"$HOME/.bun/bin\"\n"
-            + "CALLER_PWD=$PWD\n"
-            + "if [ ! -f \"$RUNNER/package.json\" ]; then\n"
-            + "  echo \"bunx: installing $PKG ...\" >&2\n"
-            + "  (cd \"$RUNNER\" && \"$BUN\" add \"$PKG\")\n"
-            + "fi\n"
-            + "ENTRY=$(cd \"$RUNNER\" && \"$BUN\" -e '\n"
-            + "const fs=require(\"fs\"); const path=require(\"path\");\n"
-            + "let spec=process.argv[1]; let name=spec;\n"
-            + "if(name.startsWith(\"@\")){const i=name.indexOf(\"@\",1); if(i>0) name=name.slice(0,i);}\n"
-            + "else {const i=name.indexOf(\"@\"); if(i>0) name=name.slice(0,i);}\n"
-            + "const pjPath=path.join(\"node_modules\",...name.split(\"/\"),\"package.json\");\n"
-            + "if(!fs.existsSync(pjPath)) { console.error(\"bunx: package not found at \"+pjPath); process.exit(1); }\n"
-            + "const pj=JSON.parse(fs.readFileSync(pjPath,\"utf8\"));\n"
-            + "let bin=pj.bin; if(!bin){console.error(\"bunx: package has no bin\"); process.exit(1);}\n"
-            + "if(typeof bin===\"object\") bin=Object.values(bin)[0];\n"
-            + "console.log(path.resolve(path.join(\"node_modules\",...name.split(\"/\"),bin)));\n"
-            + "' \"$PKG\")\n"
-            + "cd \"$CALLER_PWD\"\n"
-            + "exec \"$BUN\" \"$ENTRY\" \"$@\"\n";
+            // Drop path redirector for Bun — LD_PRELOAD + optional linux natives → SIGSYS.
+            // Explicit empty LD_PRELOAD= (redirector honors clear on execve).
+            + "set -- \"$@\"\n"
+            + "cmd=\"${1-}\"\n"
+            // Force Android optionalDependency filter. Bun reports platform=android but
+            // still resolves linux-* natives (e.g. @rolldown/binding-linux-arm-gnueabihf)
+            // for many scaffolds / Windows lockfiles → SIGSYS 31 on extract/link.
+            + "case \"$cmd\" in\n"
+            + "  install|i|add|update|remove|rm|create)\n"
+            + "    shift\n"
+            + "    has_os=0; has_cpu=0\n"
+            + "    for a in \"$@\"; do\n"
+            + "      case \"$a\" in --os|--os=*) has_os=1 ;; --cpu|--cpu=*) has_cpu=1 ;; esac\n"
+            + "    done\n"
+            + "    extra=\"\"\n"
+            + "    [ \"$has_os\" = 0 ] && extra=\"$extra --os=android\"\n"
+            + "    if [ \"$has_cpu\" = 0 ]; then\n"
+            + "      case \"$(uname -m)\" in aarch64|arm64) extra=\"$extra --cpu=arm64\" ;;\n"
+            + "        x86_64|amd64) extra=\"$extra --cpu=x64\" ;; *) extra=\"$extra --cpu=arm64\" ;; esac\n"
+            + "    fi\n"
+            + "    # shellcheck disable=SC2086\n"
+            + "    LD_PRELOAD= exec \"$REAL\" \"$cmd\"$extra \"$@\"\n"
+            + "    ;;\n"
+            + "esac\n"
+            + "LD_PRELOAD= exec \"$REAL\" \"$@\"\n";
+        writeExec(new File(binDir, "bun"), bunWrapper);
+
+        String bunx = ""
+            + "#!" + bash + "\n"
+            + "exec \"" + prefix + "/bin/bun\" x \"$@\"\n";
         writeExec(new File(binDir, "bunx"), bunx);
 
-        ensureDir(new File(home, ".bun/bin"));
-        ensureDir(new File(home, "repos"));
+        String bunDoctor = ""
+            + "#!" + bash + "\n"
+            + "PREFIX=\"" + prefix + "\"\n"
+            + "echo \"wrapper: $PREFIX/bin/bun\"\n"
+            + "echo \"real:    $PREFIX/libexec/bun\"\n"
+            + "ls -la \"$PREFIX/bin/bun\" \"$PREFIX/libexec/bun\" 2>&1\n"
+            + "if command -v readelf >/dev/null; then\n"
+            + "  readelf -l \"$PREFIX/libexec/bun\" 2>/dev/null | grep -A1 INTERP || true\n"
+            + "fi\n"
+            + "\"$PREFIX/bin/bun\" --version\n"
+            + "echo \"LD_PRELOAD in shell: ${LD_PRELOAD:-unset}\"\n"
+            + "echo \"OPENSSL_CONF=${OPENSSL_CONF:-unset}\"\n";
+        writeExec(new File(binDir, "bun-doctor"), bunDoctor);
+
+        ensureWorkspaceDirs();
+        repairPrefixBinPermissions();
+    }
+
+    /**
+     * Some package files land without the execute bit (dpkg extract / noexec
+     * quirks). {@code npm doctor} flags these; fix known PREFIX/bin entries.
+     */
+    private static void repairPrefixBinPermissions() {
+        File binDir = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH);
+        if (!binDir.isDirectory()) {
+            return;
+        }
+        String[] names = {"am.termuxam", "ksu", "am", "login", "apt", "apt-get", "dpkg"};
+        for (String name : names) {
+            File f = new File(binDir, name);
+            if (!f.isFile()) {
+                continue;
+            }
+            try {
+                //noinspection OctalInteger
+                Os.chmod(f.getAbsolutePath(), 0700);
+            } catch (Exception e) {
+                Logger.logWarn(LOG_TAG, "chmod " + f + ": " + e.getMessage());
+            }
+        }
     }
 
     private static void writeExec(@NonNull File dest, @NonNull String contents) {
@@ -276,7 +305,12 @@ public final class TermuxBunInstaller {
             //noinspection OctalInteger
             Os.chmod(tmp.getAbsolutePath(), 0700);
             if (dest.exists() && !dest.delete()) {
-                Logger.logWarn(LOG_TAG, "Could not replace " + dest);
+                // Symlink (old bunx→bun) or busy file
+                try {
+                    Os.remove(dest.getAbsolutePath());
+                } catch (Exception e) {
+                    Logger.logWarn(LOG_TAG, "Could not replace " + dest + ": " + e.getMessage());
+                }
             }
             if (!tmp.renameTo(dest)) {
                 Logger.logWarn(LOG_TAG, "Could not install " + dest);
@@ -296,8 +330,7 @@ public final class TermuxBunInstaller {
 
     /**
      * Official Android builds use the Bionic linker ({@code /system/bin/linker64} or
-     * {@code linker}). glibc linux builds request {@code /lib/ld-linux-*.so.1} and fail
-     * at exec with "required file not found".
+     * {@code linker}). glibc linux builds request {@code /lib/ld-linux-*.so.1}.
      */
     private static boolean isAndroidBunBinary(@NonNull File bunBin) {
         try (FileInputStream in = new FileInputStream(bunBin)) {
@@ -306,7 +339,6 @@ public final class TermuxBunInstaller {
             if (n < 64) {
                 return false;
             }
-            // ELF magic
             if (head[0] != 0x7f || head[1] != 'E' || head[2] != 'L' || head[3] != 'F') {
                 return false;
             }
@@ -314,7 +346,6 @@ public final class TermuxBunInstaller {
             if (probe.contains("/system/bin/linker")) {
                 return true;
             }
-            // Reject known glibc / musl interpreters
             return !probe.contains("ld-linux") && !probe.contains("ld-musl");
         } catch (Exception e) {
             Logger.logWarn(LOG_TAG, "Could not inspect bun ELF: " + e.getMessage());

@@ -310,7 +310,12 @@ static char** rewrite_envp_for_exec(const char* filename, char* const envp[]) {
             } else if (rewritten[0]) {
                 snprintf(merged, nlen, "LD_PRELOAD=%s:%s", REDIRECTOR_SO, rewritten);
             } else {
-                snprintf(merged, nlen, "LD_PRELOAD=%s", REDIRECTOR_SO);
+                /* Explicit LD_PRELOAD= (empty): honor clear — Bun/native tooling
+                 * must not inherit the path redirector (SIGSYS with linux-* .node). */
+                free(rewritten);
+                free(merged);
+                out[oi++] = (char*)entry;
+                continue;
             }
             free(rewritten);
             out[oi++] = merged;
