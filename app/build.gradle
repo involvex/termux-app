@@ -149,6 +149,23 @@ androidComponents {
 
 tasks.withType(JavaCompile).configureEach {
     dependsOn(downloadBootstraps)
+    dependsOn(downloadBunBootstraps)
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(downloadBootstraps)
+    dependsOn(downloadBunBootstraps)
+}
+
+// NDK .incbin needs the zip files before assembling libinvapp-bun.
+tasks.configureEach { task ->
+    def n = task.name.toLowerCase()
+    if (n.contains("externalnativebuild") || n.contains("buildcilist")
+            || n.contains("compiledebugnativelibrary")
+            || n.contains("compilereleasenativelibrary")) {
+        task.dependsOn(downloadBootstraps)
+        task.dependsOn(downloadBunBootstraps)
+    }
 }
 
 dependencies {
@@ -217,6 +234,8 @@ clean {
     doLast {
         def tree = fileTree(new File(projectDir, 'src/main/cpp'))
         tree.include 'bootstrap-*.zip'
+        // Keep bun-linux-*-android.zip across clean so NDK .incbin rebuilds
+        // don't race the download task in the same Gradle invocation.
         tree.each { it.delete() }
     }
 }
@@ -239,6 +258,59 @@ task downloadBootstraps() {
         } else {
             throw new GradleException("Unsupported TERMUX_PACKAGE_VARIANT \"" + packageVariant + "\"")
         }
+    }
+}
+
+def downloadBun(String artifact, String expectedChecksum) {
+    def digest = java.security.MessageDigest.getInstance("SHA-256")
+    def localUrl = "src/main/cpp/" + artifact
+    def file = new File(projectDir, localUrl)
+    if (file.exists()) {
+        def buffer = new byte[8192]
+        def input = new FileInputStream(file)
+        while (true) {
+            def readBytes = input.read(buffer)
+            if (readBytes < 0) break
+            digest.update(buffer, 0, readBytes)
+        }
+        input.close()
+        def checksum = new BigInteger(1, digest.digest()).toString(16)
+        while (checksum.length() < 64) { checksum = "0" + checksum }
+        if (checksum == expectedChecksum) {
+            return
+        }
+        logger.quiet("Deleting old Bun zip with wrong hash: " + localUrl)
+        file.delete()
+    }
+
+    def version = "1.4.2"
+    def remoteUrl = "https://github.com/oven-sh/bun/releases/download/bun-v" + version + "/" + artifact
+    logger.quiet("Downloading " + remoteUrl + " ...")
+    file.parentFile.mkdirs()
+    digest.reset()
+    def out = new BufferedOutputStream(new FileOutputStream(file))
+    def connection = new URL(remoteUrl).openConnection()
+    connection.setInstanceFollowRedirects(true)
+    def digestStream = new java.security.DigestInputStream(connection.inputStream, digest)
+    out << digestStream
+    out.close()
+
+    def checksum = new BigInteger(1, digest.digest()).toString(16)
+    while (checksum.length() < 64) { checksum = "0" + checksum }
+    if (checksum != expectedChecksum) {
+        file.delete()
+        throw new GradleException("Wrong checksum for " + remoteUrl + ": expected: " + expectedChecksum + ", actual: " + checksum)
+    }
+}
+
+task downloadBunBootstraps() {
+    doLast {
+        // Official Bionic Android builds only (not glibc linux-aarch64).
+        // 1.4.2+ skips unreadable /data ancestors (CouldntReadCurrentDirectory on Termux).
+        downloadBun("bun-linux-aarch64-android.zip",
+            "a1c7e2983f1bb65146beb256a4d72449f23042412bc2cf278aa6397ba27e0274")
+        downloadBun("bun-linux-x64-android.zip",
+            "1e90fc0d3b83cb847b34338aff2765a7034bf53c50414344b3b0bf07a330a144")
     }
 }
 

@@ -234,6 +234,9 @@ final class TermuxInstaller {
 
                     Logger.logInfo(LOG_TAG, "Bootstrap packages installed successfully.");
 
+                    // Ship official Android Bun into $PREFIX/bin after a fresh prefix.
+                    TermuxBunInstaller.installIfNeeded(activity);
+
                     // Recreate env file since termux prefix was wiped earlier
                     TermuxShellEnvironment.writeEnvironmentToFile(activity);
 

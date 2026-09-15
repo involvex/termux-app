@@ -506,16 +506,27 @@ public abstract class TermuxSharedProperties {
      * @return Returns the internal value for value.
      */
     public static String getDefaultWorkingDirectoryInternalPropertyValueFromValue(String path) {
-        if (path == null || path.isEmpty()) return TermuxPropertyConstants.DEFAULT_IVALUE_DEFAULT_WORKING_DIRECTORY;
-        File workDir = new File(path);
-        if (!workDir.exists() || !workDir.isDirectory() || !workDir.canRead()) {
-            // Fallback to default directory if user configured working directory does not exist,
-            // is not a directory or is not readable.
-            Logger.logError(LOG_TAG, "The path \"" + path + "\" for the key \"" + TermuxPropertyConstants.KEY_DEFAULT_WORKING_DIRECTORY + "\" does not exist, is not a directory or is not readable. Using default value \"" + TermuxPropertyConstants.DEFAULT_IVALUE_DEFAULT_WORKING_DIRECTORY + "\" instead.");
-            return TermuxPropertyConstants.DEFAULT_IVALUE_DEFAULT_WORKING_DIRECTORY;
-        } else {
-            return path;
+        String preferred = (path == null || path.isEmpty())
+            ? TermuxPropertyConstants.DEFAULT_IVALUE_DEFAULT_WORKING_DIRECTORY
+            : path;
+        File workDir = new File(preferred);
+        if (workDir.exists() && workDir.isDirectory() && workDir.canRead()) {
+            return preferred;
         }
+        // Prefer ~/storage/shared; fall back to $HOME if setup-storage was never run.
+        File home = new File(TermuxConstants.TERMUX_HOME_DIR_PATH);
+        if (!preferred.equals(TermuxConstants.TERMUX_HOME_DIR_PATH)
+                && home.exists() && home.isDirectory() && home.canRead()) {
+            Logger.logWarn(LOG_TAG, "The path \"" + preferred + "\" for the key \""
+                + TermuxPropertyConstants.KEY_DEFAULT_WORKING_DIRECTORY
+                + "\" is missing or unreadable. Using \""
+                + TermuxConstants.TERMUX_HOME_DIR_PATH + "\" instead.");
+            return TermuxConstants.TERMUX_HOME_DIR_PATH;
+        }
+        Logger.logError(LOG_TAG, "The path \"" + preferred + "\" for the key \""
+            + TermuxPropertyConstants.KEY_DEFAULT_WORKING_DIRECTORY
+            + "\" does not exist, is not a directory or is not readable.");
+        return preferred;
     }
 
     /**

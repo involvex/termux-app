@@ -62,6 +62,9 @@ public class TermuxApplication extends Application {
             // Install default hacker theme (colors + night-mode) when missing.
             TermuxHackerThemeInstaller.installDefaultsIfMissing(context);
 
+            // Install official Android Bun into $PREFIX/bin when missing/outdated.
+            TermuxBunInstaller.installIfNeeded(context);
+
             // Setup termux-am-socket server
             TermuxAmSocketServer.setupTermuxAmSocketServer(context);
         } else {

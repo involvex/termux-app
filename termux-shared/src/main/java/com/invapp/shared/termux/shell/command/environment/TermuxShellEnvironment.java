@@ -643,7 +643,10 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
                 environment.put(ENV_PATH, TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + ":" + TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/applets");
                 environment.put(ENV_LD_LIBRARY_PATH, TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH);
             } else {
-                environment.put(ENV_PATH, TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH);
+                // Include Bun global bin (~/.bun/bin) — bun pm bin -g warns when missing.
+                environment.put(ENV_PATH,
+                    TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + ":"
+                        + TermuxConstants.TERMUX_HOME_DIR_PATH + "/.bun/bin");
                 // Stock Termux Android 7+ binaries embed DT_RUNPATH for /data/data/com.termux/.../lib.
                 // Official Termux can leave LD_LIBRARY_PATH unset; renamed forks cannot in-place
                 // patch ELF when the package name length differs, so the dynamic linker still
@@ -655,6 +658,29 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
                     environment.remove(ENV_LD_LIBRARY_PATH);
                 }
             }
+
+            // Keep Bun / npm caches and installs inside the exec-capable app prefix,
+            // never under /storage/emulated/0 (noexec → "Permission denied").
+            environment.put("BUN_INSTALL", TermuxConstants.TERMUX_PREFIX_DIR_PATH);
+            environment.put("BUN_INSTALL_BIN", TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH);
+            environment.put("BUN_INSTALL_CACHE_DIR",
+                TermuxConstants.TERMUX_HOME_DIR_PATH + "/.bun/install/cache");
+            environment.put("BUN_TMPDIR", TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH);
+            environment.put("XDG_CACHE_HOME",
+                TermuxConstants.TERMUX_HOME_DIR_PATH + "/.cache");
+            environment.put("npm_config_cache",
+                TermuxConstants.TERMUX_HOME_DIR_PATH + "/.npm");
+            environment.put("npm_config_prefix",
+                TermuxConstants.TERMUX_PREFIX_DIR_PATH);
+            // Stock Termux node/openssl are compiled with PREFIX=/data/data/com.termux/...
+            // Point at this fork's TLS files so node/npm work even when a child
+            // clears LD_PRELOAD (bunx → npm pack → node).
+            environment.put("OPENSSL_CONF",
+                TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/tls/openssl.cnf");
+            environment.put("SSL_CERT_FILE",
+                TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/tls/cert.pem");
+            environment.put("NODE_EXTRA_CA_CERTS",
+                TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/tls/cert.pem");
         }
 
         return environment;
@@ -664,6 +690,10 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
     @NonNull
     @Override
     public String getDefaultWorkingDirectoryPath() {
+        File shared = new File(TermuxConstants.TERMUX_HOME_DIR_PATH, "storage/shared");
+        if (shared.isDirectory() && shared.canRead()) {
+            return shared.getAbsolutePath();
+        }
         return TermuxConstants.TERMUX_HOME_DIR_PATH;
     }
 

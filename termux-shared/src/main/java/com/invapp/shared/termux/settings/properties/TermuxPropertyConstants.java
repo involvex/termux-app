@@ -318,8 +318,9 @@ public final class TermuxPropertyConstants {
 
     /** Defines the key for the default working directory */
     public static final String KEY_DEFAULT_WORKING_DIRECTORY =  "default-working-directory"; // Default: "default-working-directory"
-    /** Defines the default working directory */
-    public static final String DEFAULT_IVALUE_DEFAULT_WORKING_DIRECTORY = TermuxConstants.TERMUX_HOME_DIR_PATH;
+    /** Defines the default working directory (~/storage/shared when set up) */
+    public static final String DEFAULT_IVALUE_DEFAULT_WORKING_DIRECTORY =
+        TermuxConstants.TERMUX_HOME_DIR_PATH + "/storage/shared";
 
 
 
