@@ -4,12 +4,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <fcntl.h>
 #include <android/log.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <errno.h>
 
 #define LOG_TAG "InvappRedirector"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -129,6 +133,18 @@ static void rewrite_termux_paths_in_script(const char* path) {
     for (size_t i = 0; i < (size_t)size; ) {
         if (i + old_pkg_len <= (size_t)size
             && memcmp(data + i, OLD_PKG, old_pkg_len) == 0) {
+            /*
+             * Do not rewrite Java packages that live inside stock TermuxAm
+             * (am.apk still ships com.termux.termuxam.Am). Intent actions like
+             * com.termux.app.* still get rewritten.
+             */
+            const char* after = data + i + old_pkg_len;
+            if (strncmp(after, ".termuxam", 9) == 0) {
+                memcpy(out + oi, data + i, old_pkg_len);
+                oi += old_pkg_len;
+                i += old_pkg_len;
+                continue;
+            }
             memcpy(out + oi, NEW_PKG, new_pkg_len);
             oi += new_pkg_len;
             i += old_pkg_len;
@@ -208,18 +224,36 @@ static int envp_has_key(char* const* envp, const char* key) {
  * sshd builds a clean session environment (often without LD_LIBRARY_PATH /
  * LD_PRELOAD and with HOME=/data/data/com.termux/...). Inject / rewrite those
  * here so the child linker can resolve Termux libs under our real prefix.
+ *
+ * Do NOT inject LD_* when exec'ing system binaries (e.g. /system/bin/app_process
+ * used by TermuxAm) — those intentionally unset LD_LIBRARY_PATH/LD_PRELOAD and
+ * break if Termux libs are forced in.
  * Allocations intentionally leak on success — execve replaces the process image.
  */
-static char** rewrite_envp_for_exec(char* const envp[]) {
+static char** rewrite_envp_for_exec(const char* filename, char* const envp[]) {
     size_t count = 0;
     if (envp) {
         while (envp[count]) count++;
     }
 
+    int is_termux_bin = 0;
+    if (filename) {
+        if (strncmp(filename, NEW_PREFIX, strlen(NEW_PREFIX)) == 0) {
+            is_termux_bin = 1;
+        } else {
+            char pathbuf[4096];
+            const char* redirected = redirect_path(filename, pathbuf, sizeof(pathbuf));
+            if (redirected && strncmp(redirected, NEW_PREFIX, strlen(NEW_PREFIX)) == 0) {
+                is_termux_bin = 1;
+            }
+        }
+    }
+
     int need_home = !envp_has_key(envp, "HOME");
     int need_prefix = !envp_has_key(envp, "PREFIX");
-    int need_ld_lib = !envp_has_key(envp, "LD_LIBRARY_PATH");
-    int need_ld_pre = !envp_has_key(envp, "LD_PRELOAD");
+    /* Only force LD_* for Termux-prefix executables (bash/dpkg/sshd session). */
+    int need_ld_lib = is_termux_bin && !envp_has_key(envp, "LD_LIBRARY_PATH");
+    int need_ld_pre = is_termux_bin && !envp_has_key(envp, "LD_PRELOAD");
     size_t extra = (size_t)(need_home + need_prefix + need_ld_lib + need_ld_pre);
 
     char** out = (char**)malloc((count + extra + 1) * sizeof(char*));
@@ -228,7 +262,7 @@ static char** rewrite_envp_for_exec(char* const envp[]) {
     size_t oi = 0;
     for (size_t i = 0; i < count; i++) {
         const char* entry = envp[i];
-        if (env_key_is(entry, "LD_LIBRARY_PATH")) {
+        if (is_termux_bin && env_key_is(entry, "LD_LIBRARY_PATH")) {
             const char* val = entry + strlen("LD_LIBRARY_PATH=");
             char* rewritten = replace_all_alloc(val, OLD_PKG, NEW_PKG);
             if (!rewritten) {
@@ -255,7 +289,7 @@ static char** rewrite_envp_for_exec(char* const envp[]) {
             out[oi++] = merged;
             continue;
         }
-        if (env_key_is(entry, "LD_PRELOAD")) {
+        if (is_termux_bin && env_key_is(entry, "LD_PRELOAD")) {
             const char* val = entry + strlen("LD_PRELOAD=");
             char* rewritten = replace_all_alloc(val, OLD_PKG, NEW_PKG);
             if (!rewritten) {
@@ -280,6 +314,12 @@ static char** rewrite_envp_for_exec(char* const envp[]) {
             }
             free(rewritten);
             out[oi++] = merged;
+            continue;
+        }
+        /* System binaries: leave LD_* alone (may be intentionally unset). */
+        if (!is_termux_bin
+            && (env_key_is(entry, "LD_LIBRARY_PATH") || env_key_is(entry, "LD_PRELOAD"))) {
+            out[oi++] = (char*)entry;
             continue;
         }
         if (strstr(entry, OLD_PKG)) {
@@ -332,6 +372,47 @@ int chdir(const char* path) {
     static int (*orig_chdir)(const char*);
     if (!orig_chdir) orig_chdir = dlsym(RTLD_NEXT, "chdir");
     return orig_chdir(redirected);
+}
+
+/*
+ * termux-am-socket embeds /data/data/com.termux/.../am.sock. Rewrite AF_UNIX
+ * connect paths so the client reaches our real TermuxAm socket server.
+ */
+int connect(int sockfd, const struct sockaddr* addr, socklen_t addrlen) {
+    static int (*orig_connect)(int, const struct sockaddr*, socklen_t);
+    if (!orig_connect) orig_connect = dlsym(RTLD_NEXT, "connect");
+    if (!addr || addr->sa_family != AF_UNIX) {
+        return orig_connect(sockfd, addr, addrlen);
+    }
+
+    const struct sockaddr_un* un = (const struct sockaddr_un*)addr;
+    /* Abstract namespace sockets start with '\0'; leave them alone. */
+    if (un->sun_path[0] == '\0') {
+        return orig_connect(sockfd, addr, addrlen);
+    }
+    if (!strstr(un->sun_path, OLD_PKG)) {
+        return orig_connect(sockfd, addr, addrlen);
+    }
+
+    char* rewritten = replace_all_alloc(un->sun_path, OLD_PKG, NEW_PKG);
+    if (!rewritten) {
+        return orig_connect(sockfd, addr, addrlen);
+    }
+    if (strlen(rewritten) >= sizeof(un->sun_path)) {
+        free(rewritten);
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+
+    struct sockaddr_un new_un;
+    memset(&new_un, 0, sizeof(new_un));
+    new_un.sun_family = AF_UNIX;
+    memcpy(new_un.sun_path, rewritten, strlen(rewritten) + 1);
+    free(rewritten);
+
+    socklen_t new_len = (socklen_t)(offsetof(struct sockaddr_un, sun_path)
+        + strlen(new_un.sun_path) + 1);
+    return orig_connect(sockfd, (struct sockaddr*)&new_un, new_len);
 }
 
 int open(const char* path, int flags, ...) {
@@ -421,7 +502,7 @@ int execve(const char* filename, char* const argv[], char* const envp[]) {
     char buf[4096];
     const char* redirected = redirect_path(filename, buf, sizeof(buf));
     rewrite_termux_paths_in_script(redirected);
-    char** new_envp = rewrite_envp_for_exec(envp);
+    char** new_envp = rewrite_envp_for_exec(redirected, envp);
     static int (*orig_execve)(const char*, char* const[], char* const[]);
     if (!orig_execve) orig_execve = dlsym(RTLD_NEXT, "execve");
     return orig_execve(redirected, argv, new_envp ? new_envp : (char**)envp);
@@ -433,7 +514,7 @@ int execv(const char* path, char* const argv[]) {
     rewrite_termux_paths_in_script(redirected);
     /* execv uses environ; rewrite via execve so SSH/login get LD_* / HOME. */
     extern char** environ;
-    char** new_envp = rewrite_envp_for_exec(environ);
+    char** new_envp = rewrite_envp_for_exec(redirected, environ);
     static int (*orig_execve)(const char*, char* const[], char* const[]);
     if (!orig_execve) orig_execve = dlsym(RTLD_NEXT, "execve");
     return orig_execve(redirected, argv, new_envp ? new_envp : environ);

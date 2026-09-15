@@ -2,6 +2,7 @@
 <resources>
     <!--
      https://material.io/develop/android/theming/dark
+     Hacker theme: black surfaces + matrix green accents.
     -->
 
     <!-- TermuxApp Light DarkActionBar theme. -->
@@ -18,10 +19,16 @@
     <!-- TermuxActivity DayNight NoActionBar theme. -->
     <style name="Theme.TermuxActivity.DayNight.NoActionBar" parent="Theme.TermuxApp.DayNight.NoActionBar">
         <!-- Primary brand color. -->
-        <item name="colorPrimary">@color/black</item>
-        <item name="colorPrimaryVariant">@color/black</item>
+        <item name="colorPrimary">@color/hacker_green</item>
+        <item name="colorPrimaryVariant">@color/hacker_black</item>
+        <item name="colorOnPrimary">@color/hacker_black</item>
+        <item name="colorSecondary">@color/hacker_green_dim</item>
+        <item name="colorSecondaryVariant">@color/hacker_green</item>
+        <item name="colorOnSecondary">@color/hacker_black</item>
 
-        <item name="android:windowBackground">@color/black</item>
+        <item name="android:windowBackground">@color/hacker_black</item>
+        <item name="android:navigationBarColor">@color/hacker_black</item>
+        <item name="android:statusBarColor">@color/hacker_black</item>
 
         <!-- Avoid action mode toolbar pushing down terminal content when
              selecting text on pre-6.0 (non-floating toolbar). -->
@@ -35,15 +42,15 @@
         <item name="android:windowAllowEnterTransitionOverlap">true</item>
 
         <!-- Left drawer. -->
-        <item name="buttonBarButtonStyle">@style/TermuxActivity.Drawer.ButtonBarStyle.Light</item>
-        <item name="termuxActivityDrawerBackground">@color/white</item>
-        <item name="termuxActivityDrawerImageTint">@color/black</item>
+        <item name="buttonBarButtonStyle">@style/TermuxActivity.Drawer.ButtonBarStyle.Dark</item>
+        <item name="termuxActivityDrawerBackground">@color/hacker_panel</item>
+        <item name="termuxActivityDrawerImageTint">@color/hacker_green</item>
 
         <!-- Extra keys colors. -->
-        <item name="extraKeysButtonTextColor">@color/white</item>
-        <item name="extraKeysButtonActiveTextColor">@color/red_400</item>
-        <item name="extraKeysButtonBackgroundColor">@color/black</item>
-        <item name="extraKeysButtonActiveBackgroundColor">@color/grey_500</item>
+        <item name="extraKeysButtonTextColor">@color/hacker_green</item>
+        <item name="extraKeysButtonActiveTextColor">@color/hacker_green_bright</item>
+        <item name="extraKeysButtonBackgroundColor">@color/hacker_black</item>
+        <item name="extraKeysButtonActiveBackgroundColor">@color/hacker_muted</item>
     </style>
 
 </resources>

@@ -174,6 +174,64 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
         fixDpkgMaintainerScripts(prefix);
         fixStockTermuxPathsInPrefixConfigs(prefix);
         installSshSessionEnvOverrides(prefix);
+        repairTermuxAmLauncher(prefix);
+    }
+
+    /**
+     * Stock {@code $PREFIX/bin/am} launches TermuxAm via app_process using the
+     * APK identity {@code com.termux}, which fails with Permission Denial on a
+     * renamed package id. Prefer the in-app {@code termux-am} socket server
+     * (runs as this app) and keep {@code am.apk} only as fallback docs.
+     */
+    private synchronized static void repairTermuxAmLauncher(String prefix) {
+        String amPath = prefix + "/bin/am";
+        File amFile = new File(amPath);
+        String termuxAmPath = prefix + "/bin/termux-am";
+        if (!new File(termuxAmPath).isFile()) {
+            return;
+        }
+
+        String wrapper = "#!/data/data/" + TermuxConstants.TERMUX_PACKAGE_NAME
+            + "/files/usr/bin/sh\n"
+            + "# Managed by termux-app fork — route am through termux-am socket\n"
+            + "# (stock TermuxAm APK always identifies as com.termux).\n"
+            + "PREFIX=\"/data/data/" + TermuxConstants.TERMUX_PACKAGE_NAME + "/files/usr\"\n"
+            + "export PATH=\"$PREFIX/bin${PATH:+:$PATH}\"\n"
+            + "export LD_LIBRARY_PATH=\"$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"\n"
+            + "export LD_PRELOAD=\"$PREFIX/lib/" + REDIRECTOR_LIB_NAME
+            + "${LD_PRELOAD:+:$LD_PRELOAD}\"\n"
+            + "if [ -x \"$PREFIX/bin/termux-am\" ] && [ -x \"$PREFIX/bin/bash\" ]; then\n"
+            + "\texec \"$PREFIX/bin/bash\" \"$PREFIX/bin/termux-am\" \"$@\"\n"
+            + "fi\n"
+            + "echo \"termux-am not available; cannot run am on renamed package id\" 1>&2\n"
+            + "exit 127\n";
+
+        StringBuilder contents = new StringBuilder();
+        Error readError = FileUtils.readTextFromFile("am", amPath, Charset.defaultCharset(),
+            contents, true);
+        if (readError == null && contents.toString().contains("route am through termux-am socket")) {
+            return;
+        }
+
+        // Preserve original launcher beside the wrapper once.
+        File realFile = new File(amPath + ".termuxam");
+        if (amFile.isFile() && !realFile.exists()
+            && contents.toString().contains("app_process")) {
+            FileUtils.moveRegularFile("am", amPath, realFile.getAbsolutePath(), false);
+        }
+
+        Error writeError = FileUtils.writeTextToFile("am", amPath, Charset.defaultCharset(),
+            wrapper, false);
+        if (writeError != null) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to wrap am via termux-am\n" + writeError);
+            return;
+        }
+        try {
+            //noinspection OctalInteger
+            Os.chmod(amPath, 0700);
+        } catch (Exception ignored) {
+        }
+        Logger.logInfo(LOG_TAG, "Wrapped am to use termux-am socket server");
     }
 
     /**

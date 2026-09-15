@@ -4,9 +4,12 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Keep in sync with non-adaptive ic_launcher.xml -->
+    <!--
+        Hacker-theme launcher glyph: matrix-green prompt `>_`
+        Keep in sync with art/ic_launcher.svg
+    -->
     <path
-        android:fillColor="#FFFFFF"
+        android:fillColor="#00FF41"
         android:pathData="M34,38
                           h6
                           l12,16
@@ -17,7 +20,7 @@
         />
 
     <path
-        android:fillColor="#FFFFFF"
+        android:fillColor="#00FF41"
         android:pathData="M56,66
                           h18
                           v4

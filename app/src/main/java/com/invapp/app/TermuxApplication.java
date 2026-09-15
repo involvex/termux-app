@@ -59,6 +59,9 @@ public class TermuxApplication extends Application {
                 return;
             }
 
+            // Install default hacker theme (colors + night-mode) when missing.
+            TermuxHackerThemeInstaller.installDefaultsIfMissing(context);
+
             // Setup termux-am-socket server
             TermuxAmSocketServer.setupTermuxAmSocketServer(context);
         } else {
@@ -70,6 +73,12 @@ public class TermuxApplication extends Application {
 
         if (isTermuxFilesDirectoryAccessible) {
             TermuxShellEnvironment.writeEnvironmentToFile(this);
+        }
+
+        // Re-apply night mode after possible termux.properties update.
+        if (isTermuxFilesDirectoryAccessible && properties != null) {
+            properties.loadTermuxPropertiesFromDisk();
+            TermuxThemeUtils.setAppNightMode(properties.getNightMode());
         }
     }
 

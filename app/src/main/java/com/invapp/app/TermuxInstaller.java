@@ -446,10 +446,17 @@ final class TermuxInstaller {
     private static byte[] replaceBytes(byte[] input, byte[] from, byte[] to) {
         ByteArrayOutputStream out = new ByteArrayOutputStream(input.length);
         int i = 0;
+        byte[] protectSuffix = ".termuxam".getBytes(StandardCharsets.UTF_8);
         while (i < input.length) {
             if (bytesEqualAt(input, i, from)) {
-                out.write(to, 0, to.length);
-                i += from.length;
+                // Keep stock TermuxAm Java package (am.apk) as com.termux.termuxam.*
+                if (bytesEqualAt(input, i + from.length, protectSuffix)) {
+                    out.write(input, i, from.length);
+                    i += from.length;
+                } else {
+                    out.write(to, 0, to.length);
+                    i += from.length;
+                }
             } else {
                 out.write(input[i]);
                 i++;

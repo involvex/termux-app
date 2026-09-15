@@ -6,6 +6,10 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 
+    <color name="hacker_green">#00FF41</color>
+    <color name="hacker_green_dim">#00B22E</color>
+    <color name="hacker_green_bright">#39FF14</color>
+
     <color name="red_400">#FF0000</color>
     <color name="red_800">#C4001D</color>
 

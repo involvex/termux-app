@@ -1,3 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Hacker theme palette (matrix green on black). -->
+    <color name="hacker_green">#00FF41</color>
+    <color name="hacker_green_dim">#00B22E</color>
+    <color name="hacker_green_bright">#39FF14</color>
+    <color name="hacker_black">#FF000000</color>
+    <color name="hacker_panel">#FF0A0F0A</color>
+    <color name="hacker_panel_selected">#FF003B14</color>
+    <color name="hacker_muted">#FF1A3D1A</color>
 </resources>
