@@ -199,24 +199,12 @@ final class TermuxInstaller {
                                         fileBytes = bos.toByteArray();
                                     }
 
-                                    // Binary patching: replace "com.termux" with the new package name
-                                    // This is safe because both are 10 characters long.
-                                    byte[] oldPackageBytes = "com.termux".getBytes(StandardCharsets.UTF_8);
-                                    byte[] newPackageBytes = TermuxConstants.TERMUX_PACKAGE_NAME.getBytes(StandardCharsets.UTF_8);
-
-                                    for (int i = 0; i <= fileBytes.length - oldPackageBytes.length; i++) {
-                                        boolean match = true;
-                                        for (int j = 0; j < oldPackageBytes.length; j++) {
-                                            if (fileBytes[i + j] != oldPackageBytes[j]) {
-                                                match = false;
-                                                break;
-                                            }
-                                        }
-                                        if (match) {
-                                            System.arraycopy(newPackageBytes, 0, fileBytes, i, newPackageBytes.length);
-                                            i += oldPackageBytes.length - 1;
-                                        }
-                                    }
+                                    // Rewrite embedded "com.termux" paths to the real package name.
+                                    // Equal length: safe in-place patch for ELF + text.
+                                    // Unequal length: expand/replace in non-ELF files only (shebangs,
+                                    // scripts, configs). ELF RUNPATH still relies on LD_PRELOAD
+                                    // redirector — kernel shebang lookup does not.
+                                    fileBytes = rewriteEmbeddedPackageName(fileBytes);
 
                                     try (FileOutputStream outStream = new FileOutputStream(targetFile)) {
                                         outStream.write(fileBytes);
@@ -401,6 +389,73 @@ final class TermuxInstaller {
 
     private static Error ensureDirectoryExists(File directory) {
         return FileUtils.createDirectoryFile(directory.getAbsolutePath());
+    }
+
+    /**
+     * Rewrite embedded {@code com.termux} package-name paths to
+     * {@link TermuxConstants#TERMUX_PACKAGE_NAME}.
+     *
+     * <p>When lengths match, every occurrence is patched in-place (safe for ELF).
+     * When lengths differ, only non-ELF files are rewritten with an expanding
+     * replace so shebang scripts like {@code bin/login} point at the real
+     * prefix. ELF binaries keep stock paths and rely on the LD_PRELOAD
+     * redirector at runtime.
+     */
+    private static byte[] rewriteEmbeddedPackageName(byte[] fileBytes) {
+        byte[] oldPackageBytes = "com.termux".getBytes(StandardCharsets.UTF_8);
+        byte[] newPackageBytes = TermuxConstants.TERMUX_PACKAGE_NAME.getBytes(StandardCharsets.UTF_8);
+
+        if (oldPackageBytes.length == newPackageBytes.length) {
+            for (int i = 0; i <= fileBytes.length - oldPackageBytes.length; i++) {
+                if (bytesEqualAt(fileBytes, i, oldPackageBytes)) {
+                    System.arraycopy(newPackageBytes, 0, fileBytes, i, newPackageBytes.length);
+                    i += oldPackageBytes.length - 1;
+                }
+            }
+            return fileBytes;
+        }
+
+        // Longer/shorter package name: do not expand inside ELF (would break
+        // section offsets). Scripts and configs are safe to rewrite.
+        if (isElf(fileBytes)) {
+            return fileBytes;
+        }
+        return replaceBytes(fileBytes, oldPackageBytes, newPackageBytes);
+    }
+
+    private static boolean isElf(byte[] fileBytes) {
+        return fileBytes.length >= 4
+            && fileBytes[0] == 0x7f
+            && fileBytes[1] == 'E'
+            && fileBytes[2] == 'L'
+            && fileBytes[3] == 'F';
+    }
+
+    private static boolean bytesEqualAt(byte[] haystack, int offset, byte[] needle) {
+        if (offset < 0 || offset + needle.length > haystack.length) {
+            return false;
+        }
+        for (int j = 0; j < needle.length; j++) {
+            if (haystack[offset + j] != needle[j]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static byte[] replaceBytes(byte[] input, byte[] from, byte[] to) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream(input.length);
+        int i = 0;
+        while (i < input.length) {
+            if (bytesEqualAt(input, i, from)) {
+                out.write(to, 0, to.length);
+                i += from.length;
+            } else {
+                out.write(input[i]);
+                i++;
+            }
+        }
+        return out.toByteArray();
     }
 
     public static byte[] loadZipBytes() {

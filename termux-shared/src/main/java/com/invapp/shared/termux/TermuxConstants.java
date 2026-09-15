@@ -291,7 +291,7 @@ import java.util.List;
  * it for interacting with termux apps. If changes are made to this file, increment the version number
  * and add an entry in the Changelog section above.
  *
- * Termux app default package name is "com.invapp" and is used in {@link #TERMUX_PREFIX_DIR_PATH}.
+ * Termux app default package name is "com.involvex.termux_app" and is used in {@link #TERMUX_PREFIX_DIR_PATH}.
  * The binaries compiled for termux have {@link #TERMUX_PREFIX_DIR_PATH} hardcoded in them but it
  * can be changed during compilation.
  *
@@ -321,7 +321,7 @@ import java.util.List;
  * "AndroidManifest.xml" and "applicationId" in "build.gradle".
  *
  * The {@link #TERMUX_PACKAGE_NAME} must be used in source code of Termux app and its plugins instead
- * of hardcoded "com.invapp" paths.
+ * of hardcoded "com.involvex.termux_app" paths.
  */
 public final class TermuxConstants {
 
@@ -349,7 +349,7 @@ public final class TermuxConstants {
     /** Termux app name */
     public static final String TERMUX_APP_NAME = "Termux"; // Default: "Termux"
     /** Termux package name */
-    public static final String TERMUX_PACKAGE_NAME = "com.invapp"; // Default: "com.invapp"
+    public static final String TERMUX_PACKAGE_NAME = "com.involvex.termux_app"; // Default: "com.involvex.termux_app"
     /** Termux GitHub repo name */
     public static final String TERMUX_GITHUB_REPO_NAME = "termux-app"; // Default: "termux-app"
     /** Termux GitHub repo url */

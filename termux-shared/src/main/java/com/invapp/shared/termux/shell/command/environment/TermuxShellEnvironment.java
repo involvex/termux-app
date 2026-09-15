@@ -15,6 +15,9 @@ import com.invapp.shared.termux.TermuxBootstrap;
 import com.invapp.shared.termux.TermuxConstants;
 import com.invapp.shared.termux.shell.TermuxShellUtils;
 
+import android.system.Os;
+
+import java.io.File;
 import java.nio.charset.Charset;
 import java.util.HashMap;
 
@@ -28,6 +31,17 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
     /** Environment variable for the termux {@link TermuxConstants#TERMUX_PREFIX_DIR_PATH}. */
     public static final String ENV_PREFIX = "PREFIX";
 
+    /** Filename of the path-redirector library installed under {@code $PREFIX/lib}. */
+    public static final String REDIRECTOR_LIB_NAME = "libinvapp-redirector.so";
+
+    /**
+     * Absolute path where the redirector is installed inside the Termux prefix.
+     * Must live under {@code $PREFIX} so Termux ELFs can LD_PRELOAD it (Android
+     * linker namespaces often block preloading from the APK {@code nativeLibraryDir}).
+     */
+    public static final String REDIRECTOR_PREFIX_LIB_PATH =
+        TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH + "/" + REDIRECTOR_LIB_NAME;
+
     public TermuxShellEnvironment() {
         super();
         shellCommandShellEnvironment = new TermuxShellCommandShellEnvironment();
@@ -39,8 +53,369 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
         TermuxAppShellEnvironment.setTermuxAppEnvironment(currentPackageContext);
     }
 
+    /**
+     * Copy {@code libinvapp-redirector.so} from the APK native lib dir into
+     * {@code $PREFIX/lib} so shell/dpkg processes can preload it, and ensure
+     * {@code $PREFIX/bin/login} keeps it first in {@code LD_PRELOAD} (stock
+     * login overwrites preload with termux-exec only).
+     */
+    public synchronized static void installRedirectorIntoPrefix(@NonNull Context context) {
+        if ("com.termux".equals(TermuxConstants.TERMUX_PACKAGE_NAME)) {
+            return;
+        }
+        if (!FileUtils.directoryFileExists(TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH, false)) {
+            // Prefix not bootstrapped yet.
+            return;
+        }
+
+        String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
+        File src = new File(nativeLibDir, REDIRECTOR_LIB_NAME);
+        File dest = new File(REDIRECTOR_PREFIX_LIB_PATH);
+        if (!src.exists()) {
+            Logger.logError(LOG_TAG, "Redirector not found in APK native libs: " + src.getAbsolutePath());
+            return;
+        }
+
+        // Refresh when missing or APK copy is newer (app update).
+        boolean needsCopy = !dest.exists()
+            || dest.length() != src.length()
+            || dest.lastModified() < src.lastModified();
+        if (needsCopy) {
+            Error error = FileUtils.copyRegularFile("invapp-redirector", src.getAbsolutePath(),
+                dest.getAbsolutePath(), false);
+            if (error != null) {
+                Logger.logErrorExtended(LOG_TAG, "Failed to install redirector into prefix\n" + error);
+                return;
+            }
+            try {
+                //noinspection OctalInteger
+                Os.chmod(dest.getAbsolutePath(), 0755);
+            } catch (Exception e) {
+                Logger.logStackTraceWithMessage(LOG_TAG, "Failed to chmod redirector in prefix", e);
+            }
+            Logger.logInfo(LOG_TAG, "Installed redirector to " + dest.getAbsolutePath());
+        }
+
+        patchLoginScriptToPreserveRedirector();
+        installPackageManagerPathOverrides();
+    }
+
+    /**
+     * Stock apt/dpkg ELFs embed {@code /data/data/com.termux/...} directory paths.
+     * Drop-in config overrides point them at this app's real prefix/cache so
+     * {@code apt update} does not exec methods under the inaccessible com.termux tree.
+     */
+    private synchronized static void installPackageManagerPathOverrides() {
+        String prefix = TermuxConstants.TERMUX_PREFIX_DIR_PATH;
+        String dataRoot = TermuxConstants.TERMUX_INTERNAL_PRIVATE_APP_DATA_DIR_PATH;
+        String aptConfDir = prefix + "/etc/apt/apt.conf.d";
+        String dpkgCfgDir = prefix + "/etc/dpkg/dpkg.cfg.d";
+        String cacheApt = dataRoot + "/cache/apt";
+        String logApt = prefix + "/var/log/apt";
+
+        FileUtils.createDirectoryFile(aptConfDir);
+        FileUtils.createDirectoryFile(dpkgCfgDir);
+        FileUtils.createDirectoryFile(cacheApt + "/archives/partial");
+        FileUtils.createDirectoryFile(prefix + "/var/lib/apt/lists/partial");
+        FileUtils.createDirectoryFile(logApt);
+
+        String aptConf = ""
+            + "// Managed by termux-app fork — override compiled-in com.termux paths\n"
+            + "Dir::State \"" + prefix + "/var/lib/apt\";\n"
+            + "Dir::State::status \"" + prefix + "/var/lib/dpkg/status\";\n"
+            + "Dir::Cache \"" + cacheApt + "\";\n"
+            + "Dir::Etc \"" + prefix + "/etc/apt\";\n"
+            + "Dir::Log \"" + logApt + "\";\n"
+            + "Dir::Bin::methods \"" + prefix + "/lib/apt/methods\";\n"
+            + "Dir::Bin::solvers:: \"" + prefix + "/lib/apt/solvers\";\n"
+            + "Dir::Bin::planners:: \"" + prefix + "/lib/apt/planners\";\n"
+            + "Dir::Bin::dpkg \"" + prefix + "/bin/dpkg\";\n"
+            + "Dir::Bin::apt-key \"" + prefix + "/bin/apt-key\";\n"
+            + "Dir::Bin::gpgv \"" + prefix + "/bin/gpgv\";\n"
+            + "Dir::Bin::gzip \"" + prefix + "/bin/gzip\";\n"
+            + "Dir::Bin::bzip2 \"" + prefix + "/bin/bzip2\";\n"
+            + "Dir::Bin::xz \"" + prefix + "/bin/xz\";\n"
+            + "Dir::Bin::lz4 \"" + prefix + "/bin/lz4\";\n"
+            + "Dir::Bin::zstd \"" + prefix + "/bin/zstd\";\n"
+            + "Dir::Bin::lzma \"" + prefix + "/bin/xz\";\n"
+            + "DPkg::Path \"" + prefix + "/bin\";\n";
+
+        String aptConfPath = aptConfDir + "/00invapp-prefix";
+        Error aptErr = FileUtils.writeTextToFile("apt.conf.d/00invapp-prefix", aptConfPath,
+            Charset.defaultCharset(), aptConf, false);
+        if (aptErr != null) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to write apt path overrides\n" + aptErr);
+        }
+
+        String dpkgConf = ""
+            + "# Managed by termux-app fork — override compiled-in com.termux admindir\n"
+            + "admindir " + prefix + "/var/lib/dpkg\n";
+        String dpkgConfPath = dpkgCfgDir + "/00invapp-prefix";
+        Error dpkgErr = FileUtils.writeTextToFile("dpkg.cfg.d/00invapp-prefix", dpkgConfPath,
+            Charset.defaultCharset(), dpkgConf, false);
+        if (dpkgErr != null) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to write dpkg path overrides\n" + dpkgErr);
+        } else {
+            Logger.logInfo(LOG_TAG, "Installed apt/dpkg path overrides for "
+                + TermuxConstants.TERMUX_PACKAGE_NAME);
+        }
+
+        // apt clears LD_PRELOAD before spawning apt-key/gpgv, but still passes
+        // com.termux temp paths in argv — re-enable redirector inside those tools.
+        patchBinaryWrapperForRedirector(prefix + "/bin/apt-key", true);
+        patchBinaryWrapperForRedirector(prefix + "/bin/gpgv", false);
+        patchBinaryWrapperForRedirector(prefix + "/lib/apt/methods/gpgv", false);
+        patchBinaryWrapperForRedirector(prefix + "/lib/apt/methods/http", false);
+        // Keep redirector loaded in dpkg so execve can rewrite maintainer-script shebangs.
+        patchBinaryWrapperForRedirector(prefix + "/bin/dpkg", false);
+
+        fixDpkgMaintainerScripts(prefix);
+    }
+
+    /**
+     * Rewrite leftover {@code com.termux} paths in already-unpacked dpkg maintainer
+     * scripts (postinst/prerm/…) so configure can run after a failed upgrade.
+     */
+    private synchronized static void fixDpkgMaintainerScripts(String prefix) {
+        File infoDir = new File(prefix + "/var/lib/dpkg/info");
+        File[] files = infoDir.listFiles();
+        if (files == null) {
+            return;
+        }
+        String oldPkg = "com.termux";
+        String newPkg = TermuxConstants.TERMUX_PACKAGE_NAME;
+        int fixed = 0;
+        for (File file : files) {
+            if (!file.isFile()) {
+                continue;
+            }
+            String name = file.getName();
+            StringBuilder contents = new StringBuilder();
+            Error readError = FileUtils.readTextFromFile(name, file.getAbsolutePath(),
+                Charset.defaultCharset(), contents, true);
+            if (readError != null) {
+                continue;
+            }
+            String text = contents.toString();
+            if (!text.contains(oldPkg)) {
+                // Still repair dpkg .list files that lost their final newline.
+                if (!(name.endsWith(".list") && !text.isEmpty() && !text.endsWith("\n"))) {
+                    continue;
+                }
+            }
+            String patched = text.replace(oldPkg, newPkg);
+            // dpkg requires files-list entries to end with a newline.
+            if (!patched.isEmpty() && !patched.endsWith("\n")) {
+                patched = patched + "\n";
+            }
+            Error writeError = FileUtils.writeTextToFile(name, file.getAbsolutePath(),
+                Charset.defaultCharset(), patched, false);
+            if (writeError != null) {
+                Logger.logErrorExtended(LOG_TAG, "Failed to fix " + name + "\n" + writeError);
+                continue;
+            }
+            try {
+                //noinspection OctalInteger
+                Os.chmod(file.getAbsolutePath(), 0700);
+            } catch (Exception ignored) {
+            }
+            fixed++;
+        }
+        if (fixed > 0) {
+            Logger.logInfo(LOG_TAG, "Rewrote com.termux paths in " + fixed
+                + " dpkg maintainer script(s)");
+        }
+    }
+
+    /**
+     * Ensure a bin tool re-exports the path redirector in LD_PRELOAD.
+     * For shell scripts, inject after the shebang. For ELF binaries, replace the
+     * file with a small shell wrapper that preloads then execs {@code .real}.
+     */
+    private synchronized static void patchBinaryWrapperForRedirector(String absolutePath, boolean isShellScriptHint) {
+        File target = new File(absolutePath);
+        if (!target.exists()) {
+            return;
+        }
+
+        String markerBegin = "# --- invapp-redirector LD_PRELOAD (managed by app) ---";
+        String markerEnd = "# --- end invapp-redirector LD_PRELOAD ---";
+        String preloadExport = "export LD_PRELOAD=\"" + REDIRECTOR_PREFIX_LIB_PATH
+            + "${LD_PRELOAD:+:$LD_PRELOAD}\"\n";
+        String injectBlock = markerBegin + "\n"
+            + "if [ -f \"" + REDIRECTOR_PREFIX_LIB_PATH + "\" ]; then\n"
+            + "\t" + preloadExport
+            + "fi\n"
+            + markerEnd + "\n";
+
+        boolean treatAsScript = isShellScriptHint;
+        try (java.io.FileInputStream in = new java.io.FileInputStream(target)) {
+            byte[] hdr = new byte[2];
+            if (in.read(hdr) == 2 && hdr[0] == '#' && hdr[1] == '!') {
+                treatAsScript = true;
+            } else if (hdr[0] == 0x7f && hdr[1] == 'E') {
+                treatAsScript = false;
+            }
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed reading " + absolutePath, e);
+            return;
+        }
+
+        if (treatAsScript) {
+            StringBuilder contents = new StringBuilder();
+            Error readError = FileUtils.readTextFromFile(target.getName(), absolutePath,
+                Charset.defaultCharset(), contents, false);
+            if (readError != null) {
+                Logger.logErrorExtended(LOG_TAG, "Failed to read " + absolutePath + "\n" + readError);
+                return;
+            }
+            String text = contents.toString();
+            int prevBegin = text.indexOf(markerBegin);
+            if (prevBegin >= 0) {
+                int prevEnd = text.indexOf(markerEnd, prevBegin);
+                if (prevEnd >= 0) {
+                    text = text.substring(0, prevBegin)
+                        + text.substring(prevEnd + markerEnd.length());
+                    if (text.startsWith("\n", prevBegin)) {
+                        text = text.substring(0, prevBegin) + text.substring(prevBegin + 1);
+                    }
+                }
+            }
+            int afterShebang = 0;
+            if (text.startsWith("#!")) {
+                int nl = text.indexOf('\n');
+                afterShebang = nl >= 0 ? nl + 1 : text.length();
+            }
+            String patched = text.substring(0, afterShebang) + injectBlock + text.substring(afterShebang);
+            Error writeError = FileUtils.writeTextToFile(target.getName(), absolutePath,
+                Charset.defaultCharset(), patched, false);
+            if (writeError != null) {
+                Logger.logErrorExtended(LOG_TAG, "Failed to patch " + absolutePath + "\n" + writeError);
+                return;
+            }
+        } else {
+            // ELF: move aside and wrap.
+            String realPath = absolutePath + ".real";
+            File realFile = new File(realPath);
+            if (!realFile.exists()) {
+                Error moveErr = FileUtils.moveRegularFile(target.getName(), absolutePath, realPath, false);
+                if (moveErr != null) {
+                    Logger.logErrorExtended(LOG_TAG, "Failed to move " + absolutePath + " for wrapper\n" + moveErr);
+                    return;
+                }
+            } else if (target.exists() && !isManagedWrapper(absolutePath, markerBegin)) {
+                // Already have .real; refresh wrapper only.
+            }
+            String wrapper = "#!/data/data/" + TermuxConstants.TERMUX_PACKAGE_NAME
+                + "/files/usr/bin/sh\n"
+                + injectBlock
+                + "exec \"" + realPath + "\" \"$@\"\n";
+            Error writeError = FileUtils.writeTextToFile(target.getName() + "-wrapper", absolutePath,
+                Charset.defaultCharset(), wrapper, false);
+            if (writeError != null) {
+                Logger.logErrorExtended(LOG_TAG, "Failed to write wrapper for " + absolutePath + "\n" + writeError);
+                return;
+            }
+        }
+
+        try {
+            //noinspection OctalInteger
+            Os.chmod(absolutePath, 0700);
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to chmod " + absolutePath, e);
+        }
+        Logger.logInfo(LOG_TAG, "Ensured redirector preload in " + absolutePath);
+    }
+
+    private static boolean isManagedWrapper(String absolutePath, String markerBegin) {
+        StringBuilder contents = new StringBuilder();
+        Error readError = FileUtils.readTextFromFile("wrapper-check", absolutePath,
+            Charset.defaultCharset(), contents, true);
+        return readError == null && contents.toString().contains(markerBegin);
+    }
+
+    /**
+     * Stock {@code login} sets {@code LD_PRELOAD} to termux-exec alone (or unsets it),
+     * which drops our path redirector. Re-inject the redirector immediately before
+     * {@code exec "$SHELL"} so bash/dpkg keep seeing {@code /data/data/com.termux} → real prefix.
+     */
+    private synchronized static void patchLoginScriptToPreserveRedirector() {
+        String loginPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/login";
+        File loginFile = new File(loginPath);
+        if (!loginFile.isFile()) {
+            return;
+        }
+
+        String markerBegin = "# --- invapp-redirector LD_PRELOAD (managed by app) ---";
+        String markerEnd = "# --- end invapp-redirector LD_PRELOAD ---";
+        String injectBlock = markerBegin + "\n"
+            + "if [ -f \"" + REDIRECTOR_PREFIX_LIB_PATH + "\" ]; then\n"
+            + "\texport LD_PRELOAD=\"" + REDIRECTOR_PREFIX_LIB_PATH + "${LD_PRELOAD:+:$LD_PRELOAD}\"\n"
+            + "fi\n"
+            + markerEnd + "\n";
+
+        StringBuilder contents = new StringBuilder();
+        Error readError = FileUtils.readTextFromFile("login", loginPath, Charset.defaultCharset(),
+            contents, false);
+        if (readError != null) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to read login script\n" + readError);
+            return;
+        }
+
+        String text = contents.toString();
+        // Remove a previous managed block so upgrades stay idempotent.
+        int prevBegin = text.indexOf(markerBegin);
+        if (prevBegin >= 0) {
+            int prevEnd = text.indexOf(markerEnd, prevBegin);
+            if (prevEnd >= 0) {
+                text = text.substring(0, prevBegin)
+                    + text.substring(prevEnd + markerEnd.length());
+                // Drop a single leftover newline after removal.
+                if (text.startsWith("\n", prevBegin)) {
+                    text = text.substring(0, prevBegin) + text.substring(prevBegin + 1);
+                } else if (text.startsWith("\r\n", prevBegin)) {
+                    text = text.substring(0, prevBegin) + text.substring(prevBegin + 2);
+                }
+            }
+        }
+
+        String execNeedle = "if [ -n \"$TERM\" ]; then";
+        int execAt = text.lastIndexOf(execNeedle);
+        if (execAt < 0) {
+            // Older login scripts may only have a single exec line.
+            execNeedle = "exec \"$SHELL\"";
+            execAt = text.lastIndexOf(execNeedle);
+        }
+        if (execAt < 0) {
+            Logger.logWarn(LOG_TAG, "login script has no shell exec block; skipping redirector patch");
+            return;
+        }
+
+        // Find start of the line containing the needle.
+        int lineStart = text.lastIndexOf('\n', execAt - 1) + 1;
+        String patched = text.substring(0, lineStart) + injectBlock + text.substring(lineStart);
+        if (patched.equals(contents.toString())) {
+            return;
+        }
+
+        Error writeError = FileUtils.writeTextToFile("login", loginPath, Charset.defaultCharset(),
+            patched, false);
+        if (writeError != null) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to patch login script\n" + writeError);
+            return;
+        }
+        try {
+            //noinspection OctalInteger
+            Os.chmod(loginPath, 0700);
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to chmod patched login", e);
+        }
+        Logger.logInfo(LOG_TAG, "Patched login to keep invapp-redirector in LD_PRELOAD");
+    }
+
     /** Init {@link TermuxShellEnvironment} constants and caches. */
     public synchronized static void writeEnvironmentToFile(@NonNull Context currentPackageContext) {
+        installRedirectorIntoPrefix(currentPackageContext);
         HashMap<String, String> environmentMap = new TermuxShellEnvironment().getEnvironment(currentPackageContext, false);
         String environmentString = ShellEnvironmentUtils.convertEnvironmentToDotEnvFile(environmentMap);
 
@@ -82,10 +457,15 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
         if (!isFailSafe) {
             environment.put(ENV_TMPDIR, TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH);
 
-            // Enable our custom path redirector to fix "Permission denied" during pkg update/install.
-            // This library hooks stat/open/execve and redirects /data/data/com.termux to /data/data/com.invapp.
+            // Path redirector: map hardcoded /data/data/com.termux → real package data dir.
+            // Prefer $PREFIX/lib copy — APK nativeLibraryDir is often blocked as LD_PRELOAD
+            // for executables under $PREFIX (Android linker namespaces).
+            installRedirectorIntoPrefix(currentPackageContext);
             String nativeLibDir = currentPackageContext.getApplicationInfo().nativeLibraryDir;
-            String redirectorLib = nativeLibDir + "/libinvapp-redirector.so";
+            File prefixRedirector = new File(REDIRECTOR_PREFIX_LIB_PATH);
+            String redirectorLib = prefixRedirector.exists()
+                ? prefixRedirector.getAbsolutePath()
+                : (nativeLibDir + "/" + REDIRECTOR_LIB_NAME);
             String existingPreload = environment.get("LD_PRELOAD");
             if (existingPreload != null && !existingPreload.isEmpty()) {
                 environment.put("LD_PRELOAD", redirectorLib + ":" + existingPreload);
@@ -98,9 +478,17 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
                 environment.put(ENV_PATH, TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + ":" + TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/applets");
                 environment.put(ENV_LD_LIBRARY_PATH, TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH);
             } else {
-                // Termux binaries on Android 7+ rely on DT_RUNPATH, so LD_LIBRARY_PATH should be unset by default
                 environment.put(ENV_PATH, TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH);
-                environment.remove(ENV_LD_LIBRARY_PATH);
+                // Stock Termux Android 7+ binaries embed DT_RUNPATH for /data/data/com.termux/.../lib.
+                // Official Termux can leave LD_LIBRARY_PATH unset; renamed forks cannot in-place
+                // patch ELF when the package name length differs, so the dynamic linker still
+                // searches the com.termux RUNPATH and fails with "library ... not found".
+                // Point LD_LIBRARY_PATH at the real prefix lib dir to fix that.
+                if (!"com.termux".equals(TermuxConstants.TERMUX_PACKAGE_NAME)) {
+                    environment.put(ENV_LD_LIBRARY_PATH, TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH);
+                } else {
+                    environment.remove(ENV_LD_LIBRARY_PATH);
+                }
             }
         }
 
