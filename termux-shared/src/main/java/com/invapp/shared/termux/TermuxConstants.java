@@ -1200,10 +1200,10 @@ public final class TermuxConstants {
     public static final class TERMUX_API_APP {
 
         /** Termux:API app main activity name. */
-        public static final String TERMUX_API_MAIN_ACTIVITY_NAME = TERMUX_API_PACKAGE_NAME + ".activities.TermuxAPIMainActivity"; // Default: "com.invapp.api.activities.TermuxAPIMainActivity"
+        public static final String TERMUX_API_MAIN_ACTIVITY_NAME = "com.invapp.api.activities.TermuxAPIMainActivity";
 
         /** Termux:API app launcher activity name. This is an `activity-alias` for {@link #TERMUX_API_MAIN_ACTIVITY_NAME} used for launchers with {@link Intent#CATEGORY_LAUNCHER}. */
-        public static final String TERMUX_API_LAUNCHER_ACTIVITY_NAME = TERMUX_API_PACKAGE_NAME + ".activities.TermuxAPILauncherActivity"; // Default: "com.invapp.api.activities.TermuxAPILauncherActivity"
+        public static final String TERMUX_API_LAUNCHER_ACTIVITY_NAME = "com.invapp.api.activities.TermuxAPILauncherActivity";
 
     }
 

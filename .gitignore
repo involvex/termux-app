@@ -38,3 +38,7 @@ local.properties
 ehthumbs.db
 Thumbs.db
 .cline
+
+# termux-api module
+termux-api/build/
+

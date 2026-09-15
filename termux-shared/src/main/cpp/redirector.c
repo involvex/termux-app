@@ -378,6 +378,17 @@ int chdir(const char* path) {
  * termux-am-socket embeds /data/data/com.termux/.../am.sock. Rewrite AF_UNIX
  * connect paths so the client reaches our real TermuxAm socket server.
  */
+/*
+ * Stock termux-api-broadcast hardcodes com.termux.api://listen and
+ * am -n com.termux.api/.TermuxApiReceiver. Our companion API app lives at
+ * com.involvex.termux_app.api with class com.invapp.api.TermuxApiReceiver.
+ */
+static const char* OLD_API_LISTEN = "com.termux.api://listen";
+static const char* NEW_API_LISTEN = "com.involvex.termux_app.api://listen";
+static const char* OLD_API_COMPONENT = "com.termux.api/.TermuxApiReceiver";
+static const char* NEW_API_COMPONENT =
+    "com.involvex.termux_app.api/com.invapp.api.TermuxApiReceiver";
+
 int connect(int sockfd, const struct sockaddr* addr, socklen_t addrlen) {
     static int (*orig_connect)(int, const struct sockaddr*, socklen_t);
     if (!orig_connect) orig_connect = dlsym(RTLD_NEXT, "connect");
@@ -386,10 +397,31 @@ int connect(int sockfd, const struct sockaddr* addr, socklen_t addrlen) {
     }
 
     const struct sockaddr_un* un = (const struct sockaddr_un*)addr;
-    /* Abstract namespace sockets start with '\0'; leave them alone. */
+
+    /* Abstract namespace: rewrite Termux:API listen socket address. */
     if (un->sun_path[0] == '\0') {
+        const char* abs_name = un->sun_path + 1;
+        size_t abs_len = strnlen(abs_name, sizeof(un->sun_path) - 1);
+        if (abs_len == strlen(OLD_API_LISTEN)
+            && memcmp(abs_name, OLD_API_LISTEN, abs_len) == 0) {
+            struct sockaddr_un new_un;
+            memset(&new_un, 0, sizeof(new_un));
+            new_un.sun_family = AF_UNIX;
+            new_un.sun_path[0] = '\0';
+            size_t nlen = strlen(NEW_API_LISTEN);
+            if (nlen + 1 >= sizeof(new_un.sun_path)) {
+                errno = ENAMETOOLONG;
+                return -1;
+            }
+            memcpy(new_un.sun_path + 1, NEW_API_LISTEN, nlen);
+            socklen_t new_len = (socklen_t)(offsetof(struct sockaddr_un, sun_path)
+                + 1 + nlen);
+            LOGI("rewrote API listen socket → %s", NEW_API_LISTEN);
+            return orig_connect(sockfd, (struct sockaddr*)&new_un, new_len);
+        }
         return orig_connect(sockfd, addr, addrlen);
     }
+
     if (!strstr(un->sun_path, OLD_PKG)) {
         return orig_connect(sockfd, addr, addrlen);
     }
@@ -413,6 +445,44 @@ int connect(int sockfd, const struct sockaddr* addr, socklen_t addrlen) {
     socklen_t new_len = (socklen_t)(offsetof(struct sockaddr_un, sun_path)
         + strlen(new_un.sun_path) + 1);
     return orig_connect(sockfd, (struct sockaddr*)&new_un, new_len);
+}
+
+/* Rewrite argv for am / termux-api so broadcasts hit our companion API app. */
+static char** rewrite_argv_for_exec(char* const argv[]) {
+    if (!argv) return NULL;
+
+    size_t count = 0;
+    while (argv[count]) count++;
+
+    int needs = 0;
+    for (size_t i = 0; i < count; i++) {
+        if (argv[i] && strcmp(argv[i], OLD_API_COMPONENT) == 0) {
+            needs = 1;
+            break;
+        }
+    }
+    if (!needs) return (char**)argv;
+
+    char** out = (char**)malloc((count + 1) * sizeof(char*));
+    if (!out) return (char**)argv;
+
+    for (size_t i = 0; i < count; i++) {
+        if (argv[i] && strcmp(argv[i], OLD_API_COMPONENT) == 0) {
+            size_t n = strlen(NEW_API_COMPONENT) + 1;
+            char* copy = (char*)malloc(n);
+            if (!copy) {
+                out[i] = (char*)argv[i];
+            } else {
+                memcpy(copy, NEW_API_COMPONENT, n);
+                out[i] = copy;
+                LOGI("rewrote API am component → %s", NEW_API_COMPONENT);
+            }
+        } else {
+            out[i] = (char*)argv[i];
+        }
+    }
+    out[count] = NULL;
+    return out;
 }
 
 int open(const char* path, int flags, ...) {
@@ -502,10 +572,13 @@ int execve(const char* filename, char* const argv[], char* const envp[]) {
     char buf[4096];
     const char* redirected = redirect_path(filename, buf, sizeof(buf));
     rewrite_termux_paths_in_script(redirected);
+    char** new_argv = rewrite_argv_for_exec(argv);
     char** new_envp = rewrite_envp_for_exec(redirected, envp);
     static int (*orig_execve)(const char*, char* const[], char* const[]);
     if (!orig_execve) orig_execve = dlsym(RTLD_NEXT, "execve");
-    return orig_execve(redirected, argv, new_envp ? new_envp : (char**)envp);
+    return orig_execve(redirected,
+        new_argv ? new_argv : (char**)argv,
+        new_envp ? new_envp : (char**)envp);
 }
 
 int execv(const char* path, char* const argv[]) {
@@ -514,13 +587,17 @@ int execv(const char* path, char* const argv[]) {
     rewrite_termux_paths_in_script(redirected);
     /* execv uses environ; rewrite via execve so SSH/login get LD_* / HOME. */
     extern char** environ;
+    char** new_argv = rewrite_argv_for_exec(argv);
     char** new_envp = rewrite_envp_for_exec(redirected, environ);
     static int (*orig_execve)(const char*, char* const[], char* const[]);
     if (!orig_execve) orig_execve = dlsym(RTLD_NEXT, "execve");
-    return orig_execve(redirected, argv, new_envp ? new_envp : environ);
+    return orig_execve(redirected,
+        new_argv ? new_argv : (char**)argv,
+        new_envp ? new_envp : environ);
 }
 
 int execvp(const char* file, char* const argv[]) {
+    char** new_argv = rewrite_argv_for_exec(argv);
     /* Absolute paths may still be maintainer scripts; relative names are PATH lookups. */
     if (file && file[0] == '/') {
         char buf[4096];
@@ -528,11 +605,11 @@ int execvp(const char* file, char* const argv[]) {
         rewrite_termux_paths_in_script(redirected);
         static int (*orig_execvp)(const char*, char* const[]);
         if (!orig_execvp) orig_execvp = dlsym(RTLD_NEXT, "execvp");
-        return orig_execvp(redirected, argv);
+        return orig_execvp(redirected, new_argv ? new_argv : (char**)argv);
     }
     static int (*orig_execvp)(const char*, char* const[]);
     if (!orig_execvp) orig_execvp = dlsym(RTLD_NEXT, "execvp");
-    return orig_execvp(file, argv);
+    return orig_execvp(file, new_argv ? new_argv : (char**)argv);
 }
 
 int access(const char* path, int mode) {
