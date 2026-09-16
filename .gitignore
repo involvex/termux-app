@@ -45,3 +45,5 @@ termux-api/build/
 # MkDocs output
 public/
 
+# OpenCode glibc DNS shim (arm64) shipped in APK assets
+!app/src/main/assets/opencode/*.so

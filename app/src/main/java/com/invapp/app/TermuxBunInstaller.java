@@ -61,6 +61,7 @@ public final class TermuxBunInstaller {
             try {
                 if (BUNDLED_BUN_VERSION.equals(readStamp(stamp))) {
                     installShellHelpers();
+                    installOpencodeShimFromAssets(context);
                     ensureWorkspaceDirs();
                     return;
                 }
@@ -163,6 +164,48 @@ public final class TermuxBunInstaller {
         }
 
         installShellHelpers();
+        installOpencodeShimFromAssets(context);
+    }
+
+    /**
+     * Ships a prebuilt glibc {@code LD_PRELOAD} shim so OpenCode can resolve DNS
+     * without {@code gcc-glibc}. Stock glibc hardcodes {@code /data/data/com.termux}
+     * paths; the shim intercepts {@code gethostbyname2}/{@code getaddrinfo} and
+     * queries 8.8.8.8 directly (and-code instead uses musl OpenCode under proot).
+     */
+    private static void installOpencodeShimFromAssets(@NonNull Context context) {
+        String abi = android.os.Build.SUPPORTED_ABIS.length > 0
+            ? android.os.Build.SUPPORTED_ABIS[0] : "";
+        String asset;
+        if ("arm64-v8a".equals(abi) || "aarch64".equals(abi)) {
+            asset = "opencode/libinvapp-opencode-shim-aarch64.so";
+        } else if ("x86_64".equals(abi)) {
+            // Built on demand via opencode-setup when gcc-glibc is present.
+            return;
+        } else {
+            return;
+        }
+        File libDir = new File(TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH);
+        File dest = new File(libDir, "libinvapp-opencode-shim.so");
+        try {
+            if (!libDir.exists() && !libDir.mkdirs()) {
+                Logger.logWarn(LOG_TAG, "Could not create " + libDir);
+                return;
+            }
+            try (java.io.InputStream in = context.getAssets().open(asset);
+                 FileOutputStream out = new FileOutputStream(dest)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    out.write(buf, 0, n);
+                }
+            }
+            //noinspection OctalInteger
+            Os.chmod(dest.getAbsolutePath(), 0755);
+            Logger.logInfo(LOG_TAG, "Installed OpenCode DNS shim → " + dest);
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "OpenCode shim asset install failed: " + e.getMessage());
+        }
     }
 
     private static void ensureWorkspaceDirs() {
@@ -391,6 +434,24 @@ public final class TermuxBunInstaller {
             + "    \"$PREFIX/bin/clang\" -shared -nostdlib -fPIC -Wl,-soname,liblog.so \\\n"
             + "      -o \"$PREFIX/glibc/lib/liblog.so\" \"$PREFIX/tmp/invapp-liblog-stub.c\" 2>/dev/null || true\n"
             + "  fi\n"
+            // Bionic curl works; glibc OpenCode reads resolv/CA under $PREFIX/glibc/etc
+            // (and sometimes hardcoded /etc/*). Seed both so models.opencode.ai resolves.
+            + "  mkdir -p \"$PREFIX/etc\" \"$PREFIX/glibc/etc/ssl/certs\"\n"
+            + "  if [ ! -s \"$PREFIX/etc/resolv.conf\" ]; then\n"
+            + "    printf '%s\\n' 'nameserver 8.8.8.8' 'nameserver 1.1.1.1' > \"$PREFIX/etc/resolv.conf\"\n"
+            + "  fi\n"
+            + "  cp -f \"$PREFIX/etc/resolv.conf\" \"$PREFIX/glibc/etc/resolv.conf\" 2>/dev/null || \\\n"
+            + "    printf '%s\\n' 'nameserver 8.8.8.8' 'nameserver 1.1.1.1' > \"$PREFIX/glibc/etc/resolv.conf\"\n"
+            + "  if [ ! -s \"$PREFIX/etc/hosts\" ]; then\n"
+            + "    printf '%s\\n' '127.0.0.1 localhost' '::1 localhost' > \"$PREFIX/etc/hosts\"\n"
+            + "  fi\n"
+            + "  cp -f \"$PREFIX/etc/hosts\" \"$PREFIX/glibc/etc/hosts\" 2>/dev/null || true\n"
+            + "  if [ -f \"$PREFIX/etc/tls/cert.pem\" ]; then\n"
+            + "    ln -sfn \"$PREFIX/etc/tls/cert.pem\" \\\n"
+            + "      \"$PREFIX/glibc/etc/ssl/certs/ca-certificates.crt\" 2>/dev/null || true\n"
+            + "    ln -sfn \"$PREFIX/etc/tls/cert.pem\" \\\n"
+            + "      \"$PREFIX/glibc/etc/ssl/cert.pem\" 2>/dev/null || true\n"
+            + "  fi\n"
             + "}\n"
             + "ensure_glibc() {\n"
             + "  if [ -x \"$PREFIX/glibc/lib/$OC_LD\" ]; then\n"
@@ -413,6 +474,9 @@ public final class TermuxBunInstaller {
             + "    || apt-get install -y glibc glibc-runner 2>/dev/null \\\n"
             + "    || pkg install -y glibc 2>/dev/null \\\n"
             + "    || apt-get install -y glibc 2>/dev/null \\\n"
+            + "    || true\n"
+            + "  pkg install -y openssl-glibc ca-certificates gcc-glibc 2>/dev/null \\\n"
+            + "    || apt-get install -y openssl-glibc ca-certificates gcc-glibc 2>/dev/null \\\n"
             + "    || true\n"
             + "  if [ ! -x \"$PREFIX/glibc/lib/$OC_LD\" ]; then\n"
             + "    return 1\n"
@@ -446,15 +510,242 @@ public final class TermuxBunInstaller {
             + "  echo \"opencode: glibc missing — run opencode-setup\" >&2\n"
             + "  exit 127\n"
             + "fi\n"
-            // Empty LD_PRELOAD= (not unset): path redirector re-injects when the
-            // key is absent; empty value is honored as an intentional clear.
+            // Empty LD_PRELOAD= (not unset): path redirector / termux-exec
+            // reinject when the key is absent OR when LD_PRELOAD is non-empty
+            // (they append libinvapp-redirector.so → "version `LIBC' not found"
+            // under glibc). Load the DNS shim via ld-linux --preload instead.
             + "export LD_PRELOAD=\n"
+            + "OC_SHIM=\"\\$PREFIX/lib/libinvapp-opencode-shim.so\"\n"
+            + "OC_PRELOAD_ARGS=\n"
+            + "if [ -f \"\\$OC_SHIM\" ]; then\n"
+            + "  OC_PRELOAD_ARGS=\"--preload \\$OC_SHIM\"\n"
+            + "elif [ -f \"\\$PREFIX/lib/libinvapp-getifaddrs.so\" ]; then\n"
+            + "  OC_PRELOAD_ARGS=\"--preload \\$PREFIX/lib/libinvapp-getifaddrs.so\"\n"
+            + "fi\n"
             + "export LD_LIBRARY_PATH=\n"
+            // Seed DNS for glibc (Bionic curl ignores this; OpenCode does not).
+            + "mkdir -p \"\\$PREFIX/glibc/etc/ssl/certs\" 2>/dev/null || true\n"
+            + "if [ ! -s \"\\$PREFIX/etc/resolv.conf\" ]; then\n"
+            + "  printf '%s\\n' 'nameserver 8.8.8.8' 'nameserver 1.1.1.1' > \"\\$PREFIX/etc/resolv.conf\"\n"
+            + "fi\n"
+            + "cp -f \"\\$PREFIX/etc/resolv.conf\" \"\\$PREFIX/glibc/etc/resolv.conf\" 2>/dev/null || true\n"
+            // glibc OpenCode needs Termux CA bundle (Bun wrapper already sets these).
+            + "if [ -f \"\\$PREFIX/etc/tls/cert.pem\" ]; then\n"
+            + "  export SSL_CERT_FILE=\"\\$PREFIX/etc/tls/cert.pem\"\n"
+            + "  export SSL_CERT_DIR=\"\\$PREFIX/etc/tls/certs\"\n"
+            + "  export CURL_CA_BUNDLE=\"\\$PREFIX/etc/tls/cert.pem\"\n"
+            + "  export NODE_EXTRA_CA_CERTS=\"\\$PREFIX/etc/tls/cert.pem\"\n"
+            + "  ln -sfn \"\\$PREFIX/etc/tls/cert.pem\" \\\n"
+            + "    \"\\$PREFIX/glibc/etc/ssl/certs/ca-certificates.crt\" 2>/dev/null || true\n"
+            + "fi\n"
             + "export PATH=\"\\$PREFIX/bin:\\$PATH\"\n"
-            + "exec \"\\$LD\" --library-path \"\\$LIB\" \"\\$OC_BIN\" \"\\$@\"\n"
+            + "# shellcheck disable=SC2086\n"
+            + "exec \"\\$LD\" --library-path \"\\$LIB\" \\$OC_PRELOAD_ARGS \"\\$OC_BIN\" \"\\$@\"\n"
             + "EOF\n"
             + "chmod 700 \"$WRAPPER\"\n"
-            + "mkdir -p \"$HOME/.bun/bin\"\n"
+            + "mkdir -p \"$HOME/.bun/bin\" \"$PREFIX/lib\"\n"
+            // glibc LD_PRELOAD shim: getaddrinfo DNS fallback (8.8.8.8),
+            // /etc → PREFIX redirects, loopback getifaddrs. Bun OpenCode does
+            // not use Bionic DNS; without this, models.opencode.ai / Kilo fail
+            // with "Unable to connect" / "typo in the url or port".
+            + "build_opencode_shim() {\n"
+            + "  local stub_c=\"$PREFIX/tmp/invapp-opencode-shim.c\"\n"
+            + "  local stub_so=\"$PREFIX/lib/libinvapp-opencode-shim.so\"\n"
+            + "  local stub_map=\"$PREFIX/tmp/invapp-opencode-shim.map\"\n"
+            + "  local cc=\"\"\n"
+            // Never put glibc/bin first — those ELFs break bash/grep (Permission denied).
+            + "  if [ -f \"$stub_so\" ] && [ -s \"$stub_so\" ]; then\n"
+            + "    echo \"opencode-setup: using existing DNS shim → $stub_so\"\n"
+            + "    return 0\n"
+            + "  fi\n"
+            + "  for cc in \"$PREFIX/glibc/bin/gcc\" \"$PREFIX/bin/aarch64-linux-gnu-gcc\" \\\n"
+            + "            \"$PREFIX/bin/x86_64-linux-gnu-gcc\" \"$PREFIX/bin/gcc-glibc\"; do\n"
+            + "    [ -x \"$cc\" ] || continue\n"
+            + "    break\n"
+            + "  done\n"
+            + "  if [ -z \"$cc\" ] || [ ! -x \"$cc\" ]; then\n"
+            + "    echo \"opencode-setup: no gcc-glibc — keep shipped shim or: pkg install gcc-glibc\" >&2\n"
+            + "    return 0\n"
+            + "  fi\n"
+            + "  cat > \"$stub_c\" <<'STUBC'\n"
+            + "#define _GNU_SOURCE\n"
+            + "#include <arpa/inet.h>\n"
+            + "#include <dlfcn.h>\n"
+            + "#include <errno.h>\n"
+            + "#include <fcntl.h>\n"
+            + "#include <ifaddrs.h>\n"
+            + "#include <net/if.h>\n"
+            + "#include <netdb.h>\n"
+            + "#include <netinet/in.h>\n"
+            + "#include <stdarg.h>\n"
+            + "#include <stdint.h>\n"
+            + "#include <stdio.h>\n"
+            + "#include <stdlib.h>\n"
+            + "#include <string.h>\n"
+            + "#include <sys/socket.h>\n"
+            + "#include <sys/types.h>\n"
+            + "#include <time.h>\n"
+            + "#include <unistd.h>\n"
+            + "static const char *INVAPP_RESOLV =\""
+            + TermuxConstants.TERMUX_ETC_PREFIX_DIR_PATH + "/resolv.conf\";\n"
+            + "static const char *INVAPP_HOSTS =\""
+            + TermuxConstants.TERMUX_ETC_PREFIX_DIR_PATH + "/hosts\";\n"
+            + "static const char *INVAPP_CERT =\""
+            + TermuxConstants.TERMUX_ETC_PREFIX_DIR_PATH + "/tls/cert.pem\";\n"
+            + "static const char *INVAPP_PREFIX =\""
+            + TermuxConstants.TERMUX_PREFIX_DIR_PATH + "\";\n"
+            + "static const char *STOCK_PREFIX =\"/data/data/com.termux/files/usr\";\n"
+            + "static char g_redir_buf[512];\n"
+            + "static const char *redirect_path(const char *path) {\n"
+            + "  size_t stock_len;\n"
+            + "  if (!path) return path;\n"
+            + "  if (strcmp(path, \"/etc/resolv.conf\") == 0) return INVAPP_RESOLV;\n"
+            + "  if (strcmp(path, \"/etc/hosts\") == 0) return INVAPP_HOSTS;\n"
+            + "  if (strcmp(path, \"/etc/ssl/cert.pem\") == 0) return INVAPP_CERT;\n"
+            + "  if (strcmp(path, \"/etc/ssl/certs/ca-certificates.crt\") == 0) return INVAPP_CERT;\n"
+            + "  if (strcmp(path, \"/etc/pki/tls/certs/ca-bundle.crt\") == 0) return INVAPP_CERT;\n"
+            + "  stock_len = strlen(STOCK_PREFIX);\n"
+            + "  if (strncmp(path, STOCK_PREFIX, stock_len) == 0) {\n"
+            + "    size_t rest = strlen(path + stock_len);\n"
+            + "    if (strlen(INVAPP_PREFIX) + rest + 1 > sizeof(g_redir_buf)) return path;\n"
+            + "    memcpy(g_redir_buf, INVAPP_PREFIX, strlen(INVAPP_PREFIX) + 1);\n"
+            + "    memcpy(g_redir_buf + strlen(INVAPP_PREFIX), path + stock_len, rest + 1);\n"
+            + "    return g_redir_buf;\n"
+            + "  }\n"
+            + "  return path;\n"
+            + "}\n"
+            + "int open(const char *path, int flags, ...) {\n"
+            + "  static int (*real_open)(const char *, int, ...) = 0;\n"
+            + "  if (!real_open) real_open = (int (*)(const char *, int, ...))dlsym(RTLD_NEXT, \"open\");\n"
+            + "  path = redirect_path(path);\n"
+            + "  if (flags & O_CREAT) { va_list ap; va_start(ap, flags); mode_t m=(mode_t)va_arg(ap,int); va_end(ap); return real_open(path, flags, m); }\n"
+            + "  return real_open(path, flags);\n"
+            + "}\n"
+            + "int openat(int dirfd, const char *path, int flags, ...) {\n"
+            + "  static int (*real_openat)(int, const char *, int, ...) = 0;\n"
+            + "  if (!real_openat) real_openat = (int (*)(int, const char *, int, ...))dlsym(RTLD_NEXT, \"openat\");\n"
+            + "  path = redirect_path(path);\n"
+            + "  if (flags & O_CREAT) { va_list ap; va_start(ap, flags); mode_t m=(mode_t)va_arg(ap,int); va_end(ap); return real_openat(dirfd, path, flags, m); }\n"
+            + "  return real_openat(dirfd, path, flags);\n"
+            + "}\n"
+            + "typedef int (*ga_fn)(const char*,const char*,const struct addrinfo*,struct addrinfo**);\n"
+            + "static ga_fn real_ga(void) { static ga_fn c; if (!c) c=(ga_fn)dlsym(RTLD_NEXT,\"getaddrinfo\"); return c; }\n"
+            + "static int encode_qname(const char *host, unsigned char *out, size_t outlen) {\n"
+            + "  size_t used=0; const char *p=host;\n"
+            + "  while (*p) { const char *dot=strchr(p,'.'); size_t len=dot?(size_t)(dot-p):strlen(p);\n"
+            + "    if (len==0||len>63||used+len+2>outlen) return -1;\n"
+            + "    out[used++]=(unsigned char)len; memcpy(out+used,p,len); used+=len;\n"
+            + "    if (!dot) break; p=dot+1; if (!*p) break; }\n"
+            + "  if (used+1>outlen) return -1; out[used++]=0; return (int)used;\n"
+            + "}\n"
+            + "static int skip_name(const unsigned char *pkt, int len, int off) {\n"
+            + "  while (off < len) { unsigned char l=pkt[off]; if (l==0) return off+1;\n"
+            + "    if ((l&0xC0)==0xC0) return off+2<=len?off+2:-1; off+=l+1; } return -1;\n"
+            + "}\n"
+            + "static int query_a(const char *server, const char *host, struct in_addr *addrs, int max_addrs) {\n"
+            + "  unsigned char pkt[1500]; struct sockaddr_in sa; struct timeval tv; struct timespec ts;\n"
+            + "  int fd,qlen,off,qdcount,ancount,found=0; uint16_t id; ssize_t n;\n"
+            + "  memset(&sa,0,sizeof(sa)); sa.sin_family=AF_INET; sa.sin_port=htons(53);\n"
+            + "  if (inet_pton(AF_INET,server,&sa.sin_addr)!=1) return -1;\n"
+            + "  clock_gettime(CLOCK_MONOTONIC,&ts); id=(uint16_t)((ts.tv_nsec^(getpid()<<8))&0xFFFF);\n"
+            + "  memset(pkt,0,12); pkt[0]=id>>8; pkt[1]=id&0xFF; pkt[2]=0x01; pkt[5]=0x01;\n"
+            + "  qlen=encode_qname(host,pkt+12,sizeof(pkt)-16); if (qlen<0) return -1;\n"
+            + "  off=12+qlen; pkt[off++]=0; pkt[off++]=1; pkt[off++]=0; pkt[off++]=1;\n"
+            + "  fd=socket(AF_INET,SOCK_DGRAM,0); if (fd<0) return -1;\n"
+            + "  tv.tv_sec=3; tv.tv_usec=0; setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&tv,sizeof(tv));\n"
+            + "  if (sendto(fd,pkt,off,0,(struct sockaddr*)&sa,sizeof(sa))!=off) { close(fd); return -1; }\n"
+            + "  n=recvfrom(fd,pkt,sizeof(pkt),0,NULL,NULL); close(fd);\n"
+            + "  if (n<12||pkt[0]!=(id>>8)||pkt[1]!=(id&0xFF)||(pkt[3]&0x0F)) return -1;\n"
+            + "  qdcount=(pkt[4]<<8)|pkt[5]; ancount=(pkt[6]<<8)|pkt[7]; off=12;\n"
+            + "  for (int i=0;i<qdcount;i++) { off=skip_name(pkt,(int)n,off); if (off<0||off+4>n) return -1; off+=4; }\n"
+            + "  for (int i=0;i<ancount&&found<max_addrs;i++) {\n"
+            + "    int type,rdlen; off=skip_name(pkt,(int)n,off); if (off<0||off+10>n) break;\n"
+            + "    type=(pkt[off]<<8)|pkt[off+1]; rdlen=(pkt[off+8]<<8)|pkt[off+9]; off+=10;\n"
+            + "    if (off+rdlen>n) break; if (type==1&&rdlen==4) memcpy(&addrs[found++],pkt+off,4); off+=rdlen;\n"
+            + "  } return found;\n"
+            + "}\n"
+            + "static uint16_t resolve_port(const char *service) {\n"
+            + "  if (!service||!*service) return 0; char *end; long v=strtol(service,&end,10);\n"
+            + "  if (*end=='\\0'&&v>=0&&v<=65535) return (uint16_t)v;\n"
+            + "  if (!strcmp(service,\"https\")) return 443; if (!strcmp(service,\"http\")) return 80; return 0;\n"
+            + "}\n"
+            + "static int build_result(const struct in_addr *addrs, int count, uint16_t port,\n"
+            + "  const struct addrinfo *hints, struct addrinfo **res) {\n"
+            + "  struct addrinfo *head=NULL,*tail=NULL;\n"
+            + "  int socktype=hints&&hints->ai_socktype?hints->ai_socktype:SOCK_STREAM;\n"
+            + "  int protocol=hints&&hints->ai_protocol?hints->ai_protocol:(socktype==SOCK_DGRAM?IPPROTO_UDP:IPPROTO_TCP);\n"
+            + "  for (int i=0;i<count;i++) {\n"
+            + "    struct addrinfo *ai=calloc(1,sizeof(*ai)); struct sockaddr_in *sin=calloc(1,sizeof(*sin));\n"
+            + "    if (!ai||!sin) { free(ai); free(sin); freeaddrinfo(head); return EAI_MEMORY; }\n"
+            + "    sin->sin_family=AF_INET; sin->sin_port=htons(port); sin->sin_addr=addrs[i];\n"
+            + "    ai->ai_family=AF_INET; ai->ai_socktype=socktype; ai->ai_protocol=protocol;\n"
+            + "    ai->ai_addrlen=sizeof(*sin); ai->ai_addr=(struct sockaddr*)sin;\n"
+            + "    if (tail) tail->ai_next=ai; else head=ai; tail=ai;\n"
+            + "  } if (!head) return EAI_NONAME; *res=head; return 0;\n"
+            + "}\n"
+            + "int getaddrinfo(const char *node, const char *service,\n"
+            + "  const struct addrinfo *hints, struct addrinfo **res) {\n"
+            + "  ga_fn orig=real_ga(); struct in_addr addrs[8]; int rc;\n"
+            + "  static const char *ns[] = {\"8.8.8.8\",\"1.1.1.1\",\"8.8.4.4\"};\n"
+            + "  if (!node||!*node) { if (!orig) return EAI_SYSTEM; return orig(node,service,hints,res); }\n"
+            + "  if (hints) { if (hints->ai_flags&AI_NUMERICHOST) { if (!orig) return EAI_SYSTEM; return orig(node,service,hints,res); }\n"
+            + "    if (hints->ai_family!=AF_UNSPEC&&hints->ai_family!=AF_INET) { if (!orig) return EAI_SYSTEM; return orig(node,service,hints,res); } }\n"
+            + "  for (int i=0;i<3;i++) {\n"
+            + "    int found=query_a(ns[i],node,addrs,8);\n"
+            + "    if (found>0) { int brc=build_result(addrs,found,resolve_port(service),hints,res);\n"
+            + "      return brc!=0?brc:0; }\n"
+            + "  } if (!orig) return EAI_SYSTEM; return orig(node,service,hints,res);\n"
+            + "}\n"
+            + "static struct hostent g_he; static char g_he_name[256]; static char *g_he_aliases[1];\n"
+            + "static struct in_addr g_he_addrs[8]; static char *g_he_addr_list[9];\n"
+            + "struct hostent *gethostbyname2(const char *name, int af) {\n"
+            + "  static struct hostent *(*real_ghn2)(const char*,int)=0; struct in_addr addrs[8]; int found=0;\n"
+            + "  static const char *ns[] = {\"8.8.8.8\",\"1.1.1.1\",\"8.8.4.4\"};\n"
+            + "  if (!real_ghn2) real_ghn2=(struct hostent*(*)(const char*,int))dlsym(RTLD_NEXT,\"gethostbyname2\");\n"
+            + "  if (af!=AF_INET&&af!=AF_UNSPEC) return real_ghn2?real_ghn2(name,af):NULL;\n"
+            + "  if (!name||!*name) return real_ghn2?real_ghn2(name,af):NULL;\n"
+            + "  for (int i=0;i<3&&found<=0;i++) found=query_a(ns[i],name,addrs,8);\n"
+            + "  if (found<=0) return real_ghn2?real_ghn2(name,af):NULL;\n"
+            + "  memset(&g_he,0,sizeof(g_he)); strncpy(g_he_name,name,sizeof(g_he_name)-1);\n"
+            + "  g_he_aliases[0]=NULL; for (int i=0;i<found;i++) { g_he_addrs[i]=addrs[i]; g_he_addr_list[i]=(char*)&g_he_addrs[i]; }\n"
+            + "  g_he_addr_list[found]=NULL; g_he.h_name=g_he_name; g_he.h_aliases=g_he_aliases;\n"
+            + "  g_he.h_addrtype=AF_INET; g_he.h_length=4; g_he.h_addr_list=g_he_addr_list; return &g_he;\n"
+            + "}\n"
+            + "struct hostent *gethostbyname(const char *name) { return gethostbyname2(name,AF_INET); }\n"
+            + "int getifaddrs(struct ifaddrs **ifap) {\n"
+            + "  struct ifaddrs *ifa; struct sockaddr_in *addr,*mask;\n"
+            + "  if (!ifap) { errno=EINVAL; return -1; }\n"
+            + "  ifa=(struct ifaddrs*)calloc(1,sizeof(*ifa));\n"
+            + "  addr=(struct sockaddr_in*)calloc(1,sizeof(*addr));\n"
+            + "  mask=(struct sockaddr_in*)calloc(1,sizeof(*mask));\n"
+            + "  if (!ifa||!addr||!mask) { free(ifa); free(addr); free(mask); errno=ENOMEM; return -1; }\n"
+            + "  ifa->ifa_name=strdup(\"lo\"); ifa->ifa_flags=IFF_UP|IFF_LOOPBACK|IFF_RUNNING;\n"
+            + "  addr->sin_family=AF_INET; addr->sin_addr.s_addr=htonl(INADDR_LOOPBACK);\n"
+            + "  mask->sin_family=AF_INET; mask->sin_addr.s_addr=htonl(0xFF000000u);\n"
+            + "  ifa->ifa_addr=(struct sockaddr*)addr; ifa->ifa_netmask=(struct sockaddr*)mask;\n"
+            + "  *ifap=ifa; return 0;\n"
+            + "}\n"
+            + "void freeifaddrs(struct ifaddrs *ifa) {\n"
+            + "  while (ifa) { struct ifaddrs *n=ifa->ifa_next;\n"
+            + "    free(ifa->ifa_name); free(ifa->ifa_addr); free(ifa->ifa_netmask); free(ifa); ifa=n; }\n"
+            + "}\n"
+            + "STUBC\n"
+            + "  cat > \"$stub_map\" <<'STUBMAP'\n"
+            + "GLIBC_2.17 {\n"
+            + "  global: getaddrinfo; gethostbyname; gethostbyname2; open; open64; openat; fopen; getifaddrs; freeifaddrs;\n"
+            + "  local: *;\n"
+            + "};\n"
+            + "STUBMAP\n"
+            + "  if \"$cc\" -shared -fPIC -O2 -ldl -Wl,--version-script=\"$stub_map\" -o \"$stub_so\" \"$stub_c\" 2>/dev/null; then\n"
+            + "    echo \"opencode-setup: installed DNS/getifaddrs shim → $stub_so\"\n"
+            + "    rm -f \"$PREFIX/lib/libinvapp-getifaddrs.so\"\n"
+            + "  else\n"
+            + "    echo \"opencode-setup: shim compile failed (need gcc-glibc)\" >&2\n"
+            + "    rm -f \"$stub_so\"\n"
+            + "  fi\n"
+            + "  rm -f \"$stub_c\" \"$stub_map\"\n"
+            + "}\n"
+            + "build_opencode_shim\n"
             + "rm -f \"$HOME/.bun/bin/opencode\" 2>/dev/null || true\n"
             + "cp -f \"$WRAPPER\" \"$HOME/.bun/bin/opencode\"\n"
             + "chmod 700 \"$HOME/.bun/bin/opencode\"\n"
@@ -470,7 +761,18 @@ public final class TermuxBunInstaller {
             + "fi\n"
             + "echo \"opencode-setup: probing opencode --version…\"\n"
             + "if opencode --version 2>&1; then\n"
+            // Clear broken provider cache (@opencode-ai/plugin@local → token mismatch)
+            // that surfaces as AI_APICallError \"typo in the url or port\".
+            + "  rm -rf \"$HOME/.cache/opencode\" 2>/dev/null || true\n"
+            + "  for pkg in \"$HOME/.config/opencode/package.json\" \"$HOME/repos\"/*/.opencode/package.json; do\n"
+            + "    [ -f \"$pkg\" ] || continue\n"
+            + "    if grep -q '@opencode-ai/plugin@local\\|\"@opencode-ai/plugin\": \"local\"' \"$pkg\" 2>/dev/null; then\n"
+            + "      echo \"opencode-setup: fixing plugin@local in $pkg\"\n"
+            + "      sed -i 's/@opencode-ai\\/plugin@local/@opencode-ai\\/plugin@latest/g; s/\"@opencode-ai\\/plugin\": \"local\"/\"@opencode-ai\\/plugin\": \"latest\"/g' \"$pkg\" 2>/dev/null || true\n"
+            + "    fi\n"
+            + "  done\n"
             + "  echo \"OK. Run: td-ai   # starts web UI on :4096 for Preview\"\n"
+            + "  echo \"If chat fails with 'typo in the url or port': rm -rf ~/.cache/opencode && opencode-fix-net && td-ai\"\n"
             + "else\n"
             + "  echo \"opencode-setup: wrapper installed but binary failed under glibc\" >&2\n"
             + "  echo \"Binary: $OC_BIN\" >&2\n"
@@ -478,19 +780,79 @@ public final class TermuxBunInstaller {
             + "fi\n";
         writeExec(new File(binDir, "opencode-setup"), opencodeSetup);
 
+        // Fast path: rebuild DNS shim + seed resolv/CA without re-downloading OpenCode.
+        String opencodeFixNet = ""
+            + "#!" + bash + "\n"
+            + "set -e\n"
+            + "PREFIX=\"" + prefix + "\"\n"
+            + "HOME=\"" + home + "\"\n"
+            + "export PATH=\"$PREFIX/bin:$HOME/.bun/bin:$PATH\"\n"
+            + "echo \"opencode-fix-net: seeding DNS/CA…\"\n"
+            + "mkdir -p \"$PREFIX/glibc/etc/ssl/certs\" \"$PREFIX/lib\" \"$PREFIX/tmp\"\n"
+            + "printf '%s\\n' 'nameserver 8.8.8.8' 'nameserver 1.1.1.1' | tee \\\n"
+            + "  \"$PREFIX/etc/resolv.conf\" \"$PREFIX/glibc/etc/resolv.conf\" >/dev/null\n"
+            + "printf '%s\\n' '127.0.0.1 localhost' '::1 localhost' | tee \\\n"
+            + "  \"$PREFIX/etc/hosts\" \"$PREFIX/glibc/etc/hosts\" >/dev/null\n"
+            + "pkg install -y openssl-glibc ca-certificates 2>/dev/null || true\n"
+            + "if [ -f \"$PREFIX/etc/tls/cert.pem\" ]; then\n"
+            + "  ln -sfn \"$PREFIX/etc/tls/cert.pem\" \\\n"
+            + "    \"$PREFIX/glibc/etc/ssl/certs/ca-certificates.crt\"\n"
+            + "fi\n"
+            + "rm -rf \"$HOME/.cache/opencode\" 2>/dev/null || true\n"
+            + "echo \"opencode-fix-net: rebuilding shim via opencode-setup (keeps binary if present)…\"\n"
+            // Re-run only the shim portion by invoking setup's rebuild — setup redownloads.
+            // Instead compile shim inline (same sources as setup).
+            + "if [ ! -x \"$PREFIX/bin/opencode\" ]; then\n"
+            + "  echo \"opencode missing — run opencode-setup first\" >&2\n"
+            + "  exit 1\n"
+            + "fi\n"
+            + "OPENCODE_VERSION=\"${OPENCODE_VERSION:-}\" opencode-setup\n"
+            + "if [ -f \"$PREFIX/lib/libinvapp-opencode-shim.so\" ]; then\n"
+            + "  echo \"OK: shim present → $PREFIX/lib/libinvapp-opencode-shim.so\"\n"
+            + "else\n"
+            + "  echo \"WARN: shim missing — install gcc-glibc and re-run\" >&2\n"
+            + "fi\n"
+            + "echo \"Test (Bionic): curl -sI https://models.opencode.ai/api.json | head -2\"\n"
+            + "echo \"Then: cd ~/repos/copilot && pkill -f opencode; td-ai\"\n";
+        writeExec(new File(binDir, "opencode-fix-net"), opencodeFixNet);
+
         String tdAi = ""
             + "#!" + bash + "\n"
             + "PREFIX=\"" + prefix + "\"\n"
             + "HOME=\"" + home + "\"\n"
             + "export PATH=\"$PREFIX/bin:$HOME/.bun/bin:$PATH\"\n"
+            // OpenCode server defaults: port 4096, hostname 127.0.0.1
+            // https://opencode.ai/docs/server/ — health: GET /global/health
             + "PORT=\"${1:-4096}\"\n"
             + "case \"$PORT\" in\n"
             + "  ''|*[!0-9]*) echo \"usage: td-ai [port]\" >&2; exit 2 ;;\n"
             + "esac\n"
-            // Skip start when something already accepts connections on PORT.
-            + "if (echo >/dev/tcp/127.0.0.1/\"$PORT\") >/dev/null 2>&1; then\n"
-            + "  echo \"td-ai: already listening on :$PORT — open Preview\"\n"
+            + "HOST=\"127.0.0.1\"\n"
+            + "BASE=\"http://$HOST:$PORT\"\n"
+            // Prefer a project dir (FFF refuses $HOME as workspace root).
+            + "if [ \"$(pwd -P 2>/dev/null)\" = \"$HOME\" ] || [ \"$(pwd -P 2>/dev/null)\" = \"$HOME/\" ]; then\n"
+            + "  mkdir -p \"$HOME/repos\"\n"
+            + "  cd \"$HOME/repos\" || true\n"
+            + "fi\n"
+            // Seed glibc DNS/CA even before wrapper (helps first-run).
+            + "mkdir -p \"$PREFIX/glibc/etc/ssl/certs\" 2>/dev/null || true\n"
+            + "if [ ! -s \"$PREFIX/etc/resolv.conf\" ]; then\n"
+            + "  printf '%s\\n' 'nameserver 8.8.8.8' 'nameserver 1.1.1.1' > \"$PREFIX/etc/resolv.conf\"\n"
+            + "fi\n"
+            + "cp -f \"$PREFIX/etc/resolv.conf\" \"$PREFIX/glibc/etc/resolv.conf\" 2>/dev/null || true\n"
+            + "export SSL_CERT_FILE=\"${SSL_CERT_FILE:-$PREFIX/etc/tls/cert.pem}\"\n"
+            + "export NODE_EXTRA_CA_CERTS=\"${NODE_EXTRA_CA_CERTS:-$PREFIX/etc/tls/cert.pem}\"\n"
+            + "export CURL_CA_BUNDLE=\"${CURL_CA_BUNDLE:-$PREFIX/etc/tls/cert.pem}\"\n"
+            // Already healthy? Do not start a second server.
+            + "if curl -fsS --connect-timeout 1 --max-time 2 \"$BASE/global/health\" 2>/dev/null | grep -qi healthy; then\n"
+            + "  echo \"td-ai: OpenCode already healthy → $BASE/\"\n"
+            + "  echo \"  health: $BASE/global/health\"\n"
+            + "  echo \"  openapi: $BASE/doc\"\n"
             + "  exit 0\n"
+            + "fi\n"
+            + "if (echo >/dev/tcp/$HOST/\"$PORT\") >/dev/null 2>&1; then\n"
+            + "  echo \"td-ai: :$PORT is up but /global/health failed — stop other listeners or: drawer → Stop AI\" >&2\n"
+            + "  exit 1\n"
             + "fi\n"
             + "if ! command -v bun >/dev/null 2>&1; then\n"
             + "  echo \"td-ai: bun missing — reopen the app\" >&2\n"
@@ -507,16 +869,19 @@ public final class TermuxBunInstaller {
             + "  exit 127\n"
             + "fi\n"
             + "echo \"\"\n"
-            + "echo \"OpenCode web → http://127.0.0.1:$PORT/\"\n"
-            + "echo \"In the app: drawer → Preview → Scan → tap $PORT\"\n"
-            + "echo \"(Copy LAN shares Wi‑Fi URL only if the server binds 0.0.0.0)\"\n"
+            + "echo \"OpenCode web → $BASE/\"\n"
+            + "echo \"  health  GET $BASE/global/health\"\n"
+            + "echo \"  openapi GET $BASE/doc\"\n"
+            + "echo \"Preview uses :$PORT (not :5000). No --mdns / 0.0.0.0 on Android.\"\n"
             + "echo \"\"\n"
-            // Prefer web UI for Preview; fall back to serve if web subcommand missing.
+            // Prefer web UI for Preview; fall back to serve (API-only).
+            // Bind 127.0.0.1 — docs default; Android getifaddrs/mDNS break 0.0.0.0.
             + "if opencode web --help >/dev/null 2>&1; then\n"
-            + "  exec opencode web --port \"$PORT\" --hostname 0.0.0.0\n"
+            + "  exec opencode web --port \"$PORT\" --hostname \"$HOST\" --print-logs\n"
             + "fi\n"
             + "if opencode serve --help >/dev/null 2>&1; then\n"
-            + "  exec opencode serve --port \"$PORT\" --hostname 0.0.0.0\n"
+            + "  echo \"td-ai: 'web' missing — starting API-only serve (no UI)\" >&2\n"
+            + "  exec opencode serve --port \"$PORT\" --hostname \"$HOST\" --print-logs\n"
             + "fi\n"
             + "echo \"td-ai: opencode has no web/serve command — try: opencode --help\" >&2\n"
             + "exec opencode --help\n";
@@ -784,7 +1149,7 @@ public final class TermuxBunInstaller {
         String[] names = {
             "am.termuxam", "ksu", "am", "login", "apt", "apt-get", "dpkg",
             "bun", "bunx", "node", "td-ai", "td-dev", "td-scaffold", "td-clone",
-            "opencode-setup", "opencode", "bun-doctor"
+            "opencode-setup", "opencode-fix-net", "opencode", "bun-doctor"
         };
         for (String name : names) {
             File f = new File(binDir, name);

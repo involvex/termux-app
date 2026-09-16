@@ -614,7 +614,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             previewButton.setOnClickListener(v -> {
                 getDrawer().closeDrawers();
                 ActivityUtils.startActivity(this,
-                    new Intent(this, LocalhostPreviewActivity.class));
+                    LocalhostPreviewActivity.createIntent(this, WorkflowHelper.AI_PREVIEW_PORT));
             });
         }
         setWorkflowButtonViews();
@@ -809,7 +809,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     return;
                 }
                 showToast(getString(R.string.msg_workflow_ai_starting), true);
-                openAiPreview();
+                openAiPreviewWhenHealthy();
                 maybeOfferTerminalErrorPaste();
                 return;
             case MISSING:
@@ -819,9 +819,35 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     return;
                 }
                 showToast(getString(R.string.msg_workflow_ai_installing), true);
-                openAiPreview();
+                openAiPreviewWhenHealthy();
                 maybeOfferTerminalErrorPaste();
         }
+    }
+
+    /**
+     * Wait until OpenCode {@code GET /global/health} succeeds, then open Preview
+     * on {@link WorkflowHelper#AI_PREVIEW_PORT} (not a stale :5000 default).
+     */
+    private void openAiPreviewWhenHealthy() {
+        final int port = WorkflowHelper.AI_PREVIEW_PORT;
+        mAiExecutor.execute(() -> {
+            final boolean ok = AiSessionHelper.waitUntilHealthy(port,
+                AiSessionHelper.DEFAULT_HEALTH_WAIT_MS);
+            mMainHandler.post(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+                if (ok) {
+                    showToast(getString(R.string.msg_workflow_ai_ready), true);
+                    openAiPreview();
+                } else {
+                    showToast(getString(R.string.msg_workflow_ai_health_timeout), false);
+                    // Still open Preview so the user can retry/reload once the
+                    // server finishes bootstrapping.
+                    openAiPreview();
+                }
+            });
+        });
     }
 
     private void stopAiSession() {

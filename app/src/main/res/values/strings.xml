@@ -88,7 +88,7 @@
     <string name="action_open_settings">Settings</string>
     <string name="action_open_preview">Preview</string>
     <string name="title_localhost_preview">Localhost Preview</string>
-    <string name="hint_localhost_port">Port (e.g. 5000)</string>
+    <string name="hint_localhost_port">Port (e.g. 4096)</string>
     <string name="action_preview_go">Go</string>
     <string name="action_preview_reload">Reload</string>
     <string name="action_preview_scan">Scan</string>
@@ -134,11 +134,12 @@
     <string name="msg_workflow_invalid_git_url">Paste an https:// or git@ remote URL</string>
     <string name="msg_workflow_cloning">Cloning into ~/repos…</string>
     <string name="msg_workflow_ai_checking">Checking OpenCode…</string>
-    <string name="msg_workflow_ai_starting">Starting OpenCode on :4096 — Preview opening…</string>
-    <string name="msg_workflow_ai_installing">Installing OpenCode — Preview opens when :4096 is ready…</string>
+    <string name="msg_workflow_ai_starting">Starting OpenCode on :4096 — waiting for /global/health…</string>
+    <string name="msg_workflow_ai_installing">Installing OpenCode — Preview opens when :4096 is healthy…</string>
     <string name="msg_workflow_ai_ready">OpenCode ready on :4096 — opening Preview</string>
     <string name="msg_workflow_ai_stopped">Stopped OpenCode on :4096</string>
     <string name="msg_workflow_ai_not_running">Nothing listening on :4096</string>
+    <string name="msg_workflow_ai_health_timeout">OpenCode :4096 not healthy yet — opening Preview anyway (Reload if blank)</string>
     <string name="msg_workflow_ai_error_hint">Recent terminal error — paste into OpenCode?</string>
     <string name="msg_workflow_ai_error_copied">Error copied — paste in OpenCode (Preview)</string>
 

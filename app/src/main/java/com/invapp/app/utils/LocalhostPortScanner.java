@@ -22,7 +22,7 @@ public final class LocalhostPortScanner {
 
     /** Common local-dev ports floated to the front of the chip list. */
     private static final int[] PREFERRED = {
-        3000, 3001, 4173, 5000, 5173, 8000, 8080, 8081, 8888, 4096, 19000, 19006
+        4096, 3000, 3001, 4173, 5000, 5173, 8000, 8080, 8081, 8888, 19000, 19006
     };
 
     /** TCP state LISTEN in /proc/net/tcp. */

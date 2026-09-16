@@ -58,5 +58,9 @@ public class WorkflowHelperTest {
         assertTrue(pwaReact);
         assertEquals(4096, WorkflowHelper.AI_PREVIEW_PORT);
         assertEquals(5173, WorkflowHelper.VITE_DEFAULT_PORT);
+        assertEquals("/global/health", WorkflowHelper.AI_HEALTH_PATH);
+        assertEquals("http://127.0.0.1:4096/global/health",
+            WorkflowHelper.aiHealthUrl(4096));
+        assertEquals("http://127.0.0.1:4096", WorkflowHelper.aiBaseUrl(0));
     }
 }

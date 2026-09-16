@@ -45,4 +45,11 @@ public class AiSessionHelperTest {
         assertEquals(AiSessionHelper.Status.INSTALLED, AiSessionHelper.Status.valueOf("INSTALLED"));
         assertEquals(AiSessionHelper.Status.READY, AiSessionHelper.Status.valueOf("READY"));
     }
+
+    @Test
+    public void isOpenCodeHealthy_rejectsInvalidPort() {
+        assertTrue(!AiSessionHelper.isOpenCodeHealthy(0));
+        assertTrue(!AiSessionHelper.isOpenCodeHealthy(-1));
+        assertTrue(!AiSessionHelper.isOpenCodeHealthy(70000));
+    }
 }

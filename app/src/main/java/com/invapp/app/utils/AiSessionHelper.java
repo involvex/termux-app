@@ -12,8 +12,13 @@ import com.invapp.shared.termux.TermuxConstants;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -39,6 +44,10 @@ public final class AiSessionHelper {
 
     private static final int TCP_LISTEN = 0x0A;
     private static final int CONNECT_TIMEOUT_MS = 250;
+    private static final int HEALTH_CONNECT_TIMEOUT_MS = 400;
+    private static final int HEALTH_READ_TIMEOUT_MS = 800;
+    /** Default wait when starting {@code td-ai} before opening Preview. */
+    public static final int DEFAULT_HEALTH_WAIT_MS = 45_000;
     private static final Pattern ERROR_LINE = Pattern.compile(
         "(?i).*(error|errno|exception|failed|fatal|EACCES|EPERM|SIGSYS|not found).*");
 
@@ -51,13 +60,80 @@ public final class AiSessionHelper {
 
     @NonNull
     public static Status probe(int port) {
-        if (isPortListening(port)) {
+        // Prefer OpenAPI health (docs: GET /global/health) over bare TCP —
+        // Preview must talk to a live OpenCode server, not an unrelated :4096.
+        if (isOpenCodeHealthy(port)) {
             return Status.READY;
         }
         if (isOpenCodeInstalled()) {
             return Status.INSTALLED;
         }
         return Status.MISSING;
+    }
+
+    /**
+     * {@code GET http://127.0.0.1:port/global/health} — true when body contains
+     * {@code healthy} (OpenCode server API).
+     */
+    public static boolean isOpenCodeHealthy(int port) {
+        if (port < 1 || port > 65535) {
+            return false;
+        }
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL(WorkflowHelper.aiHealthUrl(port));
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(HEALTH_CONNECT_TIMEOUT_MS);
+            conn.setReadTimeout(HEALTH_READ_TIMEOUT_MS);
+            conn.setRequestMethod("GET");
+            conn.setInstanceFollowRedirects(false);
+            int code = conn.getResponseCode();
+            if (code < 200 || code >= 300) {
+                return false;
+            }
+            InputStream in = conn.getInputStream();
+            if (in == null) {
+                return false;
+            }
+            StringBuilder sb = new StringBuilder(128);
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(in, StandardCharsets.UTF_8))) {
+                char[] buf = new char[256];
+                int n;
+                while ((n = reader.read(buf)) >= 0 && sb.length() < 512) {
+                    sb.append(buf, 0, n);
+                }
+            }
+            String body = sb.toString().toLowerCase(Locale.US);
+            return body.contains("healthy");
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
+        }
+    }
+
+    /**
+     * Poll {@link #isOpenCodeHealthy(int)} until true or {@code timeoutMs}.
+     *
+     * @return true if healthy within the timeout
+     */
+    public static boolean waitUntilHealthy(int port, int timeoutMs) {
+        long deadline = System.currentTimeMillis() + Math.max(0, timeoutMs);
+        while (System.currentTimeMillis() < deadline) {
+            if (isOpenCodeHealthy(port)) {
+                return true;
+            }
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return isOpenCodeHealthy(port);
+            }
+        }
+        return isOpenCodeHealthy(port);
     }
 
     /**

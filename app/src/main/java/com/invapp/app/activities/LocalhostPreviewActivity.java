@@ -27,6 +27,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.invapp.R;
 import com.invapp.app.utils.LanShareHelper;
 import com.invapp.app.utils.LocalhostPortScanner;
+import com.invapp.app.utils.WorkflowHelper;
 import com.invapp.shared.interact.ShareUtils;
 
 import java.util.List;
@@ -42,7 +43,8 @@ import java.util.concurrent.Executors;
 public final class LocalhostPreviewActivity extends AppCompatActivity {
 
     public static final String EXTRA_PORT = "com.invapp.preview.port";
-    private static final int DEFAULT_PORT = 5000;
+    /** OpenCode default web port ({@code http://127.0.0.1:4096/}). */
+    private static final int DEFAULT_PORT = WorkflowHelper.AI_PREVIEW_PORT;
 
     private WebView mWebView;
     private EditText mPortInput;

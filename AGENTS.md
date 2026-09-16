@@ -50,7 +50,7 @@ See `ROADMAP.md`.
 | node shim | `$PREFIX/bin/node` → bun if `nodejs` package not installed |
 | Default cwd | `~/repos` (exec-capable). `~/storage/shared` is browse/sync only (**noexec**) |
 | Preview | Drawer **Preview** → Scan + chips; **Copy LAN** / long-press chip → `http://<wifi-ip>:<port>` when bound on `0.0.0.0` |
-| AI helper | `opencode-setup` / `td-ai [port]` → OpenCode web on `:4096` + Preview. Setup downloads official `opencode-linux-*.tar.gz` from GitHub (no `bun install` / no postinstall), then `glibc` + ld-linux wrapper (`LD_PRELOAD=` clear). Optional `OPENCODE_VERSION=v1.18.31`. Drawer **AI** probes missing/installed/ready; long-press / **Stop AI** kills `:4096`. On-demand into `$PREFIX`, not baked into APK |
+| AI helper | `opencode-setup` / `td-ai [port]` → OpenCode web on `:4096` + Preview. Setup downloads official `opencode-linux-*.tar.gz` from GitHub (no `bun install` / no postinstall), then `glibc` + ld-linux wrapper with **`LD_PRELOAD=` empty** and DNS shim via **`ld-linux --preload $PREFIX/lib/libinvapp-opencode-shim.so`** (arm64 shipped in APK assets). Optional `OPENCODE_VERSION=v1.18.31`. Drawer **AI** probes missing/installed/ready; long-press / **Stop AI** kills `:4096`. On-demand into `$PREFIX`, not baked into APK |
 | Dev server | `td-dev [script]` → `bun run` with Preview/LAN hints |
 | Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`); `pwa` / `pwa-react` add `vite-plugin-pwa` |
 | Clone | `td-clone <url> [name] [--bun-i]` → git clone into `~/repos`; drawer **Clone…** |
@@ -78,11 +78,23 @@ See `ROADMAP.md`.
   **downloads the GitHub tarball** (never `bun install -g opencode-ai` or
   `curl … opencode.ai/install`). It installs `glibc` and runs under
   `ld-linux` with **`LD_PRELOAD=`** (empty). Do not `unset LD_PRELOAD` (the
-  path redirector reinjects when the key is absent). Never use stock `grun`
+  path redirector reinjects when the key is absent). Do **not** put the DNS
+  shim in `LD_PRELOAD` either — termux-exec will append
+  `libinvapp-redirector.so` and you get `version \`LIBC' not found`; use
+  `ld-linux --preload …/libinvapp-opencode-shim.so` instead. Never
+  `PATH=$PREFIX/glibc/bin:$PATH` (breaks the shell). Never use stock `grun`
   alone on this package id without path fixups.
 - `opencode` prints “postinstall script was not run” — leftover bun JS stub.
   Re-run `opencode-setup` (removes the stub) or `rm -f $PREFIX/bin/opencode`
   then setup again.
+- OpenCode “Cannot connect to API” / `Failed to fetch models.dev` /
+  `models.opencode.ai` — if `curl` works but OpenCode fails, glibc DNS is
+  broken: stock glibc hardcodes `/data/data/com.termux/.../glibc/etc/*`.
+  Ensure `$PREFIX/lib/libinvapp-opencode-shim.so` exists (APK ships arm64),
+  wrapper uses `--preload`, seed resolv/CA under `$PREFIX/glibc/etc`, export
+  `SSL_CERT_FILE` / `NODE_EXTRA_CA_CERTS`. Ready check is
+  `GET http://127.0.0.1:4096/global/health` (not `:5000/api`).
+- `getifaddrs returned an error` — bind `127.0.0.1` only; never `--mdns`.
 
 ## 2. Useful Commands
 

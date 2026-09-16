@@ -26,8 +26,24 @@ public final class WorkflowHelper {
     public static final String CMD_BUN_INSTALL = "bun install\n";
     public static final String CMD_BUN_RUN_DEV = "bun run dev\n";
     public static final String CMD_TD_AI = "td-ai\n";
+    /** OpenCode web/serve default ({@code http://127.0.0.1:4096/}). */
     public static final int AI_PREVIEW_PORT = 4096;
+    /** OpenCode server health probe — see https://opencode.ai/docs/server/#apis */
+    public static final String AI_HEALTH_PATH = "/global/health";
+    public static final String AI_DOC_PATH = "/doc";
     public static final int VITE_DEFAULT_PORT = 5173;
+
+    /** Loopback base URL for OpenCode Preview / API (no trailing slash). */
+    @NonNull
+    public static String aiBaseUrl(int port) {
+        int p = port > 0 ? port : AI_PREVIEW_PORT;
+        return "http://127.0.0.1:" + p;
+    }
+
+    @NonNull
+    public static String aiHealthUrl(int port) {
+        return aiBaseUrl(port) + AI_HEALTH_PATH;
+    }
 
     /** create-vite (+ pwa overlays) templates we expose in the New… sheet. */
     public static final String[] VITE_TEMPLATES = {
