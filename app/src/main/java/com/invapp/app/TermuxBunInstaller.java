@@ -382,6 +382,61 @@ public final class TermuxBunInstaller {
             + "exec bun run \"$SCRIPT\" \"$@\"\n";
         writeExec(new File(binDir, "td-dev"), tdDev);
 
+        // Vite golden-path scaffold under ~/repos (create-vite + host 0.0.0.0).
+        String tdScaffold = ""
+            + "#!" + bash + "\n"
+            + "set -e\n"
+            + "PREFIX=\"" + prefix + "\"\n"
+            + "HOME=\"" + home + "\"\n"
+            + "export PATH=\"$PREFIX/bin:$HOME/.bun/bin:$PATH\"\n"
+            + "NAME=\"${1-}\"\n"
+            + "TEMPLATE=\"${2:-vanilla}\"\n"
+            + "if [ -z \"$NAME\" ]; then\n"
+            + "  echo \"usage: td-scaffold <name> [template]\" >&2\n"
+            + "  echo \"templates: vanilla vanilla-ts react react-ts vue vue-ts\" >&2\n"
+            + "  exit 2\n"
+            + "fi\n"
+            + "case \"$NAME\" in\n"
+            + "  *[!a-zA-Z0-9._-]*) echo \"td-scaffold: invalid name '$NAME'\" >&2; exit 2 ;;\n"
+            + "esac\n"
+            + "case \"$TEMPLATE\" in\n"
+            + "  vanilla|vanilla-ts|react|react-ts|vue|vue-ts|svelte|svelte-ts|solid|solid-ts|qwik|qwik-ts|preact|preact-ts) ;;\n"
+            + "  *) echo \"td-scaffold: unknown template '$TEMPLATE'\" >&2; exit 2 ;;\n"
+            + "esac\n"
+            + "if ! command -v bun >/dev/null 2>&1; then\n"
+            + "  echo \"td-scaffold: bun missing — reopen the app\" >&2\n"
+            + "  exit 127\n"
+            + "fi\n"
+            + "mkdir -p \"$HOME/repos\"\n"
+            + "cd \"$HOME/repos\"\n"
+            + "if [ -e \"$NAME\" ]; then\n"
+            + "  echo \"td-scaffold: $HOME/repos/$NAME already exists\" >&2\n"
+            + "  exit 1\n"
+            + "fi\n"
+            + "echo \"td-scaffold: create-vite $NAME --template $TEMPLATE\"\n"
+            + "bunx --bun create-vite@latest \"$NAME\" --template \"$TEMPLATE\"\n"
+            + "cd \"$NAME\"\n"
+            + "# Force LAN-friendly Vite dev server for Preview / Copy LAN.\n"
+            + "if [ -f package.json ]; then\n"
+            + "  bun -e \"\n"
+            + "const fs=require('fs');\n"
+            + "const p=JSON.parse(fs.readFileSync('package.json','utf8'));\n"
+            + "p.scripts=p.scripts||{};\n"
+            + "p.scripts.dev='vite --host 0.0.0.0 --port 5173';\n"
+            + "p.scripts.preview=p.scripts.preview||'vite preview --host 0.0.0.0 --port 4173';\n"
+            + "fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\\n');\n"
+            + "\"\n"
+            + "fi\n"
+            + "echo \"td-scaffold: bun install\"\n"
+            + "bun install\n"
+            + "echo \"\"\n"
+            + "echo \"OK: $HOME/repos/$NAME\"\n"
+            + "echo \"Next: td-dev    # or drawer → bun run dev\"\n"
+            + "echo \"Then: drawer → Preview → Scan → 5173 (Copy LAN if needed)\"\n"
+            + "echo \"\"\n"
+            + "pwd\n";
+        writeExec(new File(binDir, "td-scaffold"), tdScaffold);
+
         ensureWorkspaceDirs();
         repairPrefixBinPermissions();
     }
@@ -428,7 +483,7 @@ public final class TermuxBunInstaller {
         }
         String[] names = {
             "am.termuxam", "ksu", "am", "login", "apt", "apt-get", "dpkg",
-            "bun", "bunx", "node", "td-ai", "td-dev", "opencode-setup", "bun-doctor"
+            "bun", "bunx", "node", "td-ai", "td-dev", "td-scaffold", "opencode-setup", "bun-doctor"
         };
         for (String name : names) {
             File f = new File(binDir, name);

@@ -25,8 +25,21 @@ public final class WorkflowHelper {
     public static final String CMD_GIT_PULL = "git pull\n";
     public static final String CMD_BUN_INSTALL = "bun install\n";
     public static final String CMD_BUN_RUN_DEV = "bun run dev\n";
+    public static final String CMD_TD_AI = "td-ai\n";
+    public static final int AI_PREVIEW_PORT = 4096;
+    public static final int VITE_DEFAULT_PORT = 5173;
+
+    /** Official create-vite templates we expose in the New… sheet. */
+    public static final String[] VITE_TEMPLATES = {
+        "vanilla", "vanilla-ts", "react", "react-ts", "vue", "vue-ts"
+    };
 
     private WorkflowHelper() {}
+
+    @NonNull
+    public static String tdScaffoldCommand(@NonNull String name, @NonNull String template) {
+        return "td-scaffold " + shellSingleQuote(name) + " " + shellSingleQuote(template) + "\n";
+    }
 
     public static boolean writeToSession(@Nullable TerminalSession session, @NonNull String text) {
         if (session == null || !session.isRunning() || text.isEmpty()) {

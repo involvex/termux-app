@@ -111,6 +111,20 @@
                             android:layout_height="36dp"
                             android:text="@string/action_workflow_run"
                             android:textAllCaps="false" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/workflow_new_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="@string/action_workflow_new"
+                            android:textAllCaps="false" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/workflow_ai_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="@string/action_workflow_ai"
+                            android:textAllCaps="false" />
                     </LinearLayout>
                 </HorizontalScrollView>
 

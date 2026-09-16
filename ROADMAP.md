@@ -58,6 +58,15 @@ servers on-device, and optionally attach AI CLIs.
 - [bun-termux-loader](https://github.com/kaan-escober/bun-termux-loader) is for
   glibc `bun build --compile` bundles — not needed for our official Android Bun
 
+### 7. Vite golden path + AI session UX (done)
+
+- `td-scaffold [name] [template]` — Vite app under `~/repos` (default
+  `vanilla`; also `react`, `vue`, `vanilla-ts`, …) with `dev` on
+  `0.0.0.0:5173` for Preview / Copy LAN
+- Drawer **New…** → name + template → runs `td-scaffold`
+- Drawer **AI** → `td-ai` in the current session + open Preview on `:4096`
+- Optional later: Vite-PWA template once useful
+
 ## Non-goals (for now)
 
 - Full in-app IDE / multi-tab browser
@@ -68,16 +77,15 @@ servers on-device, and optionally attach AI CLIs.
 
 ```bash
 cd ~/repos
-git clone <url> myapp && cd myapp
-bun install
-bun run dev
-# Drawer → Preview → Scan → tap 3000
+td-scaffold myapp react   # or: drawer → New…
+td-dev                    # vite on :5173
+# Drawer → Preview → Scan → 5173
 ```
 
 ```bash
 # AI web UI in Preview
-td-ai          # or: td-ai 4096
-# Drawer → Preview → tap 4096
+td-ai          # or: drawer → AI
+# Preview opens on :4096
 ```
 
 On desktop: same remote, normal git + bun. Pull on the phone to continue.

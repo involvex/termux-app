@@ -107,12 +107,19 @@
     <string name="action_workflow_bun_dev">bun run dev</string>
     <string name="action_workflow_repos">Repos</string>
     <string name="action_workflow_run">Run…</string>
+    <string name="action_workflow_new">New…</string>
+    <string name="action_workflow_ai">AI</string>
     <string name="title_workflow_repos">Open repo</string>
     <string name="title_workflow_run_script">Run script</string>
     <string name="title_workflow_pick_repo_for_run">Pick project</string>
+    <string name="title_workflow_new_project">New Vite project</string>
+    <string name="title_workflow_pick_template">Vite template</string>
+    <string name="hint_workflow_project_name">Project name</string>
     <string name="msg_workflow_no_session">No running terminal session</string>
     <string name="msg_workflow_no_repos">No projects in ~/repos</string>
     <string name="msg_workflow_no_scripts">No scripts in package.json</string>
+    <string name="msg_workflow_invalid_name">Use letters, numbers, . _ - only</string>
+    <string name="msg_workflow_ai_starting">Starting OpenCode on :4096 — Preview opening…</string>
 
     <string name="action_report_issue">Report Issue</string>
     <string name="msg_generating_report">Generating Report</string>

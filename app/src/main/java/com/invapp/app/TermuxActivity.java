@@ -627,6 +627,75 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (run != null) {
             run.setOnClickListener(v -> showReposPicker(true));
         }
+        View neu = findViewById(R.id.workflow_new_button);
+        if (neu != null) {
+            neu.setOnClickListener(v -> showNewViteProjectDialog());
+        }
+        View ai = findViewById(R.id.workflow_ai_button);
+        if (ai != null) {
+            ai.setOnClickListener(v -> startAiSession());
+        }
+    }
+
+    private void startAiSession() {
+        getDrawer().closeDrawers();
+        if (!WorkflowHelper.writeToSession(getCurrentSession(), WorkflowHelper.CMD_TD_AI)) {
+            showToast(getString(R.string.msg_workflow_no_session), false);
+            return;
+        }
+        showToast(getString(R.string.msg_workflow_ai_starting), true);
+        // Open Preview immediately; PreferredPortWatcher will also snackbar when :4096 listens.
+        ActivityUtils.startActivity(this,
+            LocalhostPreviewActivity.createIntent(this, WorkflowHelper.AI_PREVIEW_PORT));
+    }
+
+    private void showNewViteProjectDialog() {
+        final EditText nameInput = new EditText(this);
+        nameInput.setHint(R.string.hint_workflow_project_name);
+        nameInput.setSingleLine(true);
+        nameInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        nameInput.setPadding(pad, pad, pad, pad);
+
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.title_workflow_new_project)
+            .setView(nameInput)
+            .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                String name = nameInput.getText() != null
+                    ? nameInput.getText().toString().trim() : "";
+                if (!isValidScaffoldName(name)) {
+                    showToast(getString(R.string.msg_workflow_invalid_name), true);
+                    return;
+                }
+                showViteTemplatePicker(name);
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    private void showViteTemplatePicker(@NonNull String name) {
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.title_workflow_pick_template)
+            .setItems(WorkflowHelper.VITE_TEMPLATES, (dialog, which) -> {
+                String template = WorkflowHelper.VITE_TEMPLATES[which];
+                sendWorkflowCommand(WorkflowHelper.tdScaffoldCommand(name, template));
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    private static boolean isValidScaffoldName(@NonNull String name) {
+        if (name.isEmpty() || name.equals(".") || name.equals("..")) {
+            return false;
+        }
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (!(Character.isLetterOrDigit(c) || c == '.' || c == '_' || c == '-')) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void sendWorkflowCommand(@NonNull String command) {
