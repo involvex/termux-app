@@ -108,6 +108,7 @@
     <string name="action_workflow_repos">Repos</string>
     <string name="action_workflow_run">Run…</string>
     <string name="action_workflow_new">New…</string>
+    <string name="action_workflow_clone">Clone…</string>
     <string name="action_workflow_ai">AI</string>
     <string name="action_workflow_ai_stop">Stop AI</string>
     <string name="action_workflow_ai_paste_error">Paste into OpenCode</string>
@@ -115,12 +116,17 @@
     <string name="title_workflow_run_script">Run script</string>
     <string name="title_workflow_pick_repo_for_run">Pick project</string>
     <string name="title_workflow_new_project">New Vite project</string>
+    <string name="title_workflow_clone">Clone into ~/repos</string>
     <string name="title_workflow_pick_template">Vite template</string>
     <string name="hint_workflow_project_name">Project name</string>
+    <string name="hint_workflow_git_url">https://github.com/org/repo.git</string>
+    <string name="label_workflow_clone_bun_i">Run bun install after clone</string>
     <string name="msg_workflow_no_session">No running terminal session</string>
     <string name="msg_workflow_no_repos">No projects in ~/repos</string>
     <string name="msg_workflow_no_scripts">No scripts in package.json</string>
     <string name="msg_workflow_invalid_name">Use letters, numbers, . _ - only</string>
+    <string name="msg_workflow_invalid_git_url">Paste an https:// or git@ remote URL</string>
+    <string name="msg_workflow_cloning">Cloning into ~/repos…</string>
     <string name="msg_workflow_ai_checking">Checking OpenCode…</string>
     <string name="msg_workflow_ai_starting">Starting OpenCode on :4096 — Preview opening…</string>
     <string name="msg_workflow_ai_installing">Installing OpenCode — Preview opens when :4096 is ready…</string>

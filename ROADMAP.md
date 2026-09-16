@@ -80,6 +80,13 @@ servers on-device, and optionally attach AI CLIs.
 - Drawer **Stop AI** — SIGTERM listeners on `:4096` (+ `pkill` OpenCode fallback)
 - Optional Snackbar: recent terminal error → copy for paste into OpenCode
 
+### 10. Clone into ~/repos (done)
+
+- `td-clone <git-url> [name] [--bun-i]` — clone under `~/repos` (name from URL if omitted);
+  preloads path redirector so stock git works with this package id
+- Drawer **Clone…** → URL + name + optional **bun install**
+- Completes PC ↔ phone: push on desktop, clone/pull on phone
+
 ## Non-goals (for now)
 
 - Full in-app IDE / multi-tab browser
@@ -100,6 +107,13 @@ td-dev                    # vite on :5173
 td-ai          # or: drawer → AI (skips start if :4096 already up)
 # Preview opens on :4096
 # drawer → Stop AI   # when done
+```
+
+```bash
+# Clone from PC remote
+td-clone https://github.com/org/app.git   # or: drawer → Clone…
+# optional: --bun-i
+td-dev
 ```
 
 On desktop: same remote, normal git + bun. Pull on the phone to continue.

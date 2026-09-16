@@ -50,7 +50,8 @@ localhost servers on-device, optionally attach AI CLI. See `ROADMAP.md`.
 | AI helper | `opencode-setup` / `td-ai [port]` → OpenCode web on `:4096` + Preview. Drawer **AI** probes missing/installed/ready (skip start if listening); **Stop AI** kills `:4096`. On-demand into `$PREFIX`, not baked into APK |
 | Dev server | `td-dev [script]` → `bun run` with Preview/LAN hints |
 | Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`); `pwa` / `pwa-react` add `vite-plugin-pwa` |
-| Workflow | Drawer: git pull / bun i / bun run dev / Repos / Run… / **New…** / **AI** / **Stop AI**; port Snackbar → Preview |
+| Clone | `td-clone <url> [name] [--bun-i]` → git clone into `~/repos`; drawer **Clone…** |
+| Workflow | Drawer: git pull / bun i / bun run dev / Repos / Run… / **Clone…** / **New…** / **AI** / **Stop AI**; port Snackbar → Preview |
 
 **Do NOT "fix" these with more wrappers:**
 

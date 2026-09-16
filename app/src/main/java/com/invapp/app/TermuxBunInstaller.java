@@ -503,6 +503,82 @@ public final class TermuxBunInstaller {
             + "pwd\n";
         writeExec(new File(binDir, "td-scaffold"), tdScaffold);
 
+        // Clone a remote into ~/repos (PC ↔ phone golden path).
+        String tdClone = ""
+            + "#!" + bash + "\n"
+            + "set -e\n"
+            + "PREFIX=\"" + prefix + "\"\n"
+            + "HOME=\"" + home + "\"\n"
+            + "export PATH=\"$PREFIX/bin:$HOME/.bun/bin:$PATH\"\n"
+            + "REDIRECTOR_SO=\"$PREFIX/lib/libinvapp-redirector.so\"\n"
+            + "[ -f \"$REDIRECTOR_SO\" ] && export LD_PRELOAD=\"$REDIRECTOR_SO${LD_PRELOAD:+:$LD_PRELOAD}\"\n"
+            + "export LD_LIBRARY_PATH=\"$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"\n"
+            + "URL=\"${1-}\"\n"
+            + "if [ -z \"$URL\" ]; then\n"
+            + "  echo \"usage: td-clone <git-url> [name] [--bun-i]\" >&2\n"
+            + "  exit 2\n"
+            + "fi\n"
+            + "shift || true\n"
+            + "NAME=\"\"\n"
+            + "DO_BUN=0\n"
+            + "for arg in \"$@\"; do\n"
+            + "  case \"$arg\" in\n"
+            + "    --bun-i|--bun-install) DO_BUN=1 ;;\n"
+            + "    -*) echo \"td-clone: unknown flag '$arg'\" >&2; exit 2 ;;\n"
+            + "    *)\n"
+            + "      if [ -n \"$NAME\" ]; then\n"
+            + "        echo \"usage: td-clone <git-url> [name] [--bun-i]\" >&2\n"
+            + "        exit 2\n"
+            + "      fi\n"
+            + "      NAME=\"$arg\"\n"
+            + "      ;;\n"
+            + "  esac\n"
+            + "done\n"
+            + "if [ -z \"$NAME\" ]; then\n"
+            + "  NAME=$(basename \"$URL\")\n"
+            + "  NAME=${NAME%.git}\n"
+            + "  NAME=${NAME%%\\?*}\n"
+            + "  NAME=${NAME%%\\#*}\n"
+            + "fi\n"
+            + "case \"$NAME\" in\n"
+            + "  ''|'.'|'..'|*[!a-zA-Z0-9._-]*)\n"
+            + "    echo \"td-clone: invalid name '$NAME'\" >&2\n"
+            + "    exit 2\n"
+            + "    ;;\n"
+            + "esac\n"
+            + "if ! command -v git >/dev/null 2>&1; then\n"
+            + "  echo \"td-clone: git missing — pkg install git\" >&2\n"
+            + "  exit 127\n"
+            + "fi\n"
+            + "mkdir -p \"$HOME/repos\"\n"
+            + "DEST=\"$HOME/repos/$NAME\"\n"
+            + "if [ -e \"$DEST\" ]; then\n"
+            + "  echo \"td-clone: $DEST already exists\" >&2\n"
+            + "  exit 1\n"
+            + "fi\n"
+            + "echo \"td-clone: git clone $URL → $DEST\"\n"
+            + "git clone -- \"$URL\" \"$DEST\"\n"
+            + "cd \"$DEST\"\n"
+            + "if [ \"$DO_BUN\" = 1 ]; then\n"
+            + "  if [ -f package.json ]; then\n"
+            + "    if ! command -v bun >/dev/null 2>&1; then\n"
+            + "      echo \"td-clone: bun missing — reopen the app\" >&2\n"
+            + "      exit 127\n"
+            + "    fi\n"
+            + "    echo \"td-clone: bun install\"\n"
+            + "    bun install\n"
+            + "  else\n"
+            + "    echo \"td-clone: no package.json — skip bun install\"\n"
+            + "  fi\n"
+            + "fi\n"
+            + "echo \"\"\n"
+            + "echo \"OK: $DEST\"\n"
+            + "echo \"Next: td-dev    # or drawer → bun run dev\"\n"
+            + "echo \"Then: drawer → Preview → Scan (Copy LAN if needed)\"\n"
+            + "echo \"\"\n"
+            + "pwd\n";
+        writeExec(new File(binDir, "td-clone"), tdClone);
+
         ensureWorkspaceDirs();
         repairPrefixBinPermissions();
     }
@@ -549,7 +625,8 @@ public final class TermuxBunInstaller {
         }
         String[] names = {
             "am.termuxam", "ksu", "am", "login", "apt", "apt-get", "dpkg",
-            "bun", "bunx", "node", "td-ai", "td-dev", "td-scaffold", "opencode-setup", "bun-doctor"
+            "bun", "bunx", "node", "td-ai", "td-dev", "td-scaffold", "td-clone",
+            "opencode-setup", "bun-doctor"
         };
         for (String name : names) {
             File f = new File(binDir, name);

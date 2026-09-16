@@ -25,11 +25,15 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
+import android.text.Editable;
+import android.text.TextWatcher;
 
 import com.google.android.material.snackbar.Snackbar;
 import com.invapp.R;
@@ -645,6 +649,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (neu != null) {
             neu.setOnClickListener(v -> showNewViteProjectDialog());
         }
+        View clone = findViewById(R.id.workflow_clone_button);
+        if (clone != null) {
+            clone.setOnClickListener(v -> showCloneRepoDialog());
+        }
         View ai = findViewById(R.id.workflow_ai_button);
         if (ai != null) {
             ai.setOnClickListener(v -> startAiSession());
@@ -744,6 +752,92 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             .show();
     }
 
+    private void showCloneRepoDialog() {
+        float density = getResources().getDisplayMetrics().density;
+        int pad = (int) (16 * density);
+        int gap = (int) (8 * density);
+
+        final EditText urlInput = new EditText(this);
+        urlInput.setHint(R.string.hint_workflow_git_url);
+        urlInput.setSingleLine(true);
+        urlInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+
+        final EditText nameInput = new EditText(this);
+        nameInput.setHint(R.string.hint_workflow_project_name);
+        nameInput.setSingleLine(true);
+        nameInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+
+        final CheckBox bunInstall = new CheckBox(this);
+        bunInstall.setText(R.string.label_workflow_clone_bun_i);
+        bunInstall.setChecked(true);
+
+        final boolean[] nameEdited = {false};
+        nameInput.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (nameInput.hasFocus()) {
+                    nameEdited[0] = true;
+                }
+            }
+        });
+        urlInput.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (nameEdited[0]) {
+                    return;
+                }
+                String suggested = WorkflowHelper.suggestRepoNameFromUrl(
+                    s != null ? s.toString() : "");
+                nameInput.setText(suggested);
+            }
+        });
+
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.setPadding(pad, pad, pad, pad);
+        column.addView(urlInput);
+        LinearLayout.LayoutParams nameLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        nameLp.topMargin = gap;
+        column.addView(nameInput, nameLp);
+        LinearLayout.LayoutParams bunLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        bunLp.topMargin = gap;
+        column.addView(bunInstall, bunLp);
+
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.title_workflow_clone)
+            .setView(column)
+            .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                String url = urlInput.getText() != null
+                    ? urlInput.getText().toString().trim() : "";
+                String name = nameInput.getText() != null
+                    ? nameInput.getText().toString().trim() : "";
+                if (!WorkflowHelper.isPlausibleGitUrl(url)) {
+                    showToast(getString(R.string.msg_workflow_invalid_git_url), true);
+                    return;
+                }
+                if (name.isEmpty()) {
+                    name = WorkflowHelper.suggestRepoNameFromUrl(url);
+                }
+                if (!WorkflowHelper.isValidRepoName(name)) {
+                    showToast(getString(R.string.msg_workflow_invalid_name), true);
+                    return;
+                }
+                showToast(getString(R.string.msg_workflow_cloning), false);
+                sendWorkflowCommand(WorkflowHelper.tdCloneCommand(
+                    url, name, bunInstall.isChecked()));
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
     private void showNewViteProjectDialog() {
         final EditText nameInput = new EditText(this);
         nameInput.setHint(R.string.hint_workflow_project_name);
@@ -759,7 +853,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             .setPositiveButton(android.R.string.ok, (dialog, which) -> {
                 String name = nameInput.getText() != null
                     ? nameInput.getText().toString().trim() : "";
-                if (!isValidScaffoldName(name)) {
+                if (!WorkflowHelper.isValidRepoName(name)) {
                     showToast(getString(R.string.msg_workflow_invalid_name), true);
                     return;
                 }
@@ -778,19 +872,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             })
             .setNegativeButton(android.R.string.cancel, null)
             .show();
-    }
-
-    private static boolean isValidScaffoldName(@NonNull String name) {
-        if (name.isEmpty() || name.equals(".") || name.equals("..")) {
-            return false;
-        }
-        for (int i = 0; i < name.length(); i++) {
-            char c = name.charAt(i);
-            if (!(Character.isLetterOrDigit(c) || c == '.' || c == '_' || c == '-')) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private void sendWorkflowCommand(@NonNull String command) {

@@ -16,6 +16,31 @@ public class WorkflowHelperTest {
     }
 
     @Test
+    public void tdCloneCommand_quotesAndOptionalBun() {
+        assertEquals("td-clone 'https://github.com/a/b.git' 'b'\n",
+            WorkflowHelper.tdCloneCommand("https://github.com/a/b.git", "b", false));
+        assertEquals("td-clone 'https://github.com/a/b.git' 'b' --bun-i\n",
+            WorkflowHelper.tdCloneCommand("https://github.com/a/b.git", "b", true));
+        assertEquals("td-clone 'x'\\''y' 'n' --bun-i\n",
+            WorkflowHelper.tdCloneCommand("x'y", "n", true));
+    }
+
+    @Test
+    public void suggestRepoNameFromUrl_stripsGitSuffix() {
+        assertEquals("repo",
+            WorkflowHelper.suggestRepoNameFromUrl("https://github.com/org/repo.git"));
+        assertEquals("repo",
+            WorkflowHelper.suggestRepoNameFromUrl("git@github.com:org/repo.git"));
+        assertEquals("repo",
+            WorkflowHelper.suggestRepoNameFromUrl("https://github.com/org/repo"));
+        assertTrue(WorkflowHelper.isPlausibleGitUrl("https://github.com/a/b"));
+        assertTrue(WorkflowHelper.isPlausibleGitUrl("git@github.com:a/b.git"));
+        assertTrue(!WorkflowHelper.isPlausibleGitUrl("not a url"));
+        assertTrue(WorkflowHelper.isValidRepoName("my-app"));
+        assertTrue(!WorkflowHelper.isValidRepoName("../x"));
+    }
+
+    @Test
     public void viteTemplates_includeVanillaReactAndPwa() {
         boolean vanilla = false;
         boolean react = false;

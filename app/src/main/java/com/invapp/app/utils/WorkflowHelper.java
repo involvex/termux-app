@@ -42,6 +42,95 @@ public final class WorkflowHelper {
         return "td-scaffold " + shellSingleQuote(name) + " " + shellSingleQuote(template) + "\n";
     }
 
+    /**
+     * {@code td-clone <url> [name] [--bun-i]} — clone into {@code ~/repos}.
+     */
+    @NonNull
+    public static String tdCloneCommand(@NonNull String url, @NonNull String name,
+                                       boolean bunInstall) {
+        StringBuilder sb = new StringBuilder("td-clone ");
+        sb.append(shellSingleQuote(url)).append(' ').append(shellSingleQuote(name));
+        if (bunInstall) {
+            sb.append(" --bun-i");
+        }
+        sb.append('\n');
+        return sb.toString();
+    }
+
+    /**
+     * Derive a directory name from a git URL ({@code …/foo.git} → {@code foo}).
+     */
+    @NonNull
+    public static String suggestRepoNameFromUrl(@Nullable String url) {
+        if (url == null) {
+            return "";
+        }
+        String s = url.trim();
+        if (s.isEmpty()) {
+            return "";
+        }
+        // git@host:path/repo.git
+        int colon = s.lastIndexOf(':');
+        int slash = s.lastIndexOf('/');
+        String last;
+        if (s.startsWith("git@") && colon > 0 && colon > s.indexOf('@')) {
+            last = s.substring(colon + 1);
+            int slashIn = last.lastIndexOf('/');
+            if (slashIn >= 0) {
+                last = last.substring(slashIn + 1);
+            }
+        } else if (slash >= 0 && slash < s.length() - 1) {
+            last = s.substring(slash + 1);
+        } else {
+            last = s;
+        }
+        if (last.endsWith(".git")) {
+            last = last.substring(0, last.length() - 4);
+        }
+        // Strip query/fragment noise
+        int q = last.indexOf('?');
+        if (q >= 0) {
+            last = last.substring(0, q);
+        }
+        int hash = last.indexOf('#');
+        if (hash >= 0) {
+            last = last.substring(0, hash);
+        }
+        return last;
+    }
+
+    /** Loose check: https/http/git/ssh-style remote. */
+    public static boolean isPlausibleGitUrl(@Nullable String url) {
+        if (url == null) {
+            return false;
+        }
+        String s = url.trim();
+        if (s.length() < 4) {
+            return false;
+        }
+        String lower = s.toLowerCase(java.util.Locale.US);
+        if (lower.startsWith("https://") || lower.startsWith("http://")
+            || lower.startsWith("git://") || lower.startsWith("ssh://")) {
+            return s.contains("/") || s.contains(":");
+        }
+        // git@host:path
+        return s.startsWith("git@") && s.contains(":");
+    }
+
+    /** Same rules as {@code td-scaffold} / {@code td-clone} directory names. */
+    public static boolean isValidRepoName(@Nullable String name) {
+        if (name == null || name.isEmpty() || ".".equals(name) || "..".equals(name)) {
+            return false;
+        }
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (!(Character.isLetterOrDigit(c) || c == '.' || c == '_' || c == '-')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public static boolean writeToSession(@Nullable TerminalSession session, @NonNull String text) {
         if (session == null || !session.isRunning() || text.isEmpty()) {
             return false;
