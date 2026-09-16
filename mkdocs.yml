@@ -1,0 +1,48 @@
+site_name: InVxTermux
+site_description: Unofficial Termux fork for phone + PC terminal development
+site_url: https://involvex.github.io/termux-app/
+repo_url: https://github.com/involvex/termux-app
+repo_name: involvex/termux-app
+edit_uri: edit/master/docs/
+site_dir: public
+
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: black
+    accent: green
+  font:
+    text: Roboto Mono
+    code: Roboto Mono
+  features:
+    - navigation.instant
+    - navigation.sections
+    - content.code.copy
+    - toc.follow
+
+extra_css:
+  - stylesheets/hacker.css
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Install: install.md
+  - Phone + PC workflow: workflow.md
+  - AI helper: ai.md
+  - Troubleshooting: troubleshooting.md
+  - About / License: about.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/involvex/termux-app

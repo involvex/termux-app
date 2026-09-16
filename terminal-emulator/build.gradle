@@ -77,7 +77,7 @@ afterEvaluate {
                 from components.default
                 groupId = 'com.invapp'
                 artifactId = 'terminal-emulator'
-                version = '0.118.0'
+                version = '0.200.0'
                 artifact(sourceJar)
             }
         }

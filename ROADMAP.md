@@ -1,8 +1,14 @@
-# Terminal Dev roadmap
+# InVxTermux roadmap
 
-Product direction for this Termux fork (`com.involvex.termux_app`): stay in the
-terminal, develop on PC and phone against the same git remotes, preview local
-servers on-device, and optionally attach AI CLIs.
+Product direction for this Termux fork (`com.involvex.termux_app`, display name
+**InVxTermux**): stay in the terminal, develop on PC and phone against the same
+git remotes, preview local servers on-device, and optionally attach AI CLIs.
+
+Docs: https://involvex.github.io/termux-app/ · Repo:
+https://github.com/involvex/termux-app
+
+> Unofficial fork of [termux/termux-app](https://github.com/termux/termux-app).
+> Not affiliated with the Termux maintainers.
 
 ## Pillars
 

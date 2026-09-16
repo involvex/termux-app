@@ -1,0 +1,81 @@
+/* InVxTermux docs — matrix green on black (aligned with app hacker theme) */
+:root {
+  --invx-green: #00ff41;
+  --invx-green-bright: #39ff14;
+  --invx-green-dim: #00b22e;
+  --invx-black: #000000;
+  --invx-panel: #0a0f0a;
+  --invx-muted: #1a3d1a;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-default-fg-color: var(--invx-green);
+  --md-default-fg-color--light: var(--invx-green-dim);
+  --md-default-fg-color--lighter: var(--invx-muted);
+  --md-default-bg-color: var(--invx-black);
+  --md-default-bg-color--light: var(--invx-panel);
+  --md-default-bg-color--lighter: #050805;
+  --md-primary-fg-color: var(--invx-black);
+  --md-primary-bg-color: var(--invx-green);
+  --md-accent-fg-color: var(--invx-green-bright);
+  --md-typeset-a-color: var(--invx-green-bright);
+  --md-code-bg-color: var(--invx-panel);
+  --md-code-fg-color: var(--invx-green);
+  --md-footer-bg-color: var(--invx-panel);
+  --md-footer-fg-color: var(--invx-green-dim);
+}
+
+.md-header {
+  background-color: var(--invx-panel) !important;
+  border-bottom: 1px solid rgba(0, 255, 65, 0.25);
+}
+
+.md-header__title,
+.md-header__button {
+  color: var(--invx-green) !important;
+}
+
+.md-tabs {
+  background-color: var(--invx-black) !important;
+  border-bottom: 1px solid rgba(0, 255, 65, 0.15);
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  color: var(--invx-green-bright);
+  font-family: "Roboto Mono", "Consolas", monospace;
+}
+
+.md-typeset a:hover {
+  color: var(--invx-green);
+}
+
+.md-typeset code {
+  border: 1px solid rgba(0, 255, 65, 0.2);
+}
+
+.md-typeset .admonition,
+.md-typeset details {
+  border-color: rgba(0, 255, 65, 0.35);
+}
+
+.md-nav__link--active,
+.md-nav__link:focus,
+.md-nav__link:hover {
+  color: var(--invx-green-bright) !important;
+}
+
+.md-search__form {
+  background-color: var(--invx-panel) !important;
+  border: 1px solid rgba(0, 255, 65, 0.25);
+}
+
+::selection {
+  background: rgba(0, 255, 65, 0.3);
+  color: #000;
+}
+
+.md-footer {
+  border-top: 1px solid rgba(0, 255, 65, 0.2);
+}

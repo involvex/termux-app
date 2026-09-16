@@ -1,4 +1,4 @@
-# AGENTS.md — Termux App (`com.involvex.termux_app` fork)
+# AGENTS.md — InVxTermux (`com.involvex.termux_app` fork)
 
 > Agent operating guide for this repo. Source of truth for versions/commands is
 > `gradle.properties`, `app/build.gradle`, `settings.gradle`, `README.md`,
@@ -8,10 +8,11 @@
 
 ## 1. Project Overview
 
-**Termux** is an Android terminal app + Linux environment. This repo (`termux-app`)
-holds the **app UI + terminal emulation**. Packages installable *inside* the app
-live in [`termux-packages`](https://github.com/termux/termux-packages) — do not
-add package logic here.
+**InVxTermux** is an unofficial fork of [Termux](https://termux.dev): an Android
+terminal app + Linux environment. This repo (`involvex/termux-app`) holds the
+**app UI + terminal emulation**. Packages installable *inside* the app live in
+[`termux-packages`](https://github.com/termux/termux-packages) — do not add
+package logic here. Docs: https://involvex.github.io/termux-app/
 
 ### Modules (`settings.gradle`)
 
@@ -32,14 +33,16 @@ Key shared entry points:
   redirector `libinvapp-redirector.so`).
 - `app/build.gradle` — version, variants, bootstrap/Bun download tasks.
 
-### This fork — Terminal Dev (`com.involvex.termux_app`)
+### This fork — InVxTermux / Terminal Dev (`com.involvex.termux_app`)
 
-Stay in terminal, develop on PC + phone against same git remote, preview
-localhost servers on-device, optionally attach AI CLI. See `ROADMAP.md`.
+Display name **InVxTermux**. Stay in terminal, develop on PC + phone against
+same git remote, preview localhost servers on-device, optionally attach AI CLI.
+See `ROADMAP.md`.
 
 | Piece | Path / behavior |
 |-------|-----------------|
-| Package id | `com.involvex.termux_app` (`sharedUserId` still `com.invapp`) |
+| Package id | `com.involvex.termux_app` |
+| Display name | `InVxTermux` |
 | Path redirector | `LD_PRELOAD=$PREFIX/lib/libinvapp-redirector.so` maps hardcoded `/data/data/com.termux` → this prefix (apt/SSH/node); also rewrites `#!/usr/bin/env` shebangs (npm/npx) |
 | Bun real binary | `$PREFIX/libexec/bun` — official `bun-linux-*-android.zip`, currently **1.4.2** |
 | Bun wrapper | `$PREFIX/bin/bun` → drops path redirector, preloads `libinvapp-bun-seccomp.so` (SIGSYS→ENOSYS for `openat2`/`fchmodat2`), sets OPENSSL + `--os=android --cpu=…` on install/add/create |
@@ -104,7 +107,7 @@ git --no-pager diff
 ./gradlew test                          # unit tests (JUnit + Robolectric)
 ./gradlew lint
 ./gradlew clean
-./gradlew versionName                   # prints e.g. 0.118.0
+./gradlew versionName                   # prints e.g. 0.200.0
 ./gradlew --refresh-dependencies
 ./gradlew assembleDebug -DTERMUX_PACKAGE_VARIANT=apt-android-7
 ```
@@ -114,11 +117,11 @@ Env vars honored by `app/build.gradle`:
 | Var | Default | Effect |
 |-----|---------|--------|
 | `TERMUX_PACKAGE_VARIANT` | `apt-android-7` | `apt-android-7` (Android 7+) or `apt-android-5` (Android 5/6, deprecated) |
-| `TERMUX_APP_VERSION_NAME` | `0.118.0` | Override `versionName` (must stay semver) |
+| `TERMUX_APP_VERSION_NAME` | `0.200.0` | Override `versionName` (must stay semver) |
 | `TERMUX_APK_VERSION_TAG` | — | APK filename tag |
 | `TERMUX_SPLIT_APKS_FOR_DEBUG_BUILDS` | `1` | Per-ABI APKs for debug |
 | `TERMUX_SPLIT_APKS_FOR_RELEASE_BUILDS` | `0` | F-Droid needs single APK (#1904) |
-| `JITPACK_NDK_VERSION` | `29.0.14206865` | NDK override (JitPack) |
+| `JITPACK_NDK_VERSION` | `29.0.14206865` | Optional NDK override (legacy env name) |
 
 Bootstrap/Bun tasks (run automatically via `preBuild`/`JavaCompile`/native
 build deps; run manually to prefetch):
@@ -176,7 +179,7 @@ without testing bootstrap + all ABIs.
 | NDK | `29.0.14206865`, `ndk-build` (`Android.mk` per module) |
 | JDK (build) | `17` (Android Studio Flamingo+) |
 | Java compat | `1.8` + `coreLibraryDesugaring` (`desugar_jdk_libs:1.1.5`) |
-| App version | `versionCode 118`, `versionName 0.118.0` (semver-enforced at build) |
+| App version | `versionCode 200`, `versionName 0.200.0` (semver-enforced at build) |
 | Bootstrap | `2026.02.12-r1+apt.android-7` (aarch64/arm/i686/x86_64, SHA-256 verified); android-5: `2022.04.28-r6` |
 | Bun | `1.4.2` official `bun-linux-{aarch64,x64}-android.zip` (SHA-256 verified, `.incbin` into `libinvapp-bun`, extracted by `TermuxBunInstaller`) |
 | Editor | 4-space, LF, UTF-8, final newline (`.editorconfig`); 2-space for `*.yaml` |
@@ -209,10 +212,10 @@ Native flags: `-std=c11 -Wall -Wextra -Werror -Os -fno-stack-protector
 - `debug_build.yml` — per-commit debug APKs (Artifacts; login required).
 - `run_tests.yml` — unit tests on PRs.
 - `attach_debug_apks_to_release.yml` — attaches APKs to GitHub Releases.
-- `gradle-wrapper-validation.yml`, `dependency-submission.yml`,
-  `trigger_library_builds_on_jitpack.yml` (publishes `termux-shared`
-  `com.invapp:termux-shared:0.118.0`, `terminal-emulator` to JitPack).
+- `docs.yml` — MkDocs → GitHub Pages (`https://involvex.github.io/termux-app/`).
+- `gradle-wrapper-validation.yml`, `dependency-submission.yml`.
 - Dependabot (`dependabot.yml`) for dependency bumps.
+- **No JitPack publish** for this fork (libraries are not published).
 
 ### Project layout
 
@@ -252,9 +255,9 @@ termux-app/
 ### Versioning — SemVer 2.0.0 (build-validated)
 
 - Format `major.minor.patch(-prerelease)(+buildmetadata)`, always with patch:
-  `0.118.0`, `0.119.0-beta.1`, never `v0.1`. Tag as `v0.118.0`.
+  `0.200.0`, `0.201.0-beta.1`, never `v0.1`. Tag as `v0.200.0`.
 - `app/build.gradle:validateVersionName()` fails the build on bad versions.
-- Keep `termux-shared`/`terminal-emulator` publish versions (`0.118.0`) in
+- Keep `termux-shared`/`terminal-emulator` versions (`0.200.0`) in
   sync when cutting releases.
 
 ### Code style / quality
@@ -367,10 +370,11 @@ termux-app/
 
 ## 8. Useful Links
 
-- Upstream: https://github.com/termux/termux-app · Wiki: https://wiki.termux.com/wiki/ · App wiki: https://github.com/termux/termux-app/wiki
+- Upstream: https://github.com/termux/termux-app · Wiki: https://wiki.termux.com/wiki/
+- This fork: https://github.com/involvex/termux-app · Docs: https://involvex.github.io/termux-app/
 - Packages: https://github.com/termux/termux-packages · File layout: https://github.com/termux/termux-packages/wiki/Termux-file-system-layout
 - `RUN_COMMAND` intent: https://github.com/termux/termux-app/wiki/RUN_COMMAND-Intent · Libraries: https://github.com/termux/termux-app/wiki/Termux-Libraries
 - Community: https://reddit.com/r/termux · Matrix: `#termux_termux:gitter.im`, `#termux_dev:gitter.im` · https://twitter.com/termuxdevs · support@termux.dev
-- Security: https://termux.dev/security · Vuln disclosure: https://termux.github.io/general/2022/02/15/termux-apps-vulnerability-disclosures.html
+- Security (this fork): [SECURITY.md](SECURITY.md) · Upstream: https://termux.dev/security
 - Terminal refs: https://invisible-island.net/xterm/ctlseqs/ctlseqs.html · https://vt100.net/
 - License: `LICENSE.md` (GPLv3 + exceptions) · `termux-shared/LICENSE.md`

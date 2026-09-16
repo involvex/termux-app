@@ -42,3 +42,6 @@ Thumbs.db
 # termux-api module
 termux-api/build/
 
+# MkDocs output
+public/
+

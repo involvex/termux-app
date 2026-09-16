@@ -330,10 +330,15 @@ public final class TermuxConstants {
      * Termux organization variables.
      */
 
-    /** Termux GitHub organization name */
-    public static final String TERMUX_GITHUB_ORGANIZATION_NAME = "termux"; // Default: "termux"
-    /** Termux GitHub organization url */
-    public static final String TERMUX_GITHUB_ORGANIZATION_URL = "https://github.com" + "/" + TERMUX_GITHUB_ORGANIZATION_NAME; // Default: "https://github.com/termux"
+    /** Termux GitHub organization name (this fork) */
+    public static final String TERMUX_GITHUB_ORGANIZATION_NAME = "involvex"; // Default: "involvex"
+    /** Termux GitHub organization url (this fork) */
+    public static final String TERMUX_GITHUB_ORGANIZATION_URL = "https://github.com" + "/" + TERMUX_GITHUB_ORGANIZATION_NAME; // Default: "https://github.com/involvex"
+
+    /** Upstream Termux GitHub organization name (packages / official plugins) */
+    public static final String TERMUX_UPSTREAM_GITHUB_ORGANIZATION_NAME = "termux"; // Default: "termux"
+    /** Upstream Termux GitHub organization url */
+    public static final String TERMUX_UPSTREAM_GITHUB_ORGANIZATION_URL = "https://github.com" + "/" + TERMUX_UPSTREAM_GITHUB_ORGANIZATION_NAME; // Default: "https://github.com/termux"
 
     /** F-Droid packages base url */
     public static final String FDROID_PACKAGES_BASE_URL = "https://f-droid.org/en/packages"; // Default: "https://f-droid.org/en/packages"
@@ -347,7 +352,7 @@ public final class TermuxConstants {
      */
 
     /** Termux app name */
-    public static final String TERMUX_APP_NAME = "Termux"; // Default: "Termux"
+    public static final String TERMUX_APP_NAME = "InVxTermux"; // Default: "InVxTermux"
     /** Termux package name */
     public static final String TERMUX_PACKAGE_NAME = "com.involvex.termux_app"; // Default: "com.involvex.termux_app"
     /** Termux GitHub repo name */
@@ -367,7 +372,7 @@ public final class TermuxConstants {
     /** Termux:API GitHub repo name */
     public static final String TERMUX_API_GITHUB_REPO_NAME = "termux-api"; // Default: "termux-api"
     /** Termux:API GitHub repo url */
-    public static final String TERMUX_API_GITHUB_REPO_URL = TERMUX_GITHUB_ORGANIZATION_URL + "/" + TERMUX_API_GITHUB_REPO_NAME; // Default: "https://github.com/termux/termux-api"
+    public static final String TERMUX_API_GITHUB_REPO_URL = TERMUX_UPSTREAM_GITHUB_ORGANIZATION_URL + "/" + TERMUX_API_GITHUB_REPO_NAME; // Default: "https://github.com/termux/termux-api"
     /** Termux:API GitHub issues repo url */
     public static final String TERMUX_API_GITHUB_ISSUES_REPO_URL = TERMUX_API_GITHUB_REPO_URL + "/issues"; // Default: "https://github.com/termux/termux-api/issues"
     /** Termux:API F-Droid package url */
@@ -381,7 +386,7 @@ public final class TermuxConstants {
     /** Termux:Boot GitHub repo name */
     public static final String TERMUX_BOOT_GITHUB_REPO_NAME = "termux-boot"; // Default: "termux-boot"
     /** Termux:Boot GitHub repo url */
-    public static final String TERMUX_BOOT_GITHUB_REPO_URL = TERMUX_GITHUB_ORGANIZATION_URL + "/" + TERMUX_BOOT_GITHUB_REPO_NAME; // Default: "https://github.com/termux/termux-boot"
+    public static final String TERMUX_BOOT_GITHUB_REPO_URL = TERMUX_UPSTREAM_GITHUB_ORGANIZATION_URL + "/" + TERMUX_BOOT_GITHUB_REPO_NAME; // Default: "https://github.com/termux/termux-boot"
     /** Termux:Boot GitHub issues repo url */
     public static final String TERMUX_BOOT_GITHUB_ISSUES_REPO_URL = TERMUX_BOOT_GITHUB_REPO_URL + "/issues"; // Default: "https://github.com/termux/termux-boot/issues"
     /** Termux:Boot F-Droid package url */
@@ -395,7 +400,7 @@ public final class TermuxConstants {
     /** Termux:Float GitHub repo name */
     public static final String TERMUX_FLOAT_GITHUB_REPO_NAME = "termux-float"; // Default: "termux-float"
     /** Termux:Float GitHub repo url */
-    public static final String TERMUX_FLOAT_GITHUB_REPO_URL = TERMUX_GITHUB_ORGANIZATION_URL + "/" + TERMUX_FLOAT_GITHUB_REPO_NAME; // Default: "https://github.com/termux/termux-float"
+    public static final String TERMUX_FLOAT_GITHUB_REPO_URL = TERMUX_UPSTREAM_GITHUB_ORGANIZATION_URL + "/" + TERMUX_FLOAT_GITHUB_REPO_NAME; // Default: "https://github.com/termux/termux-float"
     /** Termux:Float GitHub issues repo url */
     public static final String TERMUX_FLOAT_GITHUB_ISSUES_REPO_URL = TERMUX_FLOAT_GITHUB_REPO_URL + "/issues"; // Default: "https://github.com/termux/termux-float/issues"
     /** Termux:Float F-Droid package url */
@@ -409,7 +414,7 @@ public final class TermuxConstants {
     /** Termux:Styling GitHub repo name */
     public static final String TERMUX_STYLING_GITHUB_REPO_NAME = "termux-styling"; // Default: "termux-styling"
     /** Termux:Styling GitHub repo url */
-    public static final String TERMUX_STYLING_GITHUB_REPO_URL = TERMUX_GITHUB_ORGANIZATION_URL + "/" + TERMUX_STYLING_GITHUB_REPO_NAME; // Default: "https://github.com/termux/termux-styling"
+    public static final String TERMUX_STYLING_GITHUB_REPO_URL = TERMUX_UPSTREAM_GITHUB_ORGANIZATION_URL + "/" + TERMUX_STYLING_GITHUB_REPO_NAME; // Default: "https://github.com/termux/termux-styling"
     /** Termux:Styling GitHub issues repo url */
     public static final String TERMUX_STYLING_GITHUB_ISSUES_REPO_URL = TERMUX_STYLING_GITHUB_REPO_URL + "/issues"; // Default: "https://github.com/termux/termux-styling/issues"
     /** Termux:Styling F-Droid package url */
@@ -423,7 +428,7 @@ public final class TermuxConstants {
     /** Termux:Tasker GitHub repo name */
     public static final String TERMUX_TASKER_GITHUB_REPO_NAME = "termux-tasker"; // Default: "termux-tasker"
     /** Termux:Tasker GitHub repo url */
-    public static final String TERMUX_TASKER_GITHUB_REPO_URL = TERMUX_GITHUB_ORGANIZATION_URL + "/" + TERMUX_TASKER_GITHUB_REPO_NAME; // Default: "https://github.com/termux/termux-tasker"
+    public static final String TERMUX_TASKER_GITHUB_REPO_URL = TERMUX_UPSTREAM_GITHUB_ORGANIZATION_URL + "/" + TERMUX_TASKER_GITHUB_REPO_NAME; // Default: "https://github.com/termux/termux-tasker"
     /** Termux:Tasker GitHub issues repo url */
     public static final String TERMUX_TASKER_GITHUB_ISSUES_REPO_URL = TERMUX_TASKER_GITHUB_REPO_URL + "/issues"; // Default: "https://github.com/termux/termux-tasker/issues"
     /** Termux:Tasker F-Droid package url */
@@ -437,7 +442,7 @@ public final class TermuxConstants {
     /** Termux:Widget GitHub repo name */
     public static final String TERMUX_WIDGET_GITHUB_REPO_NAME = "termux-widget"; // Default: "termux-widget"
     /** Termux:Widget GitHub repo url */
-    public static final String TERMUX_WIDGET_GITHUB_REPO_URL = TERMUX_GITHUB_ORGANIZATION_URL + "/" + TERMUX_WIDGET_GITHUB_REPO_NAME; // Default: "https://github.com/termux/termux-widget"
+    public static final String TERMUX_WIDGET_GITHUB_REPO_URL = TERMUX_UPSTREAM_GITHUB_ORGANIZATION_URL + "/" + TERMUX_WIDGET_GITHUB_REPO_NAME; // Default: "https://github.com/termux/termux-widget"
     /** Termux:Widget GitHub issues repo url */
     public static final String TERMUX_WIDGET_GITHUB_ISSUES_REPO_URL = TERMUX_WIDGET_GITHUB_REPO_URL + "/issues"; // Default: "https://github.com/termux/termux-widget/issues"
     /** Termux:Widget F-Droid package url */
@@ -510,7 +515,7 @@ public final class TermuxConstants {
     /** Termux Packages GitHub repo name */
     public static final String TERMUX_PACKAGES_GITHUB_REPO_NAME = "termux-packages"; // Default: "termux-packages"
     /** Termux Packages GitHub repo url */
-    public static final String TERMUX_PACKAGES_GITHUB_REPO_URL = TERMUX_GITHUB_ORGANIZATION_URL + "/" + TERMUX_PACKAGES_GITHUB_REPO_NAME; // Default: "https://github.com/termux/termux-packages"
+    public static final String TERMUX_PACKAGES_GITHUB_REPO_URL = TERMUX_UPSTREAM_GITHUB_ORGANIZATION_URL + "/" + TERMUX_PACKAGES_GITHUB_REPO_NAME; // Default: "https://github.com/termux/termux-packages"
     /** Termux Packages GitHub issues repo url */
     public static final String TERMUX_PACKAGES_GITHUB_ISSUES_REPO_URL = TERMUX_PACKAGES_GITHUB_REPO_URL + "/issues"; // Default: "https://github.com/termux/termux-packages/issues"
 
@@ -520,7 +525,7 @@ public final class TermuxConstants {
     /** Termux API apt GitHub repo name */
     public static final String TERMUX_API_APT_GITHUB_REPO_NAME = "termux-api-package"; // Default: "termux-api-package"
     /** Termux API apt GitHub repo url */
-    public static final String TERMUX_API_APT_GITHUB_REPO_URL = TERMUX_GITHUB_ORGANIZATION_URL + "/" + TERMUX_API_APT_GITHUB_REPO_NAME; // Default: "https://github.com/termux/termux-api-package"
+    public static final String TERMUX_API_APT_GITHUB_REPO_URL = TERMUX_UPSTREAM_GITHUB_ORGANIZATION_URL + "/" + TERMUX_API_APT_GITHUB_REPO_NAME; // Default: "https://github.com/termux/termux-api-package"
     /** Termux API apt GitHub issues repo url */
     public static final String TERMUX_API_APT_GITHUB_ISSUES_REPO_URL = TERMUX_API_APT_GITHUB_REPO_URL + "/issues"; // Default: "https://github.com/termux/termux-api-package/issues"
 
@@ -535,13 +540,13 @@ public final class TermuxConstants {
     /** Termux Site */
     public static final String TERMUX_SITE = TERMUX_APP_NAME + " Site"; // Default: "Termux Site"
 
-    /** Termux Site url */
-    public static final String TERMUX_SITE_URL = "https://termux.dev"; // Default: "https://termux.dev"
+    /** Termux Site url (InVxTermux docs) */
+    public static final String TERMUX_SITE_URL = "https://involvex.github.io/termux-app"; // Default: "https://involvex.github.io/termux-app"
 
     /** Termux Wiki */
     public static final String TERMUX_WIKI = TERMUX_APP_NAME + " Wiki"; // Default: "Termux Wiki"
 
-    /** Termux Wiki url */
+    /** Termux Wiki url (upstream Termux wiki for packages / shell tips) */
     public static final String TERMUX_WIKI_URL = "https://wiki.termux.com"; // Default: "https://wiki.termux.com"
 
     /** Termux GitHub wiki repo url */
@@ -566,7 +571,7 @@ public final class TermuxConstants {
 
 
     /** Termux donate url */
-    public static final String TERMUX_DONATE_URL = TERMUX_SITE_URL + "/donate"; // Default: "https://termux.dev/donate"
+    public static final String TERMUX_DONATE_URL = "https://github.com/sponsors/involvex"; // Default: "https://github.com/sponsors/involvex"
 
 
 

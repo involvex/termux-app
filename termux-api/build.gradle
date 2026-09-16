@@ -16,7 +16,7 @@ android {
 
         // Must match the main app sharedUserId / signing cert so sockets work.
         manifestPlaceholders.TERMUX_PACKAGE_NAME = "com.involvex.termux_app"
-        manifestPlaceholders.TERMUX_APP_NAME = "Termux"
+        manifestPlaceholders.TERMUX_APP_NAME = "InVxTermux"
         manifestPlaceholders.TERMUX_API_APP_NAME = "Termux:API"
     }
 

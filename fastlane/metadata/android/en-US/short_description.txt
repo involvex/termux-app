@@ -1,1 +1,1 @@
-Terminal emulator app with a large set of command line utilities
+InVxTermux — terminal + Bun/Preview phone+PC workflow (Termux fork)
