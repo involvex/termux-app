@@ -4,6 +4,8 @@ import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -12,7 +14,9 @@ import android.content.ServiceConnection;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
 import android.view.Gravity;
@@ -27,6 +31,7 @@ import android.widget.ListView;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
+import com.google.android.material.snackbar.Snackbar;
 import com.invapp.R;
 import com.invapp.app.api.file.FileReceiverActivity;
 import com.invapp.app.terminal.TermuxActivityRootView;
@@ -38,11 +43,13 @@ import com.invapp.shared.activity.media.AppCompatActivityUtils;
 import com.invapp.shared.data.IntentUtils;
 import com.invapp.shared.android.PermissionUtils;
 import com.invapp.shared.data.DataUtils;
+import com.invapp.shared.shell.ShellUtils;
 import com.invapp.shared.termux.TermuxConstants;
 import com.invapp.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY;
 import com.invapp.app.activities.HelpActivity;
 import com.invapp.app.activities.LocalhostPreviewActivity;
 import com.invapp.app.activities.SettingsActivity;
+import com.invapp.app.utils.AiSessionHelper;
 import com.invapp.app.utils.PreferredPortWatcher;
 import com.invapp.app.utils.WorkflowHelper;
 import com.invapp.shared.termux.crash.TermuxCrashUtils;
@@ -72,6 +79,8 @@ import androidx.viewpager.widget.ViewPager;
 import java.io.File;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * A terminal emulator activity.
@@ -156,6 +165,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     /** Offers Preview when a preferred localhost port newly appears. */
     private PreferredPortWatcher mPreferredPortWatcher;
+
+    /** Background probes for AI OpenCode status / stop. */
+    private final ExecutorService mAiExecutor = Executors.newSingleThreadExecutor();
+    private final Handler mMainHandler = new Handler(Looper.getMainLooper());
 
     /**
      * If between onResume() and onStop(). Note that only one session is in the foreground of the terminal view at the
@@ -371,6 +384,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mPreferredPortWatcher.shutdown();
             mPreferredPortWatcher = null;
         }
+        mAiExecutor.shutdownNow();
 
         if (mIsInvalidState) return;
 
@@ -635,18 +649,99 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (ai != null) {
             ai.setOnClickListener(v -> startAiSession());
         }
+        View aiStop = findViewById(R.id.workflow_ai_stop_button);
+        if (aiStop != null) {
+            aiStop.setOnClickListener(v -> stopAiSession());
+        }
     }
 
     private void startAiSession() {
         getDrawer().closeDrawers();
-        if (!WorkflowHelper.writeToSession(getCurrentSession(), WorkflowHelper.CMD_TD_AI)) {
-            showToast(getString(R.string.msg_workflow_no_session), false);
+        showToast(getString(R.string.msg_workflow_ai_checking), false);
+        mAiExecutor.execute(() -> {
+            final AiSessionHelper.Status status = AiSessionHelper.probe();
+            mMainHandler.post(() -> applyAiSessionStatus(status));
+        });
+    }
+
+    private void applyAiSessionStatus(@NonNull AiSessionHelper.Status status) {
+        if (isFinishing()) {
             return;
         }
-        showToast(getString(R.string.msg_workflow_ai_starting), true);
-        // Open Preview immediately; PreferredPortWatcher will also snackbar when :4096 listens.
+        switch (status) {
+            case READY:
+                showToast(getString(R.string.msg_workflow_ai_ready), true);
+                openAiPreview();
+                maybeOfferTerminalErrorPaste();
+                return;
+            case INSTALLED:
+                if (!WorkflowHelper.writeToSession(getCurrentSession(), WorkflowHelper.CMD_TD_AI)) {
+                    showToast(getString(R.string.msg_workflow_no_session), false);
+                    return;
+                }
+                showToast(getString(R.string.msg_workflow_ai_starting), true);
+                openAiPreview();
+                maybeOfferTerminalErrorPaste();
+                return;
+            case MISSING:
+            default:
+                if (!WorkflowHelper.writeToSession(getCurrentSession(), WorkflowHelper.CMD_TD_AI)) {
+                    showToast(getString(R.string.msg_workflow_no_session), false);
+                    return;
+                }
+                showToast(getString(R.string.msg_workflow_ai_installing), true);
+                openAiPreview();
+                maybeOfferTerminalErrorPaste();
+        }
+    }
+
+    private void stopAiSession() {
+        getDrawer().closeDrawers();
+        mAiExecutor.execute(() -> {
+            final int killed = AiSessionHelper.stopAi(WorkflowHelper.AI_PREVIEW_PORT);
+            mMainHandler.post(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+                if (killed > 0) {
+                    showToast(getString(R.string.msg_workflow_ai_stopped), true);
+                } else {
+                    showToast(getString(R.string.msg_workflow_ai_not_running), false);
+                }
+            });
+        });
+    }
+
+    private void openAiPreview() {
         ActivityUtils.startActivity(this,
             LocalhostPreviewActivity.createIntent(this, WorkflowHelper.AI_PREVIEW_PORT));
+    }
+
+    /**
+     * If the current session transcript ends with an error-looking snippet, offer
+     * copying it for paste into OpenCode Preview.
+     */
+    private void maybeOfferTerminalErrorPaste() {
+        TerminalSession session = getCurrentSession();
+        String transcript = ShellUtils.getTerminalSessionTranscriptText(session, false, true);
+        final String snippet = AiSessionHelper.extractLastErrorSnippet(transcript);
+        if (snippet == null) {
+            return;
+        }
+        View root = findViewById(R.id.activity_termux_root_view);
+        if (root == null) {
+            return;
+        }
+        Snackbar.make(root, R.string.msg_workflow_ai_error_hint, Snackbar.LENGTH_LONG)
+            .setAction(R.string.action_workflow_ai_paste_error, v -> {
+                ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                if (cm != null) {
+                    cm.setPrimaryClip(ClipData.newPlainText("termux-error", snippet));
+                }
+                showToast(getString(R.string.msg_workflow_ai_error_copied), true);
+                openAiPreview();
+            })
+            .show();
     }
 
     private void showNewViteProjectDialog() {

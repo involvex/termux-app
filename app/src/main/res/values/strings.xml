@@ -109,6 +109,8 @@
     <string name="action_workflow_run">Run…</string>
     <string name="action_workflow_new">New…</string>
     <string name="action_workflow_ai">AI</string>
+    <string name="action_workflow_ai_stop">Stop AI</string>
+    <string name="action_workflow_ai_paste_error">Paste into OpenCode</string>
     <string name="title_workflow_repos">Open repo</string>
     <string name="title_workflow_run_script">Run script</string>
     <string name="title_workflow_pick_repo_for_run">Pick project</string>
@@ -119,7 +121,14 @@
     <string name="msg_workflow_no_repos">No projects in ~/repos</string>
     <string name="msg_workflow_no_scripts">No scripts in package.json</string>
     <string name="msg_workflow_invalid_name">Use letters, numbers, . _ - only</string>
+    <string name="msg_workflow_ai_checking">Checking OpenCode…</string>
     <string name="msg_workflow_ai_starting">Starting OpenCode on :4096 — Preview opening…</string>
+    <string name="msg_workflow_ai_installing">Installing OpenCode — Preview opens when :4096 is ready…</string>
+    <string name="msg_workflow_ai_ready">OpenCode ready on :4096 — opening Preview</string>
+    <string name="msg_workflow_ai_stopped">Stopped OpenCode on :4096</string>
+    <string name="msg_workflow_ai_not_running">Nothing listening on :4096</string>
+    <string name="msg_workflow_ai_error_hint">Recent terminal error — paste into OpenCode?</string>
+    <string name="msg_workflow_ai_error_copied">Error copied — paste in OpenCode (Preview)</string>
 
     <string name="action_report_issue">Report Issue</string>
     <string name="msg_generating_report">Generating Report</string>

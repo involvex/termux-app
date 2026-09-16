@@ -73,6 +73,13 @@ servers on-device, and optionally attach AI CLIs.
 - Dev remains the golden path; `bun run build` produces a installable PWA
   for home-screen use (no Capacitor / native packaging)
 
+### 9. AI session status + control (done)
+
+- Drawer **AI** probes OpenCode: missing / installed / ready (listening on `:4096`)
+- Start `td-ai` only when needed; if ready, jump straight to Preview
+- Drawer **Stop AI** — SIGTERM listeners on `:4096` (+ `pkill` OpenCode fallback)
+- Optional Snackbar: recent terminal error → copy for paste into OpenCode
+
 ## Non-goals (for now)
 
 - Full in-app IDE / multi-tab browser
@@ -90,8 +97,9 @@ td-dev                    # vite on :5173
 
 ```bash
 # AI web UI in Preview
-td-ai          # or: drawer → AI
+td-ai          # or: drawer → AI (skips start if :4096 already up)
 # Preview opens on :4096
+# drawer → Stop AI   # when done
 ```
 
 On desktop: same remote, normal git + bun. Pull on the phone to continue.

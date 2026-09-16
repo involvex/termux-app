@@ -329,6 +329,11 @@ public final class TermuxBunInstaller {
             + "case \"$PORT\" in\n"
             + "  ''|*[!0-9]*) echo \"usage: td-ai [port]\" >&2; exit 2 ;;\n"
             + "esac\n"
+            // Skip start when something already accepts connections on PORT.
+            + "if (echo >/dev/tcp/127.0.0.1/\"$PORT\") >/dev/null 2>&1; then\n"
+            + "  echo \"td-ai: already listening on :$PORT — open Preview\"\n"
+            + "  exit 0\n"
+            + "fi\n"
             + "if ! command -v bun >/dev/null 2>&1; then\n"
             + "  echo \"td-ai: bun missing — reopen the app\" >&2\n"
             + "  exit 127\n"
