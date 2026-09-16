@@ -49,7 +49,7 @@ localhost servers on-device, optionally attach AI CLI. See `ROADMAP.md`.
 | Preview | Drawer **Preview** → Scan + chips; **Copy LAN** / long-press chip → `http://<wifi-ip>:<port>` when bound on `0.0.0.0` |
 | AI helper | `opencode-setup` / `td-ai [port]` → OpenCode web on `:4096` + Preview hint. On-demand into `$PREFIX`, not baked into APK |
 | Dev server | `td-dev [script]` → `bun run` with Preview/LAN hints |
-| Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`) |
+| Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`); `pwa` / `pwa-react` add `vite-plugin-pwa` |
 | Workflow | Drawer: git pull / bun i / bun run dev / Repos / Run… / **New…** / **AI**; port Snackbar → Preview |
 
 **Do NOT "fix" these with more wrappers:**

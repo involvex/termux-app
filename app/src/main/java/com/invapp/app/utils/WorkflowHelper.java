@@ -29,9 +29,10 @@ public final class WorkflowHelper {
     public static final int AI_PREVIEW_PORT = 4096;
     public static final int VITE_DEFAULT_PORT = 5173;
 
-    /** Official create-vite templates we expose in the New… sheet. */
+    /** create-vite (+ pwa overlays) templates we expose in the New… sheet. */
     public static final String[] VITE_TEMPLATES = {
-        "vanilla", "vanilla-ts", "react", "react-ts", "vue", "vue-ts"
+        "vanilla", "vanilla-ts", "react", "react-ts", "vue", "vue-ts",
+        "pwa", "pwa-react"
     };
 
     private WorkflowHelper() {}

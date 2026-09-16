@@ -65,7 +65,13 @@ servers on-device, and optionally attach AI CLIs.
   `0.0.0.0:5173` for Preview / Copy LAN
 - Drawer **New…** → name + template → runs `td-scaffold`
 - Drawer **AI** → `td-ai` in the current session + open Preview on `:4096`
-- Optional later: Vite-PWA template once useful
+### 8. Vite-PWA scaffold (done)
+
+- `td-scaffold [name] pwa` / `pwa-react` — create-vite base + `vite-plugin-pwa`
+  (autoUpdate, basic manifest, same `0.0.0.0:5173` Preview / Copy LAN path)
+- Drawer **New…** lists `pwa` and `pwa-react` alongside vanilla/react/vue
+- Dev remains the golden path; `bun run build` produces a installable PWA
+  for home-screen use (no Capacitor / native packaging)
 
 ## Non-goals (for now)
 
@@ -77,7 +83,7 @@ servers on-device, and optionally attach AI CLIs.
 
 ```bash
 cd ~/repos
-td-scaffold myapp react   # or: drawer → New…
+td-scaffold myapp react   # or: drawer → New… → pwa / pwa-react
 td-dev                    # vite on :5173
 # Drawer → Preview → Scan → 5173
 ```
