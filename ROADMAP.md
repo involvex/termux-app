@@ -48,6 +48,16 @@ servers on-device, and optionally attach AI CLIs.
 - Only when the server listens on `0.0.0.0` / `::` (loopback-only binds explain how to fix)
 - No public tunnels by default
 
+### 6. Dev CLI reliability (done)
+
+- `node` shim → Bun when `nodejs` pkg is absent (package bins with
+  `#!/usr/bin/env node`)
+- Bun preload = seccomp + redirector (SIGSYS fix **and** shebang rewrite for
+  bunx children)
+- `bunx` passes `--bun`; `td-dev [script]` for Preview/LAN hints; hardened `td-ai`
+- [bun-termux-loader](https://github.com/kaan-escober/bun-termux-loader) is for
+  glibc `bun build --compile` bundles — not needed for our official Android Bun
+
 ## Non-goals (for now)
 
 - Full in-app IDE / multi-tab browser

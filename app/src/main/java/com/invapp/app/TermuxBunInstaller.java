@@ -20,9 +20,9 @@ import java.util.zip.ZipInputStream;
  * wrapper.
  *
  * <p>Real binary lives at {@code $PREFIX/libexec/bun}. The {@code bin/bun}
- * wrapper drops the path redirector and preloads {@code libinvapp-bun-seccomp.so}
- * so Android seccomp SIGSYS (openat2/fchmodat2 during install bin-linking)
- * becomes ENOSYS and Bun's fallbacks run. Also sets OPENSSL + Android
+ * wrapper drops a bare path-redirector-only preload and instead loads
+ * {@code libinvapp-bun-seccomp.so} (+ redirector for {@code #!/usr/bin/env}
+ * shebang rewrite so bunx/package bins work). Sets OPENSSL + Android
  * {@code --os}/{@code --cpu} install filters.
  *
  * <p>Uses oven-sh {@code bun-linux-*-android.zip} (Bionic PIE), not glibc Linux
@@ -224,16 +224,15 @@ public final class TermuxBunInstaller {
             + "  echo \"bun: missing Android binary at $REAL (reopen the app)\" >&2\n"
             + "  exit 127\n"
             + "fi\n"
-            // Path redirector must NOT preload with Bun (optional linux natives / hooks).
-            // Preload only the seccomp SIGSYS→ENOSYS shim so bun install bin-linking works
-            // on Android (openat2/fchmodat2 would otherwise kill with signal 31).
+            // Seccomp SIGSYS→ENOSYS (openat2/fchmodat2) PLUS path redirector so
+            // bunx/child bins with #!/usr/bin/env node get shebang rewrite.
+            // Redirector alone used to SIGSYS on install; seccomp fixes that.
             + "SECCOMP_SO=\"$PREFIX/lib/libinvapp-bun-seccomp.so\"\n"
-            + "if [ -f \"$SECCOMP_SO\" ]; then\n"
-            + "  export LD_PRELOAD=\"$SECCOMP_SO\"\n"
-            + "else\n"
-            + "  LD_PRELOAD=\n"
-            + "  export LD_PRELOAD\n"
-            + "fi\n"
+            + "REDIRECTOR_SO=\"$PREFIX/lib/libinvapp-redirector.so\"\n"
+            + "preload=\"\"\n"
+            + "[ -f \"$SECCOMP_SO\" ] && preload=\"$SECCOMP_SO\"\n"
+            + "[ -f \"$REDIRECTOR_SO\" ] && preload=\"${preload:+$preload:}$REDIRECTOR_SO\"\n"
+            + "export LD_PRELOAD=\"$preload\"\n"
             + "set -- \"$@\"\n"
             + "cmd=\"${1-}\"\n"
             // Force Android optionalDependency filter. Bun reports platform=android but
@@ -259,23 +258,43 @@ public final class TermuxBunInstaller {
             + "exec \"$REAL\" \"$@\"\n";
         writeExec(new File(binDir, "bun"), bunWrapper);
 
+        // bunx must run package bins under Bun. Stock `bun x` execs the bin
+        // shebang (#!/usr/bin/env node); without node that exits 127 and often
+        // prints nothing — the "silent fail" users hit for create-vite / serve.
         String bunx = ""
             + "#!" + bash + "\n"
-            + "exec \"" + prefix + "/bin/bun\" x \"$@\"\n";
+            + "PREFIX=\"" + prefix + "\"\n"
+            + "has_bun=0\n"
+            + "for a in \"$@\"; do\n"
+            + "  case \"$a\" in --bun) has_bun=1 ;; esac\n"
+            + "done\n"
+            + "if [ \"$has_bun\" = 1 ]; then\n"
+            + "  exec \"$PREFIX/bin/bun\" x \"$@\"\n"
+            + "fi\n"
+            + "exec \"$PREFIX/bin/bun\" x --bun \"$@\"\n";
         writeExec(new File(binDir, "bunx"), bunx);
+
+        // Provide `node` → bun when nodejs package is not installed so
+        // #!/usr/bin/env node scripts (npm bins, bunx children) actually run.
+        ensureNodeBunShim(binDir, bash, prefix);
 
         String bunDoctor = ""
             + "#!" + bash + "\n"
             + "PREFIX=\"" + prefix + "\"\n"
+            + "HOME=\"" + home + "\"\n"
             + "echo \"wrapper: $PREFIX/bin/bun\"\n"
             + "echo \"real:    $PREFIX/libexec/bun\"\n"
-            + "ls -la \"$PREFIX/bin/bun\" \"$PREFIX/libexec/bun\" 2>&1\n"
+            + "ls -la \"$PREFIX/bin/bun\" \"$PREFIX/libexec/bun\" \"$PREFIX/bin/bunx\" \"$PREFIX/bin/node\" 2>&1\n"
             + "if command -v readelf >/dev/null; then\n"
             + "  readelf -l \"$PREFIX/libexec/bun\" 2>/dev/null | grep -A1 INTERP || true\n"
             + "fi\n"
             + "\"$PREFIX/bin/bun\" --version\n"
+            + "echo \"node → $(command -v node 2>/dev/null || echo missing)\"\n"
+            + "if [ -f \"$PREFIX/bin/node\" ]; then head -2 \"$PREFIX/bin/node\"; fi\n"
             + "echo \"LD_PRELOAD in shell: ${LD_PRELOAD:-unset}\"\n"
-            + "echo \"OPENSSL_CONF=${OPENSSL_CONF:-unset}\"\n";
+            + "echo \"OPENSSL_CONF=${OPENSSL_CONF:-unset}\"\n"
+            + "echo \"--- bunx smoke ---\"\n"
+            + "bunx --bun cowsay ok 2>&1 | head -15 || true\n";
         writeExec(new File(binDir, "bun-doctor"), bunDoctor);
 
         // OpenCode bootstrap (optional AI CLI → Preview).
@@ -310,24 +329,92 @@ public final class TermuxBunInstaller {
             + "case \"$PORT\" in\n"
             + "  ''|*[!0-9]*) echo \"usage: td-ai [port]\" >&2; exit 2 ;;\n"
             + "esac\n"
+            + "if ! command -v bun >/dev/null 2>&1; then\n"
+            + "  echo \"td-ai: bun missing — reopen the app\" >&2\n"
+            + "  exit 127\n"
+            + "fi\n"
             + "if ! command -v opencode >/dev/null 2>&1; then\n"
             + "  echo \"opencode not found — running opencode-setup…\"\n"
             + "  opencode-setup || exit $?\n"
             + "  export PATH=\"$PREFIX/bin:$HOME/.bun/bin:$PATH\"\n"
+            + "  hash -r 2>/dev/null || true\n"
+            + "fi\n"
+            + "if ! command -v opencode >/dev/null 2>&1; then\n"
+            + "  echo \"td-ai: opencode still missing after setup\" >&2\n"
+            + "  exit 127\n"
             + "fi\n"
             + "echo \"\"\n"
             + "echo \"OpenCode web → http://127.0.0.1:$PORT/\"\n"
-            + "echo \"In the app: drawer → Preview → tap $PORT (or Scan)\"\n"
+            + "echo \"In the app: drawer → Preview → Scan → tap $PORT\"\n"
+            + "echo \"(Copy LAN shares Wi‑Fi URL only if the server binds 0.0.0.0)\"\n"
             + "echo \"\"\n"
             // Prefer web UI for Preview; fall back to serve if web subcommand missing.
             + "if opencode web --help >/dev/null 2>&1; then\n"
-            + "  exec opencode web --port \"$PORT\" --hostname 127.0.0.1\n"
+            + "  exec opencode web --port \"$PORT\" --hostname 0.0.0.0\n"
             + "fi\n"
-            + "exec opencode serve --port \"$PORT\" --hostname 127.0.0.1\n";
+            + "if opencode serve --help >/dev/null 2>&1; then\n"
+            + "  exec opencode serve --port \"$PORT\" --hostname 0.0.0.0\n"
+            + "fi\n"
+            + "echo \"td-ai: opencode has no web/serve command — try: opencode --help\" >&2\n"
+            + "exec opencode --help\n";
         writeExec(new File(binDir, "td-ai"), tdAi);
+
+        // Dev-server helper: clear errors + Preview/LAN hints before bun run.
+        String tdDev = ""
+            + "#!" + bash + "\n"
+            + "PREFIX=\"" + prefix + "\"\n"
+            + "HOME=\"" + home + "\"\n"
+            + "export PATH=\"$PREFIX/bin:$HOME/.bun/bin:$PATH\"\n"
+            + "SCRIPT=\"${1:-dev}\"\n"
+            + "if [ \"$#\" -gt 0 ]; then shift; fi\n"
+            + "if ! command -v bun >/dev/null 2>&1; then\n"
+            + "  echo \"td-dev: bun missing — reopen the app\" >&2\n"
+            + "  exit 127\n"
+            + "fi\n"
+            + "if [ ! -f package.json ]; then\n"
+            + "  echo \"td-dev: no package.json in $(pwd)\" >&2\n"
+            + "  echo \"hint: cd ~/repos/<project> first\" >&2\n"
+            + "  exit 1\n"
+            + "fi\n"
+            + "echo \"td-dev: bun run $SCRIPT $*\"\n"
+            + "echo \"When the port appears: drawer → Preview → Scan (or Copy LAN)\"\n"
+            + "echo \"\"\n"
+            + "exec bun run \"$SCRIPT\" \"$@\"\n";
+        writeExec(new File(binDir, "td-dev"), tdDev);
 
         ensureWorkspaceDirs();
         repairPrefixBinPermissions();
+    }
+
+    /**
+     * If {@code node} is missing (or is our previous shim), install a tiny
+     * wrapper that execs Bun. Leaves a real {@code nodejs} package binary alone.
+     */
+    private static void ensureNodeBunShim(@NonNull File binDir, @NonNull String bash,
+                                          @NonNull String prefix) {
+        File node = new File(binDir, "node");
+        if (node.isFile() && !isInvappNodeShim(node)) {
+            return;
+        }
+        String shim = ""
+            + "#!" + bash + "\n"
+            + "# invapp-bun-node-shim — provides node for #!/usr/bin/env node bins\n"
+            + "exec \"" + prefix + "/bin/bun\" \"$@\"\n";
+        writeExec(node, shim);
+    }
+
+    private static boolean isInvappNodeShim(@NonNull File node) {
+        try (FileInputStream in = new FileInputStream(node)) {
+            byte[] buf = new byte[256];
+            int n = in.read(buf);
+            if (n <= 0) {
+                return false;
+            }
+            String head = new String(buf, 0, n, java.nio.charset.StandardCharsets.UTF_8);
+            return head.contains("invapp-bun-node-shim");
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**
@@ -339,7 +426,10 @@ public final class TermuxBunInstaller {
         if (!binDir.isDirectory()) {
             return;
         }
-        String[] names = {"am.termuxam", "ksu", "am", "login", "apt", "apt-get", "dpkg"};
+        String[] names = {
+            "am.termuxam", "ksu", "am", "login", "apt", "apt-get", "dpkg",
+            "bun", "bunx", "node", "td-ai", "td-dev", "opencode-setup", "bun-doctor"
+        };
         for (String name : names) {
             File f = new File(binDir, name);
             if (!f.isFile()) {

@@ -43,10 +43,12 @@ localhost servers on-device, optionally attach AI CLI. See `ROADMAP.md`.
 | Path redirector | `LD_PRELOAD=$PREFIX/lib/libinvapp-redirector.so` maps hardcoded `/data/data/com.termux` → this prefix (apt/SSH/node); also rewrites `#!/usr/bin/env` shebangs (npm/npx) |
 | Bun real binary | `$PREFIX/libexec/bun` — official `bun-linux-*-android.zip`, currently **1.4.2** |
 | Bun wrapper | `$PREFIX/bin/bun` → drops path redirector, preloads `libinvapp-bun-seccomp.so` (SIGSYS→ENOSYS for `openat2`/`fchmodat2`), sets OPENSSL + `--os=android --cpu=…` on install/add/create |
-| bunx | `$PREFIX/bin/bunx` → `bun x` via wrapper (no per-package mapping) |
+| bunx | `$PREFIX/bin/bunx` → `bun x --bun` (avoids silent fail when `node` missing) |
+| node shim | `$PREFIX/bin/node` → bun if `nodejs` package not installed |
 | Default cwd | `~/repos` (exec-capable). `~/storage/shared` is browse/sync only (**noexec**) |
 | Preview | Drawer **Preview** → Scan + chips; **Copy LAN** / long-press chip → `http://<wifi-ip>:<port>` when bound on `0.0.0.0` |
 | AI helper | `opencode-setup` / `td-ai [port]` → OpenCode web on `:4096` + Preview hint. On-demand into `$PREFIX`, not baked into APK |
+| Dev server | `td-dev [script]` → `bun run` with Preview/LAN hints |
 | Workflow | Drawer snippets: `git pull` / `bun i` / `bun run dev` / Repos / Run…; port Snackbar → Preview |
 
 **Do NOT "fix" these with more wrappers:**
