@@ -111,6 +111,17 @@
     <string name="action_workflow_clone">Clone…</string>
     <string name="action_workflow_more">⋯</string>
     <string name="action_workflow_customize">Customize bar…</string>
+    <string name="action_customize_extra_keys">Customize keys…</string>
+    <string name="title_customize_extra_keys">Extra keys (page 2)</string>
+    <string name="msg_customize_extra_keys">Page 1 stays ESC/nav. Swipe the key bar left/right for page 2. New session after shell completion install.</string>
+    <string name="msg_extra_keys_updated">Extra keys updated</string>
+    <string name="error_extra_keys_write_failed">Could not write termux.properties</string>
+    <string name="title_right_drawer_tools">Tools</string>
+    <string name="action_paste">Paste</string>
+    <string name="sheet_section_clipboard">Clipboard</string>
+    <string name="sheet_section_session">Session</string>
+    <string name="sheet_section_dev">Dev</string>
+    <string name="sheet_section_app">App</string>
     <string name="action_workflow_reset_bar">Reset defaults</string>
     <string name="title_workflow_more">More</string>
     <string name="title_workflow_customize_bar">Quick actions</string>

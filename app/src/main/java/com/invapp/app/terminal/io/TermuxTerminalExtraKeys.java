@@ -1,10 +1,10 @@
 package com.invapp.app.terminal.io;
 
 import android.annotation.SuppressLint;
-import android.view.Gravity;
 import android.view.View;
 
 import androidx.annotation.NonNull;
+import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 
 import com.invapp.app.TermuxActivity;
@@ -47,19 +47,16 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
     /**
      * Set the terminal extra keys and style.
      */
-    private void setExtraKeys() {
+    public void setExtraKeys() {
         mExtraKeysInfo = null;
 
         try {
-            // The mMap stores the extra key and style string values while loading properties
-            // Check {@link #getExtraKeysInternalPropertyValueFromValue(String)} and
-            // {@link #getExtraKeysStyleInternalPropertyValueFromValue(String)}
             String extrakeys = (String) mActivity.getProperties().getInternalPropertyValue(TermuxPropertyConstants.KEY_EXTRA_KEYS, true);
             String extraKeysStyle = (String) mActivity.getProperties().getInternalPropertyValue(TermuxPropertyConstants.KEY_EXTRA_KEYS_STYLE, true);
 
             ExtraKeysConstants.ExtraKeyDisplayMap extraKeyDisplayMap = ExtraKeysInfo.getCharDisplayMapForStyle(extraKeysStyle);
             if (ExtraKeysConstants.EXTRA_KEY_DISPLAY_MAPS.DEFAULT_CHAR_DISPLAY.equals(extraKeyDisplayMap) && !TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS_STYLE.equals(extraKeysStyle)) {
-                Logger.logError(TermuxSharedProperties.LOG_TAG, "The style \"" + extraKeysStyle + "\" for the key \"" + TermuxPropertyConstants.KEY_EXTRA_KEYS_STYLE + "\" is invalid. Using default style instead.");
+                Logger.logError(TermuxSharedProperties.LOG_TAG, "The style \"" + extraKeysStyle + "\" for the key \"" + TermuxPropertyConstants.KEY_EXTRA_KEYS + "\" is invalid. Using default style instead.");
                 extraKeysStyle = TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS_STYLE;
             }
 
@@ -71,11 +68,21 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
             try {
                 mExtraKeysInfo = new ExtraKeysInfo(TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS, TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS_STYLE, ExtraKeysConstants.CONTROL_CHARS_ALIASES);
             } catch (JSONException e2) {
-                Logger.showToast(mActivity, "Can't create default extra keys",true);
+                Logger.showToast(mActivity, "Could not create default extra keys",true);
                 Logger.logStackTraceWithMessage(LOG_TAG, "Could create default extra keys: ", e);
                 mExtraKeysInfo = null;
             }
         }
+    }
+
+    /** Re-read properties from disk and reload the extra-keys view + toolbar height. */
+    public void reloadFromProperties() {
+        mActivity.getProperties().loadTermuxPropertiesFromDisk();
+        setExtraKeys();
+        if (mActivity.getExtraKeysView() != null && mExtraKeysInfo != null) {
+            mActivity.getExtraKeysView().reload(mExtraKeysInfo, mActivity.getTerminalToolbarDefaultHeight());
+        }
+        mActivity.setTerminalToolbarHeightPublic();
     }
 
     public ExtraKeysInfo getExtraKeysInfo() {
@@ -90,10 +97,16 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
                 mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
         } else if ("DRAWER".equals(key)) {
             DrawerLayout drawerLayout = mTermuxTerminalViewClient.getActivity().getDrawer();
-            if (drawerLayout.isDrawerOpen(Gravity.LEFT))
-                drawerLayout.closeDrawer(Gravity.LEFT);
+            if (drawerLayout.isDrawerOpen(GravityCompat.START))
+                drawerLayout.closeDrawer(GravityCompat.START);
             else
-                drawerLayout.openDrawer(Gravity.LEFT);
+                drawerLayout.openDrawer(GravityCompat.START);
+        } else if ("DRAWER_RIGHT".equals(key)) {
+            DrawerLayout drawerLayout = mTermuxTerminalViewClient.getActivity().getDrawer();
+            if (drawerLayout.isDrawerOpen(GravityCompat.END))
+                drawerLayout.closeDrawer(GravityCompat.END);
+            else
+                drawerLayout.openDrawer(GravityCompat.END);
         } else if ("PASTE".equals(key)) {
             if(mTermuxTerminalSessionActivityClient != null)
                 mTermuxTerminalSessionActivityClient.onPasteTextFromClipboard(null);
@@ -109,6 +122,12 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
             mActivity.sendWorkflowCommandFromExtraKeys(WorkflowHelper.CMD_BUN_RUN_DEV);
         } else if ("REPOS".equals(key)) {
             mActivity.showReposPickerFromExtraKeys();
+        } else if ("CLONE".equals(key)) {
+            mActivity.showCloneRepoDialogFromExtraKeys();
+        } else if ("AI".equals(key)) {
+            mActivity.startAiSessionFromExtraKeys();
+        } else if ("NEW".equals(key)) {
+            mActivity.showNewViteProjectDialogFromExtraKeys();
         } else {
             super.onTerminalExtraKeyButtonClick(view, key, ctrlDown, altDown, shiftDown, fnDown);
         }

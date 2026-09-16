@@ -326,8 +326,17 @@ public final class TermuxPropertyConstants {
 
     /** Defines the key for extra keys */
     public static final String KEY_EXTRA_KEYS =  "extra-keys"; // Default: "extra-keys"
-    //public static final String DEFAULT_IVALUE_EXTRA_KEYS = "[[ESC, TAB, CTRL, ALT, {key: '-', popup: '|'}, DOWN, UP]]"; // Single row
-    public static final String DEFAULT_IVALUE_EXTRA_KEYS = "[['ESC','/',{key: '-', popup: '|'},'HOME','UP','END','PGUP'], ['TAB','CTRL','ALT','LEFT','DOWN','RIGHT','PGDN'], [{key: 'PULL', display: 'pull'},{key: 'BUNI', display: 'bun i'},{key: 'DEV', display: 'dev'},{key: 'REPOS', display: 'repos'},'DRAWER','KEYBOARD','PASTE']]"; // Dev workflow row
+    /**
+     * Multi-page default: page 0 = nav/modifiers (2 rows); page 1 = workflow.
+     * Swipe left/right on the extra-keys bar to change pages.
+     */
+    public static final String DEFAULT_IVALUE_EXTRA_KEYS =
+        "["
+            + "[['ESC','/',{key: '-', popup: '|'},'HOME','UP','END','PGUP'],"
+            + "['TAB','CTRL','ALT','LEFT','DOWN','RIGHT','PGDN']],"
+            + "[[{key: 'PULL', display: 'pull'},{key: 'BUNI', display: 'bun i'},{key: 'DEV', display: 'dev'},{key: 'REPOS', display: 'repos'}],"
+            + "[{key: 'CLONE', display: 'clone'},{key: 'AI', display: 'AI'},'DRAWER',{key: 'DRAWER_RIGHT', display: 'tools'},'KEYBOARD','PASTE']]"
+            + "]";
 
     /** Defines the key for extra keys style */
     public static final String KEY_EXTRA_KEYS_STYLE =  "extra-keys-style"; // Default: "extra-keys-style"

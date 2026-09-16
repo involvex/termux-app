@@ -208,6 +208,14 @@ public final class ExtraKeysView extends GridLayout {
     protected SpecialButtonsLongHoldRunnable mSpecialButtonsLongHoldRunnable;
     protected int mLongPressCount;
 
+    /** Cached info for page swipes. */
+    private ExtraKeysInfo mLoadedExtraKeysInfo;
+    private float mLoadedHeightPx;
+    private int mCurrentPage;
+    private float mPageSwipeStartX;
+    private float mPageSwipeStartY;
+    private boolean mPageSwipeTracking;
+
 
     public ExtraKeysView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -387,12 +395,49 @@ public final class ExtraKeysView extends GridLayout {
         if (extraKeysInfo == null)
             return;
 
+        mLoadedExtraKeysInfo = extraKeysInfo;
+        mLoadedHeightPx = heightPx;
+        if (mCurrentPage < 0 || mCurrentPage >= extraKeysInfo.getPageCount()) {
+            mCurrentPage = 0;
+        }
+        reloadCurrentPage();
+    }
+
+    public int getCurrentPage() {
+        return mCurrentPage;
+    }
+
+    public int getPageCount() {
+        return mLoadedExtraKeysInfo == null ? 0 : mLoadedExtraKeysInfo.getPageCount();
+    }
+
+    /** Switch page by delta (-1 / +1). Returns true if the page changed. */
+    public boolean shiftPage(int delta) {
+        if (mLoadedExtraKeysInfo == null || mLoadedExtraKeysInfo.getPageCount() <= 1) {
+            return false;
+        }
+        int next = mCurrentPage + delta;
+        if (next < 0 || next >= mLoadedExtraKeysInfo.getPageCount()) {
+            return false;
+        }
+        mCurrentPage = next;
+        reloadCurrentPage();
+        return true;
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private void reloadCurrentPage() {
+        ExtraKeysInfo extraKeysInfo = mLoadedExtraKeysInfo;
+        float heightPx = mLoadedHeightPx;
+        if (extraKeysInfo == null)
+            return;
+
         for(SpecialButtonState state : mSpecialButtons.values())
             state.buttons = new ArrayList<>();
 
         removeAllViews();
 
-        ExtraKeyButton[][] buttons = extraKeysInfo.getMatrix();
+        ExtraKeyButton[][] buttons = extraKeysInfo.getMatrix(mCurrentPage);
 
         setRowCount(buttons.length);
         setColumnCount(maximumLength(buttons));
@@ -423,11 +468,34 @@ public final class ExtraKeysView extends GridLayout {
                     switch (event.getAction()) {
                         case MotionEvent.ACTION_DOWN:
                             view.setBackgroundColor(mButtonActiveBackgroundColor);
+                            mPageSwipeStartX = event.getRawX();
+                            mPageSwipeStartY = event.getRawY();
+                            mPageSwipeTracking = true;
                             // Start long press scheduled executors which will be stopped in next MotionEvent
                             startScheduledExecutors(view, buttonInfo, button);
                             return true;
 
                         case MotionEvent.ACTION_MOVE:
+                            if (mPageSwipeTracking) {
+                                float dx = event.getRawX() - mPageSwipeStartX;
+                                float dy = event.getRawY() - mPageSwipeStartY;
+                                int touchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+                                // Prefer horizontal page change over key/popup when clearly horizontal.
+                                if (Math.abs(dx) > touchSlop * 2
+                                    && Math.abs(dx) > Math.abs(dy) * 1.5f
+                                    && mLoadedExtraKeysInfo != null
+                                    && mLoadedExtraKeysInfo.getPageCount() > 1) {
+                                    stopScheduledExecutors();
+                                    view.setBackgroundColor(mButtonBackgroundColor);
+                                    mPageSwipeTracking = false;
+                                    if (dx < 0) {
+                                        shiftPage(1);
+                                    } else {
+                                        shiftPage(-1);
+                                    }
+                                    return true;
+                                }
+                            }
                             if (buttonInfo.getPopup() != null) {
                                 // Show popup on swipe up
                                 if (mPopupWindow == null && event.getY() < 0) {
@@ -445,11 +513,13 @@ public final class ExtraKeysView extends GridLayout {
                         case MotionEvent.ACTION_CANCEL:
                             view.setBackgroundColor(mButtonBackgroundColor);
                             stopScheduledExecutors();
+                            mPageSwipeTracking = false;
                             return true;
 
                         case MotionEvent.ACTION_UP:
                             view.setBackgroundColor(mButtonBackgroundColor);
                             stopScheduledExecutors();
+                            mPageSwipeTracking = false;
                             // If ACTION_UP up was not from a repetitive key or was with a key with a popup button
                             if (mLongPressCount == 0 || mPopupWindow != null) {
                                 // Trigger popup button click if swipe up complete
@@ -485,7 +555,6 @@ public final class ExtraKeysView extends GridLayout {
             }
         }
     }
-
 
 
     public void onExtraKeyButtonClick(View view, ExtraKeyButton buttonInfo, MaterialButton button) {

@@ -31,10 +31,12 @@ import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 import android.text.Editable;
 import android.text.TextWatcher;
 
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.snackbar.Snackbar;
 import com.invapp.R;
 import com.invapp.app.api.file.FileReceiverActivity;
@@ -54,6 +56,7 @@ import com.invapp.app.activities.HelpActivity;
 import com.invapp.app.activities.LocalhostPreviewActivity;
 import com.invapp.app.activities.SettingsActivity;
 import com.invapp.app.utils.AiSessionHelper;
+import com.invapp.app.utils.ExtraKeysBarHelper;
 import com.invapp.app.utils.PreferredPortWatcher;
 import com.invapp.app.utils.WorkflowBarHelper;
 import com.invapp.app.utils.WorkflowHelper;
@@ -78,6 +81,7 @@ import com.invapp.view.TerminalViewClient;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.viewpager.widget.ViewPager;
 
@@ -215,6 +219,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final int CONTEXT_MENU_HELP_ID = 7;
     private static final int CONTEXT_MENU_SETTINGS_ID = 8;
     private static final int CONTEXT_MENU_REPORT_ID = 9;
+    private static final int CONTEXT_MENU_PASTE_ID = 12;
+    private static final int CONTEXT_MENU_PREVIEW_ID = 13;
+    private static final int CONTEXT_MENU_AI_ID = 14;
 
     private static final String ARG_TERMINAL_TOOLBAR_TEXT_INPUT = "terminal_toolbar_text_input";
     private static final String ARG_ACTIVITY_RECREATED = "activity_recreated";
@@ -574,9 +581,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         ViewGroup.LayoutParams layoutParams = terminalToolbarViewPager.getLayoutParams();
         layoutParams.height = Math.round(mTerminalToolbarDefaultHeight *
-            (mTermuxTerminalExtraKeys.getExtraKeysInfo() == null ? 0 : mTermuxTerminalExtraKeys.getExtraKeysInfo().getMatrix().length) *
+            (mTermuxTerminalExtraKeys.getExtraKeysInfo() == null ? 0 : mTermuxTerminalExtraKeys.getExtraKeysInfo().getMaxRowCount()) *
             mProperties.getTerminalToolbarHeightScaleFactor());
         terminalToolbarViewPager.setLayoutParams(layoutParams);
+    }
+
+    /** Called after extra-keys property reload. */
+    public void setTerminalToolbarHeightPublic() {
+        setTerminalToolbarHeight();
     }
 
     public void toggleTerminalToolbar() {
@@ -618,10 +630,45 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             });
         }
         setWorkflowButtonViews();
+        setRightDrawerViews();
 
         View root = findViewById(R.id.activity_termux_root_view);
         if (root != null && mPreferredPortWatcher == null) {
             mPreferredPortWatcher = new PreferredPortWatcher(this, root);
+        }
+    }
+
+    private void setRightDrawerViews() {
+        View preview = findViewById(R.id.right_drawer_preview_button);
+        if (preview != null) {
+            preview.setOnClickListener(v -> {
+                getDrawer().closeDrawers();
+                ActivityUtils.startActivity(this,
+                    LocalhostPreviewActivity.createIntent(this, WorkflowHelper.AI_PREVIEW_PORT));
+            });
+        }
+        View ai = findViewById(R.id.right_drawer_ai_button);
+        if (ai != null) {
+            ai.setOnClickListener(v -> startAiSession());
+            ai.setOnLongClickListener(v -> {
+                stopAiSession();
+                return true;
+            });
+        }
+        View clone = findViewById(R.id.right_drawer_clone_button);
+        if (clone != null) {
+            clone.setOnClickListener(v -> showCloneRepoDialog());
+        }
+        View neu = findViewById(R.id.right_drawer_new_button);
+        if (neu != null) {
+            neu.setOnClickListener(v -> showNewViteProjectDialog());
+        }
+        View keys = findViewById(R.id.right_drawer_customize_keys_button);
+        if (keys != null) {
+            keys.setOnClickListener(v -> {
+                getDrawer().closeDrawers();
+                showCustomizeExtraKeysDialog();
+            });
         }
     }
 
@@ -731,6 +778,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             getString(R.string.action_workflow_run),
             getString(R.string.action_workflow_ai_stop),
             getString(R.string.action_workflow_customize),
+            getString(R.string.action_customize_extra_keys),
             getString(R.string.action_workflow_reset_bar)
         };
         new AlertDialog.Builder(this)
@@ -740,12 +788,46 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     case 0: showReposPicker(true); break;
                     case 1: stopAiSession(); break;
                     case 2: showCustomizeWorkflowBarDialog(); break;
-                    case 3:
+                    case 3: showCustomizeExtraKeysDialog(); break;
+                    case 4:
                         WorkflowBarHelper.resetToDefault(this);
                         applyWorkflowBarVisibility();
-                        showToast(getString(R.string.msg_workflow_ai_long_press_stop), true);
                         break;
                     default: break;
+                }
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    private void showCustomizeExtraKeysDialog() {
+        final String[] labels = ExtraKeysBarHelper.PAGE2_LABELS;
+        final boolean[] checked = ExtraKeysBarHelper.checkedFlags(
+            ExtraKeysBarHelper.getPage2Ids(this));
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.title_customize_extra_keys)
+            .setMessage(R.string.msg_customize_extra_keys)
+            .setMultiChoiceItems(labels, checked, (dialog, which, isChecked) -> {
+                checked[which] = isChecked;
+            })
+            .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                List<String> ids = ExtraKeysBarHelper.filterToCatalogOrder(checked);
+                ExtraKeysBarHelper.setPage2Ids(this, ids);
+                if (ExtraKeysBarHelper.writeExtraKeysProperty(ids)) {
+                    if (mTermuxTerminalExtraKeys != null) {
+                        mTermuxTerminalExtraKeys.reloadFromProperties();
+                    }
+                    showToast(getString(R.string.msg_extra_keys_updated), true);
+                } else {
+                    showToast(getString(R.string.error_extra_keys_write_failed), true);
+                }
+            })
+            .setNeutralButton(R.string.action_workflow_reset_bar, (dialog, which) -> {
+                ExtraKeysBarHelper.resetToDefault(this);
+                List<String> ids = ExtraKeysBarHelper.getPage2Ids(this);
+                if (ExtraKeysBarHelper.writeExtraKeysProperty(ids)
+                    && mTermuxTerminalExtraKeys != null) {
+                    mTermuxTerminalExtraKeys.reloadFromProperties();
                 }
             })
             .setNegativeButton(android.R.string.cancel, null)
@@ -1038,6 +1120,21 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         showReposPicker(false);
     }
 
+    /** Used by extra-key {@code CLONE}. */
+    public void showCloneRepoDialogFromExtraKeys() {
+        showCloneRepoDialog();
+    }
+
+    /** Used by extra-key {@code AI}. */
+    public void startAiSessionFromExtraKeys() {
+        startAiSession();
+    }
+
+    /** Used by extra-key {@code NEW}. */
+    public void showNewViteProjectDialogFromExtraKeys() {
+        showNewViteProjectDialog();
+    }
+
     /**
      * @param forRunScripts if true, after picking a repo show package.json scripts sheet
      */
@@ -1113,11 +1210,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
 
 
-    @SuppressLint("RtlHardcoded")
     @Override
     public void onBackPressed() {
-        if (getDrawer().isDrawerOpen(Gravity.LEFT)) {
-            getDrawer().closeDrawers();
+        DrawerLayout drawer = getDrawer();
+        if (drawer.isDrawerOpen(GravityCompat.START) || drawer.isDrawerOpen(GravityCompat.END)) {
+            drawer.closeDrawers();
         } else {
             finishActivityIfNotFinishing();
         }
@@ -1143,79 +1240,162 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     @Override
     public void onCreateContextMenu(ContextMenu menu, View v, ContextMenuInfo menuInfo) {
-        TerminalSession currentSession = getCurrentSession();
-        if (currentSession == null) return;
-
-        boolean autoFillEnabled = mTerminalView.isAutoFillEnabled();
-
-        menu.add(Menu.NONE, CONTEXT_MENU_SELECT_URL_ID, Menu.NONE, R.string.action_select_url);
-        menu.add(Menu.NONE, CONTEXT_MENU_SHARE_TRANSCRIPT_ID, Menu.NONE, R.string.action_share_transcript);
-        if (!DataUtils.isNullOrEmpty(mTerminalView.getStoredSelectedText()))
-            menu.add(Menu.NONE, CONTEXT_MENU_SHARE_SELECTED_TEXT, Menu.NONE, R.string.action_share_selected_text);
-        if (autoFillEnabled)
-            menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_USERNAME, Menu.NONE, R.string.action_autofill_username);
-        if (autoFillEnabled)
-            menu.add(Menu.NONE, CONTEXT_MENU_AUTOFILL_PASSWORD, Menu.NONE, R.string.action_autofill_password);
-        menu.add(Menu.NONE, CONTEXT_MENU_RESET_TERMINAL_ID, Menu.NONE, R.string.action_reset_terminal);
-        menu.add(Menu.NONE, CONTEXT_MENU_KILL_PROCESS_ID, Menu.NONE, getResources().getString(R.string.action_kill_process, getCurrentSession().getPid())).setEnabled(currentSession.isRunning());
-        menu.add(Menu.NONE, CONTEXT_MENU_STYLING_ID, Menu.NONE, R.string.action_style_terminal);
-        menu.add(Menu.NONE, CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON, Menu.NONE, R.string.action_toggle_keep_screen_on).setCheckable(true).setChecked(mPreferences.shouldKeepScreenOn());
-        menu.add(Menu.NONE, CONTEXT_MENU_HELP_ID, Menu.NONE, R.string.action_open_help);
-        menu.add(Menu.NONE, CONTEXT_MENU_SETTINGS_ID, Menu.NONE, R.string.action_open_settings);
-        menu.add(Menu.NONE, CONTEXT_MENU_REPORT_ID, Menu.NONE, R.string.action_report_issue);
+        // Prefer Material bottom sheet over the legacy floating ContextMenu.
+        menu.clear();
+        v.post(() -> {
+            closeContextMenu();
+            showTerminalActionsSheet();
+        });
     }
 
-    /** Hook system menu to show context menu instead. */
+    /** Hook system menu to show actions sheet instead. */
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        mTerminalView.showContextMenu();
+        showTerminalActionsSheet();
         return false;
+    }
+
+    /** Grouped terminal / session / app actions (replaces classic ContextMenu). */
+    public void showTerminalActionsSheet() {
+        TerminalSession currentSession = getCurrentSession();
+        if (currentSession == null || isFinishing()) {
+            return;
+        }
+
+        final BottomSheetDialog sheet = new BottomSheetDialog(this);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        root.setPadding(pad, pad, pad, pad);
+
+        boolean autoFillEnabled = mTerminalView.isAutoFillEnabled();
+        boolean hasSelection = !DataUtils.isNullOrEmpty(mTerminalView.getStoredSelectedText());
+
+        addSheetSection(root, R.string.sheet_section_clipboard);
+        addSheetAction(root, sheet, R.string.action_paste,
+            CONTEXT_MENU_PASTE_ID);
+        if (hasSelection) {
+            addSheetAction(root, sheet, R.string.action_share_selected_text,
+                CONTEXT_MENU_SHARE_SELECTED_TEXT);
+        }
+        addSheetAction(root, sheet, R.string.action_select_url, CONTEXT_MENU_SELECT_URL_ID);
+        addSheetAction(root, sheet, R.string.action_share_transcript, CONTEXT_MENU_SHARE_TRANSCRIPT_ID);
+        if (autoFillEnabled) {
+            addSheetAction(root, sheet, R.string.action_autofill_username, CONTEXT_MENU_AUTOFILL_USERNAME);
+            addSheetAction(root, sheet, R.string.action_autofill_password, CONTEXT_MENU_AUTOFILL_PASSWORD);
+        }
+
+        addSheetSection(root, R.string.sheet_section_session);
+        addSheetAction(root, sheet, R.string.action_reset_terminal, CONTEXT_MENU_RESET_TERMINAL_ID);
+        addSheetAction(root, sheet,
+            getResources().getString(R.string.action_kill_process, currentSession.getPid()),
+            CONTEXT_MENU_KILL_PROCESS_ID);
+
+        addSheetSection(root, R.string.sheet_section_dev);
+        addSheetAction(root, sheet, R.string.action_open_preview, CONTEXT_MENU_PREVIEW_ID);
+        addSheetAction(root, sheet, R.string.action_workflow_ai, CONTEXT_MENU_AI_ID);
+
+        addSheetSection(root, R.string.sheet_section_app);
+        addSheetAction(root, sheet, R.string.action_style_terminal, CONTEXT_MENU_STYLING_ID);
+        addSheetAction(root, sheet, R.string.action_toggle_keep_screen_on, CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON);
+        addSheetAction(root, sheet, R.string.action_open_help, CONTEXT_MENU_HELP_ID);
+        addSheetAction(root, sheet, R.string.action_open_settings, CONTEXT_MENU_SETTINGS_ID);
+        addSheetAction(root, sheet, R.string.action_report_issue, CONTEXT_MENU_REPORT_ID);
+
+        sheet.setContentView(root);
+        sheet.setOnDismissListener(d -> mTerminalView.onContextMenuClosed(null));
+        sheet.show();
+    }
+
+    private void addSheetSection(@NonNull LinearLayout root, int titleRes) {
+        TextView title = new TextView(this);
+        title.setText(titleRes);
+        title.setPadding(0, (int) (12 * getResources().getDisplayMetrics().density), 0, 4);
+        title.setTextAppearance(this, android.R.style.TextAppearance_Medium);
+        root.addView(title);
+    }
+
+    private void addSheetAction(@NonNull LinearLayout root, @NonNull BottomSheetDialog sheet,
+                                int labelRes, int actionId) {
+        addSheetAction(root, sheet, getString(labelRes), actionId);
+    }
+
+    private void addSheetAction(@NonNull LinearLayout root, @NonNull BottomSheetDialog sheet,
+                                @NonNull String label, int actionId) {
+        com.google.android.material.button.MaterialButton btn =
+            new com.google.android.material.button.MaterialButton(this, null,
+                android.R.attr.buttonBarButtonStyle);
+        btn.setText(label);
+        btn.setAllCaps(false);
+        btn.setLayoutParams(new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        btn.setOnClickListener(v -> {
+            sheet.dismiss();
+            dispatchContextAction(actionId);
+        });
+        root.addView(btn);
+    }
+
+    private void dispatchContextAction(int actionId) {
+        TerminalSession session = getCurrentSession();
+        switch (actionId) {
+            case CONTEXT_MENU_PASTE_ID:
+                if (mTermuxTerminalSessionActivityClient != null) {
+                    mTermuxTerminalSessionActivityClient.onPasteTextFromClipboard(null);
+                }
+                return;
+            case CONTEXT_MENU_PREVIEW_ID:
+                ActivityUtils.startActivity(this,
+                    LocalhostPreviewActivity.createIntent(this, WorkflowHelper.AI_PREVIEW_PORT));
+                return;
+            case CONTEXT_MENU_AI_ID:
+                startAiSession();
+                return;
+            case CONTEXT_MENU_SELECT_URL_ID:
+                mTermuxTerminalViewClient.showUrlSelection();
+                return;
+            case CONTEXT_MENU_SHARE_TRANSCRIPT_ID:
+                mTermuxTerminalViewClient.shareSessionTranscript();
+                return;
+            case CONTEXT_MENU_SHARE_SELECTED_TEXT:
+                mTermuxTerminalViewClient.shareSelectedText();
+                return;
+            case CONTEXT_MENU_AUTOFILL_USERNAME:
+                mTerminalView.requestAutoFillUsername();
+                return;
+            case CONTEXT_MENU_AUTOFILL_PASSWORD:
+                mTerminalView.requestAutoFillPassword();
+                return;
+            case CONTEXT_MENU_RESET_TERMINAL_ID:
+                onResetTerminalSession(session);
+                return;
+            case CONTEXT_MENU_KILL_PROCESS_ID:
+                showKillSessionDialog(session);
+                return;
+            case CONTEXT_MENU_STYLING_ID:
+                showStylingDialog();
+                return;
+            case CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON:
+                toggleKeepScreenOn();
+                return;
+            case CONTEXT_MENU_HELP_ID:
+                ActivityUtils.startActivity(this, new Intent(this, HelpActivity.class));
+                return;
+            case CONTEXT_MENU_SETTINGS_ID:
+                ActivityUtils.startActivity(this, new Intent(this, SettingsActivity.class));
+                return;
+            case CONTEXT_MENU_REPORT_ID:
+                mTermuxTerminalViewClient.reportIssueFromTranscript();
+                return;
+            default:
+                break;
+        }
     }
 
     @Override
     public boolean onContextItemSelected(MenuItem item) {
-        TerminalSession session = getCurrentSession();
-
-        switch (item.getItemId()) {
-            case CONTEXT_MENU_SELECT_URL_ID:
-                mTermuxTerminalViewClient.showUrlSelection();
-                return true;
-            case CONTEXT_MENU_SHARE_TRANSCRIPT_ID:
-                mTermuxTerminalViewClient.shareSessionTranscript();
-                return true;
-            case CONTEXT_MENU_SHARE_SELECTED_TEXT:
-                mTermuxTerminalViewClient.shareSelectedText();
-                return true;
-            case CONTEXT_MENU_AUTOFILL_USERNAME:
-                mTerminalView.requestAutoFillUsername();
-                return true;
-            case CONTEXT_MENU_AUTOFILL_PASSWORD:
-                mTerminalView.requestAutoFillPassword();
-                return true;
-            case CONTEXT_MENU_RESET_TERMINAL_ID:
-                onResetTerminalSession(session);
-                return true;
-            case CONTEXT_MENU_KILL_PROCESS_ID:
-                showKillSessionDialog(session);
-                return true;
-            case CONTEXT_MENU_STYLING_ID:
-                showStylingDialog();
-                return true;
-            case CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON:
-                toggleKeepScreenOn();
-                return true;
-            case CONTEXT_MENU_HELP_ID:
-                ActivityUtils.startActivity(this, new Intent(this, HelpActivity.class));
-                return true;
-            case CONTEXT_MENU_SETTINGS_ID:
-                ActivityUtils.startActivity(this, new Intent(this, SettingsActivity.class));
-                return true;
-            case CONTEXT_MENU_REPORT_ID:
-                mTermuxTerminalViewClient.reportIssueFromTranscript();
-                return true;
-            default:
-                return super.onContextItemSelected(item);
-        }
+        dispatchContextAction(item.getItemId());
+        return true;
     }
 
     @Override
@@ -1489,6 +1669,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void reloadActivityStyling(boolean recreateActivity) {
         if (mProperties != null) {
             reloadProperties();
+
+            if (mTermuxTerminalExtraKeys != null) {
+                mTermuxTerminalExtraKeys.setExtraKeys();
+            }
 
             if (mExtraKeysView != null) {
                 mExtraKeysView.setButtonTextAllCaps(mProperties.shouldExtraKeysTextBeAllCaps());

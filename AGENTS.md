@@ -54,7 +54,8 @@ See `ROADMAP.md`.
 | Dev server | `td-dev [script]` → `bun run` with Preview/LAN hints |
 | Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`); `pwa` / `pwa-react` add `vite-plugin-pwa` |
 | Clone | `td-clone <url> [name] [--bun-i]` → git clone into `~/repos`; drawer **Clone…** |
-| Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize |
+| Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize bar / Customize keys. Extra-keys: 2-row nav page + swipe L/R for workflow page; end drawer = Tools (Preview/AI/Clone/New). Long-press / Ctrl+Alt+M → actions bottom sheet |
+| Completions | App installs `$PREFIX/etc/profile.d/invapp-completions.sh` + `bash_completion.d` for bun/pkg/npm/gh/git. Prefer `pkg install bash-completion` for richer git. **New session** after update. Never edit `~/.bashrc` |
 
 **Do NOT "fix" these with more wrappers:**
 

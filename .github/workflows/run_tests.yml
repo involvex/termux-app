@@ -24,6 +24,10 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: '17'
+    - name: Show java version
+      run: |
+        java -version
+        echo "JAVA_HOME=$JAVA_HOME"
     - name: Execute tests
       run: |
         ./gradlew test

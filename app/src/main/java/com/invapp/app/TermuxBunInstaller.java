@@ -1102,8 +1102,180 @@ public final class TermuxBunInstaller {
             + "pwd\n";
         writeExec(new File(binDir, "td-clone"), tdClone);
 
+        installBashCompletions(prefix);
         ensureWorkspaceDirs();
         repairPrefixBinPermissions();
+    }
+
+    /**
+     * Installs {@code $PREFIX/etc/profile.d/invapp-completions.sh} and static
+     * completers under {@code $PREFIX/etc/bash_completion.d/}. Does not touch
+     * {@code ~/.bashrc}. Open a new session after install.
+     */
+    static void installBashCompletions(@NonNull String prefix) {
+        File profileD = new File(prefix, "etc/profile.d");
+        File completionD = new File(prefix, "etc/bash_completion.d");
+        ensureDir(profileD);
+        ensureDir(completionD);
+
+        String hook = ""
+            + "# invapp-completions — sourced by login shells via profile.d\n"
+            + "[ -n \"${BASH_VERSION-}\" ] || return 0\n"
+            + "shopt -q progcomp 2>/dev/null || shopt -s progcomp 2>/dev/null || true\n"
+            + "if [ -f \"$PREFIX/share/bash-completion/bash_completion\" ]; then\n"
+            + "  # shellcheck source=/dev/null\n"
+            + "  . \"$PREFIX/share/bash-completion/bash_completion\"\n"
+            + "elif [ -f \"$PREFIX/etc/bash_completion\" ]; then\n"
+            + "  # shellcheck source=/dev/null\n"
+            + "  . \"$PREFIX/etc/bash_completion\"\n"
+            + "fi\n"
+            + "for _invapp_comp in \"$PREFIX/etc/bash_completion.d\"/*.bash \"$PREFIX/etc/bash_completion.d\"/*.sh; do\n"
+            + "  [ -f \"$_invapp_comp\" ] || continue\n"
+            + "  # shellcheck source=/dev/null\n"
+            + "  . \"$_invapp_comp\"\n"
+            + "done\n"
+            + "unset _invapp_comp\n";
+        writeTextFile(new File(profileD, "invapp-completions.sh"), hook);
+
+        writeTextFile(new File(completionD, "invapp-bun.bash"), bunCompletionScript());
+        writeTextFile(new File(completionD, "invapp-pkg.bash"), pkgCompletionScript());
+        writeTextFile(new File(completionD, "invapp-npm.bash"), npmCompletionScript());
+        writeTextFile(new File(completionD, "invapp-gh.bash"), ghCompletionScript());
+        writeTextFile(new File(completionD, "invapp-git.bash"), gitCompletionScript());
+    }
+
+    @NonNull
+    static String bunCompletionScript() {
+        return ""
+            + "# invapp bun completions (subset; regenerate with: bun completions bash)\n"
+            + "_invapp_bun() {\n"
+            + "  local cur=\"${COMP_WORDS[COMP_CWORD]}\"\n"
+            + "  local cmds=\"run test install i add remove rm update create x exec init help --version --help\"\n"
+            + "  if [ \"$COMP_CWORD\" -eq 1 ]; then\n"
+            + "    COMPREPLY=( $(compgen -W \"$cmds\" -- \"$cur\") )\n"
+            + "    return\n"
+            + "  fi\n"
+            + "  case \"${COMP_WORDS[1]}\" in\n"
+            + "    run|test|x|exec) COMPREPLY=( $(compgen -f -- \"$cur\") ) ;;\n"
+            + "    *) COMPREPLY=( $(compgen -W \"$cmds\" -- \"$cur\") ) ;;\n"
+            + "  esac\n"
+            + "}\n"
+            + "complete -F _invapp_bun bun 2>/dev/null || true\n"
+            + "complete -F _invapp_bun bunx 2>/dev/null || true\n";
+    }
+
+    @NonNull
+    static String pkgCompletionScript() {
+        return ""
+            + "# invapp pkg completions\n"
+            + "_invapp_pkg() {\n"
+            + "  local cur=\"${COMP_WORDS[COMP_CWORD]}\"\n"
+            + "  local cmds=\"install uninstall reinstall search list files show upgrade update clean hold unhold help\"\n"
+            + "  if [ \"$COMP_CWORD\" -eq 1 ]; then\n"
+            + "    COMPREPLY=( $(compgen -W \"$cmds\" -- \"$cur\") )\n"
+            + "    return\n"
+            + "  fi\n"
+            + "  case \"${COMP_WORDS[1]}\" in\n"
+            + "    install|uninstall|reinstall|search|files|show|hold|unhold)\n"
+            + "      if command -v apt-cache >/dev/null 2>&1; then\n"
+            + "        COMPREPLY=( $(apt-cache --no-generate pkgnames \"$cur\" 2>/dev/null) )\n"
+            + "      else\n"
+            + "        COMPREPLY=( $(compgen -W \"\" -- \"$cur\") )\n"
+            + "      fi\n"
+            + "      ;;\n"
+            + "    *) COMPREPLY=( $(compgen -W \"$cmds\" -- \"$cur\") ) ;;\n"
+            + "  esac\n"
+            + "}\n"
+            + "complete -F _invapp_pkg pkg 2>/dev/null || true\n";
+    }
+
+    @NonNull
+    static String npmCompletionScript() {
+        return ""
+            + "# invapp npm completions (works with real npm or node shim)\n"
+            + "_invapp_npm() {\n"
+            + "  local cur=\"${COMP_WORDS[COMP_CWORD]}\"\n"
+            + "  local cmds=\"install i uninstall remove rm run test start build publish pack link unlink outdated audit doctor help\"\n"
+            + "  if [ \"$COMP_CWORD\" -eq 1 ]; then\n"
+            + "    COMPREPLY=( $(compgen -W \"$cmds\" -- \"$cur\") )\n"
+            + "    return\n"
+            + "  fi\n"
+            + "  case \"${COMP_WORDS[1]}\" in\n"
+            + "    run|start|test|build) COMPREPLY=( $(compgen -f -- \"$cur\") ) ;;\n"
+            + "    *) COMPREPLY=( $(compgen -W \"$cmds\" -- \"$cur\") ) ;;\n"
+            + "  esac\n"
+            + "}\n"
+            + "complete -F _invapp_npm npm 2>/dev/null || true\n"
+            + "complete -F _invapp_npm npx 2>/dev/null || true\n";
+    }
+
+    @NonNull
+    static String ghCompletionScript() {
+        return ""
+            + "# invapp gh completions — prefer upstream when available\n"
+            + "if command -v gh >/dev/null 2>&1; then\n"
+            + "  if ! complete -p gh >/dev/null 2>&1; then\n"
+            + "    eval \"$(gh completion -s bash 2>/dev/null)\" || true\n"
+            + "  fi\n"
+            + "fi\n"
+            + "if ! complete -p gh >/dev/null 2>&1; then\n"
+            + "  _invapp_gh() {\n"
+            + "    local cur=\"${COMP_WORDS[COMP_CWORD]}\"\n"
+            + "    local cmds=\"auth repo pr issue release gist api browse config help\"\n"
+            + "    if [ \"$COMP_CWORD\" -eq 1 ]; then\n"
+            + "      COMPREPLY=( $(compgen -W \"$cmds\" -- \"$cur\") )\n"
+            + "    fi\n"
+            + "  }\n"
+            + "  complete -F _invapp_gh gh 2>/dev/null || true\n"
+            + "fi\n";
+    }
+
+    @NonNull
+    static String gitCompletionScript() {
+        return ""
+            + "# invapp git stub — skip if bash-completion already registered git\n"
+            + "if complete -p git >/dev/null 2>&1; then\n"
+            + "  return 0 2>/dev/null || true\n"
+            + "fi\n"
+            + "_invapp_git() {\n"
+            + "  local cur=\"${COMP_WORDS[COMP_CWORD]}\"\n"
+            + "  local cmds=\"status add commit push pull clone fetch checkout branch merge rebase log diff stash remote init help\"\n"
+            + "  if [ \"$COMP_CWORD\" -eq 1 ]; then\n"
+            + "    COMPREPLY=( $(compgen -W \"$cmds\" -- \"$cur\") )\n"
+            + "    return\n"
+            + "  fi\n"
+            + "  COMPREPLY=( $(compgen -f -- \"$cur\") )\n"
+            + "}\n"
+            + "complete -F _invapp_git git 2>/dev/null || true\n";
+    }
+
+    private static void writeTextFile(@NonNull File dest, @NonNull String contents) {
+        try {
+            File parent = dest.getParentFile();
+            if (parent != null) {
+                ensureDir(parent);
+            }
+            File tmp = new File(dest.getAbsolutePath() + ".new");
+            try (FileOutputStream out = new FileOutputStream(tmp)) {
+                out.write(contents.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            //noinspection OctalInteger
+            Os.chmod(tmp.getAbsolutePath(), 0644);
+            if (dest.exists() && !dest.delete()) {
+                try {
+                    Os.remove(dest.getAbsolutePath());
+                } catch (Exception e) {
+                    Logger.logWarn(LOG_TAG, "Could not replace " + dest + ": " + e.getMessage());
+                }
+            }
+            if (!tmp.renameTo(dest)) {
+                Logger.logWarn(LOG_TAG, "Could not install " + dest);
+                //noinspection ResultOfMethodCallIgnored
+                tmp.delete();
+            }
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "Text install failed for " + dest + ": " + e.getMessage());
+        }
     }
 
     /**

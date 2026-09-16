@@ -1,11 +1,7 @@
 package com.invapp.shared.termux.extrakeys;
 
-import android.view.View;
-import android.widget.Button;
-
 import androidx.annotation.NonNull;
 
-import com.google.android.material.button.MaterialButton;
 import com.invapp.shared.termux.extrakeys.ExtraKeysConstants.EXTRA_KEY_DISPLAY_MAPS;
 import com.invapp.shared.termux.terminal.io.TerminalExtraKeys;
 
@@ -14,128 +10,82 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
- * A {@link Class} that defines the info needed by {@link ExtraKeysView} to display the extra key
- * views.
+ * Info needed by {@link ExtraKeysView} to display extra keys.
  *
- * The {@code propertiesInfo} passed to the constructors of this class must be json array of arrays.
- * Each array element of the json array will be considered a separate row of keys.
- * Each key can either be simple string that defines the name of the key or a json dict that defines
- * advance info for the key. The syntax can be `'KEY'` or `{key: 'KEY'}`.
- * For example `HOME` or `{key: 'HOME', ...}.
+ * <p>Legacy format (single page): JSON array of <em>rows</em>:
+ * {@code [['ESC','TAB'], ['CTRL','ALT']]}.
  *
- * In advance json dict mode, the key can also be a sequence of space separated keys instead of one
- * key. This can be done by replacing `key` key/value pair of the dict with a `macro` key/value pair.
- * The syntax is `{macro: 'KEY COMBINATION'}`. For example {macro: 'HOME RIGHT', ...}.
+ * <p>Multi-page format: JSON array of <em>pages</em>, each page an array of rows:
+ * {@code [[['ESC','TAB'],['CTRL','ALT']], [[{key:'PULL',display:'pull'},'DRAWER']]]}.
  *
- * In advance json dict mode, you can define a nested json dict with the `popup` key which will be
- * used as the popup key and will be triggered on swipe up. The syntax can be
- * `{key: 'KEY', popup: 'POPUP_KEY'}` or `{key: 'KEY', popup: {macro: 'KEY COMBINATION', display: 'Key combo'}}`.
- * For example `{key: 'HOME', popup: {KEY: 'END', ...}, ...}`.
+ * <p>Detection: if the first element of the outer array is a JSONArray whose first
+ * element is also a JSONArray, the value is treated as multi-page.
  *
- * In advance json dict mode, the key can also have a custom display name that can be used as the
- * text to display on the button by defining the `display` key. The syntax is `{display: 'DISPLAY'}`.
- * For example {display: 'Custom name', ...}.
- *
- * Examples:
- * {@code
- * # Empty:
- * []
- *
- * # Single row:
- * [[ESC, TAB, CTRL, ALT, {key: '-', popup: '|'}, DOWN, UP]]
- *
- * # 2 row:
- * [['ESC','/',{key: '-', popup: '|'},'HOME','UP','END','PGUP'],
- * ['TAB','CTRL','ALT','LEFT','DOWN','RIGHT','PGDN']]
- *
- * # Advance:
- * [[
- *   {key: ESC, popup: {macro: "CTRL f d", display: "tmux exit"}},
- *   {key: CTRL, popup: {macro: "CTRL f BKSP", display: "tmux ←"}},
- *   {key: ALT, popup: {macro: "CTRL f TAB", display: "tmux →"}},
- *   {key: TAB, popup: {macro: "ALT a", display: A-a}},
- *   {key: LEFT, popup: HOME},
- *   {key: DOWN, popup: PGDN},
- *   {key: UP, popup: PGUP},
- *   {key: RIGHT, popup: END},
- *   {macro: "ALT j", display: A-j, popup: {macro: "ALT g", display: A-g}},
- *   {key: KEYBOARD, popup: {macro: "CTRL d", display: exit}}
- * ]]
- *
- * }
- *
- * Aliases are also allowed for the keys that you can pass as {@code extraKeyAliasMap}. Check
- * {@link ExtraKeysConstants#CONTROL_CHARS_ALIASES}.
- *
- * Its up to the {@link ExtraKeysView.IExtraKeysView} client on how to handle individual key values
- * of an {@link ExtraKeyButton}. They are sent as is via
- * {@link ExtraKeysView.IExtraKeysView#onExtraKeyButtonClick(View, ExtraKeyButton, MaterialButton)}. The
- * {@link TerminalExtraKeys} which is an implementation of the interface,
- * checks if the key is one of {@link ExtraKeysConstants#PRIMARY_KEY_CODES_FOR_STRINGS} and generates
- * a {@link android.view.KeyEvent} for it, and if its not, then converts the key to code points by
- * calling {@link CharSequence#codePoints()} and passes them to the terminal as literal strings.
- *
- * Examples:
- * {@code
- * "ENTER" will trigger the ENTER keycode
- * "LEFT" will trigger the LEFT keycode and be displayed as "←"
- * "→" will input a "→" character
- * "−" will input a "−" character
- * "-_-" will input the string "-_-"
- * }
- *
- * For more info, check https://wiki.termux.com/wiki/Touch_Keyboard.
+ * @see ExtraKeysView
+ * @see TerminalExtraKeys
  */
 public class ExtraKeysInfo {
 
-    /**
-     * Matrix of buttons to be displayed in {@link ExtraKeysView}.
-     */
-    private final ExtraKeyButton[][] mButtons;
+    private final ExtraKeyButton[][][] mPages;
 
-    /**
-     * Initialize {@link ExtraKeysInfo}.
-     *
-     * @param propertiesInfo The {@link String} containing the info to create the {@link ExtraKeysInfo}.
-     *                       Check the class javadoc for details.
-     * @param style The style to pass to {@link #getCharDisplayMapForStyle(String)} to get the
-     *              {@link ExtraKeysConstants.ExtraKeyDisplayMap} that defines the display text
-     *              mapping for the keys if a custom value is not defined by
-     *              {@link ExtraKeyButton#KEY_DISPLAY_NAME} for a key.
-     * @param extraKeyAliasMap The {@link ExtraKeysConstants.ExtraKeyDisplayMap} that defines the
-     *                           aliases for the actual key names. You can create your own or
-     *                           optionally pass {@link ExtraKeysConstants#CONTROL_CHARS_ALIASES}.
-     */
     public ExtraKeysInfo(@NonNull String propertiesInfo, String style,
                          @NonNull ExtraKeysConstants.ExtraKeyDisplayMap extraKeyAliasMap) throws JSONException {
-        mButtons = initExtraKeysInfo(propertiesInfo, getCharDisplayMapForStyle(style), extraKeyAliasMap);
+        mPages = initPages(propertiesInfo, getCharDisplayMapForStyle(style), extraKeyAliasMap);
     }
 
-    /**
-     * Initialize {@link ExtraKeysInfo}.
-     *
-     * @param propertiesInfo The {@link String} containing the info to create the {@link ExtraKeysInfo}.
-     *                       Check the class javadoc for details.
-     * @param extraKeyDisplayMap The {@link ExtraKeysConstants.ExtraKeyDisplayMap} that defines the
-     *                           display text mapping for the keys if a custom value is not defined
-     *                           by {@link ExtraKeyButton#KEY_DISPLAY_NAME} for a key. You can create
-     *                           your own or optionally pass one of the values defined in
-     *                           {@link #getCharDisplayMapForStyle(String)}.
-     * @param extraKeyAliasMap The {@link ExtraKeysConstants.ExtraKeyDisplayMap} that defines the
-     *                           aliases for the actual key names. You can create your own or
-     *                           optionally pass {@link ExtraKeysConstants#CONTROL_CHARS_ALIASES}.
-     */
     public ExtraKeysInfo(@NonNull String propertiesInfo,
                          @NonNull ExtraKeysConstants.ExtraKeyDisplayMap extraKeyDisplayMap,
                          @NonNull ExtraKeysConstants.ExtraKeyDisplayMap extraKeyAliasMap) throws JSONException {
-        mButtons = initExtraKeysInfo(propertiesInfo, extraKeyDisplayMap, extraKeyAliasMap);
+        mPages = initPages(propertiesInfo, extraKeyDisplayMap, extraKeyAliasMap);
     }
 
-    private ExtraKeyButton[][] initExtraKeysInfo(@NonNull String propertiesInfo,
-                                                 @NonNull ExtraKeysConstants.ExtraKeyDisplayMap extraKeyDisplayMap,
-                                                 @NonNull ExtraKeysConstants.ExtraKeyDisplayMap extraKeyAliasMap) throws JSONException {
-        // Convert String propertiesInfo to Array of Arrays
+    @NonNull
+    private static ExtraKeyButton[][][] initPages(@NonNull String propertiesInfo,
+                                                  @NonNull ExtraKeysConstants.ExtraKeyDisplayMap extraKeyDisplayMap,
+                                                  @NonNull ExtraKeysConstants.ExtraKeyDisplayMap extraKeyAliasMap) throws JSONException {
         JSONArray arr = new JSONArray(propertiesInfo);
+        if (arr.length() == 0) {
+            return new ExtraKeyButton[][][] { new ExtraKeyButton[0][] };
+        }
+        if (isMultiPage(arr)) {
+            ExtraKeyButton[][][] pages = new ExtraKeyButton[arr.length()][][];
+            for (int p = 0; p < arr.length(); p++) {
+                pages[p] = parseMatrix(arr.getJSONArray(p), extraKeyDisplayMap, extraKeyAliasMap);
+            }
+            return pages;
+        }
+        return new ExtraKeyButton[][][] {
+            parseMatrix(arr, extraKeyDisplayMap, extraKeyAliasMap)
+        };
+    }
+
+    /**
+     * Multi-page when outer[0][0] is itself a JSONArray (a row inside a page).
+     */
+    static boolean isMultiPage(@NonNull JSONArray arr) throws JSONException {
+        if (arr.length() == 0) {
+            return false;
+        }
+        Object first = arr.get(0);
+        if (!(first instanceof JSONArray)) {
+            return false;
+        }
+        JSONArray pageOrRow = (JSONArray) first;
+        if (pageOrRow.length() == 0) {
+            return false;
+        }
+        return pageOrRow.get(0) instanceof JSONArray;
+    }
+
+    /** Visible for tests. */
+    public static boolean isMultiPageJson(@NonNull String propertiesInfo) throws JSONException {
+        return isMultiPage(new JSONArray(propertiesInfo));
+    }
+
+    @NonNull
+    private static ExtraKeyButton[][] parseMatrix(@NonNull JSONArray arr,
+                                                  @NonNull ExtraKeysConstants.ExtraKeyDisplayMap extraKeyDisplayMap,
+                                                  @NonNull ExtraKeysConstants.ExtraKeyDisplayMap extraKeyAliasMap) throws JSONException {
         Object[][] matrix = new Object[arr.length()][];
         for (int i = 0; i < arr.length(); i++) {
             JSONArray line = arr.getJSONArray(i);
@@ -145,53 +95,62 @@ public class ExtraKeysInfo {
             }
         }
 
-        // convert matrix to buttons
         ExtraKeyButton[][] buttons = new ExtraKeyButton[matrix.length][];
         for (int i = 0; i < matrix.length; i++) {
             buttons[i] = new ExtraKeyButton[matrix[i].length];
             for (int j = 0; j < matrix[i].length; j++) {
-                Object key = matrix[i][j];
-
-                JSONObject jobject = normalizeKeyConfig(key);
-
+                JSONObject jobject = normalizeKeyConfig(matrix[i][j]);
                 ExtraKeyButton button;
-
                 if (!jobject.has(ExtraKeyButton.KEY_POPUP)) {
-                    // no popup
                     button = new ExtraKeyButton(jobject, extraKeyDisplayMap, extraKeyAliasMap);
                 } else {
-                    // a popup
                     JSONObject popupJobject = normalizeKeyConfig(jobject.get(ExtraKeyButton.KEY_POPUP));
                     ExtraKeyButton popup = new ExtraKeyButton(popupJobject, extraKeyDisplayMap, extraKeyAliasMap);
                     button = new ExtraKeyButton(jobject, popup, extraKeyDisplayMap, extraKeyAliasMap);
                 }
-
                 buttons[i][j] = button;
             }
         }
-
         return buttons;
     }
 
-    /**
-     * Convert "value" -> {"key": "value"}. Required by
-     * {@link ExtraKeyButton#ExtraKeyButton(JSONObject, ExtraKeyButton, ExtraKeysConstants.ExtraKeyDisplayMap, ExtraKeysConstants.ExtraKeyDisplayMap)}.
-     */
     private static JSONObject normalizeKeyConfig(Object key) throws JSONException {
-        JSONObject jobject;
         if (key instanceof String) {
-            jobject = new JSONObject();
+            JSONObject jobject = new JSONObject();
             jobject.put(ExtraKeyButton.KEY_KEY_NAME, key);
+            return jobject;
         } else if (key instanceof JSONObject) {
-            jobject = (JSONObject) key;
-        } else {
-            throw new JSONException("An key in the extra-key matrix must be a string or an object");
+            return (JSONObject) key;
         }
-        return jobject;
+        throw new JSONException("An key in the extra-key matrix must be a string or an object");
     }
 
+    /** First page matrix (backward compatible). */
     public ExtraKeyButton[][] getMatrix() {
-        return mButtons;
+        return getMatrix(0);
+    }
+
+    @NonNull
+    public ExtraKeyButton[][] getMatrix(int page) {
+        if (page < 0 || page >= mPages.length) {
+            return mPages[0];
+        }
+        return mPages[page];
+    }
+
+    public int getPageCount() {
+        return mPages.length;
+    }
+
+    /** Max row count across all pages (for toolbar height). */
+    public int getMaxRowCount() {
+        int max = 0;
+        for (ExtraKeyButton[][] page : mPages) {
+            if (page != null && page.length > max) {
+                max = page.length;
+            }
+        }
+        return max;
     }
 
     @NonNull

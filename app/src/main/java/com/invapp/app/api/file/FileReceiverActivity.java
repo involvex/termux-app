@@ -5,7 +5,6 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.OpenableColumns;
-import android.util.Patterns;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -57,7 +56,8 @@ public class FileReceiverActivity extends AppCompatActivity {
     static boolean isSharedTextAnUrl(String sharedText) {
         if (sharedText == null || sharedText.isEmpty()) return false;
 
-        return Patterns.WEB_URL.matcher(sharedText).matches()
+        // Pure java.util.regex so unit tests do not need Robolectric/Android Patterns.
+        return Pattern.matches("(?i)https?://\\S+", sharedText)
             || Pattern.matches("magnet:\\?xt=urn:btih:.*?", sharedText);
     }
 

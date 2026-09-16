@@ -1,16 +1,12 @@
 package com.invapp.app.api.file;
 
-import com.invapp.app.api.file.FileReceiverActivity;
-
 import org.junit.Assert;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
 
 import java.util.ArrayList;
 import java.util.List;
 
-@RunWith(RobolectricTestRunner.class)
+/** Pure JUnit — no Robolectric (JDK 25 + Robolectric 4.10 fails ClassReader). */
 public class FileReceiverActivityTest {
 
     @Test
@@ -21,7 +17,7 @@ public class FileReceiverActivityTest {
         validUrls.add("https://example.com/path/parameter=foo");
         validUrls.add("magnet:?xt=urn:btih:d540fc48eb12f2833163eed6421d449dd8f1ce1f&dn=Ubuntu+desktop+19.04+%2864bit%29&tr=udp%3A%2F%2Ftracker.openbittorrent.com%3A80&tr=udp%3A%2F%2Ftracker.publicbt.com%3A80&tr=udp%3A%2F%2Ftracker.ccc.de%3A80");
         for (String url : validUrls) {
-            Assert.assertTrue(FileReceiverActivity.isSharedTextAnUrl(url));
+            Assert.assertTrue(url, FileReceiverActivity.isSharedTextAnUrl(url));
         }
 
         List<String> invalidUrls = new ArrayList<>();
@@ -29,7 +25,7 @@ public class FileReceiverActivityTest {
         invalidUrls.add("");
         invalidUrls.add(null);
         for (String url : invalidUrls) {
-            Assert.assertFalse(FileReceiverActivity.isSharedTextAnUrl(url));
+            Assert.assertFalse(String.valueOf(url), FileReceiverActivity.isSharedTextAnUrl(url));
         }
     }
 

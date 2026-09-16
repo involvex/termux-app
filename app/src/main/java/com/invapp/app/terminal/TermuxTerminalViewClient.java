@@ -17,6 +17,8 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.Toast;
 
+import androidx.core.view.GravityCompat;
+
 import com.invapp.R;
 import com.invapp.app.TermuxActivity;
 import com.invapp.shared.file.FileUtils;
@@ -254,13 +256,13 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
             } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP || unicodeChar == 'p' /* previous */) {
                 mTermuxTerminalSessionActivityClient.switchToSession(false);
             } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                mActivity.getDrawer().openDrawer(Gravity.LEFT);
+                mActivity.getDrawer().openDrawer(GravityCompat.START);
             } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
                 mActivity.getDrawer().closeDrawers();
             } else if (unicodeChar == 'k'/* keyboard */) {
                 onToggleSoftKeyboardRequest();
             } else if (unicodeChar == 'm'/* menu */) {
-                mActivity.getTerminalView().showContextMenu();
+                mActivity.showTerminalActionsSheet();
             } else if (unicodeChar == 'r'/* rename */) {
                 mTermuxTerminalSessionActivityClient.renameSession(currentSession);
             } else if (unicodeChar == 'c'/* create */) {
