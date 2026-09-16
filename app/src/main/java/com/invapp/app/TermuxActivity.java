@@ -55,6 +55,7 @@ import com.invapp.app.activities.LocalhostPreviewActivity;
 import com.invapp.app.activities.SettingsActivity;
 import com.invapp.app.utils.AiSessionHelper;
 import com.invapp.app.utils.PreferredPortWatcher;
+import com.invapp.app.utils.WorkflowBarHelper;
 import com.invapp.app.utils.WorkflowHelper;
 import com.invapp.shared.termux.crash.TermuxCrashUtils;
 import com.invapp.shared.termux.settings.preferences.TermuxAppSharedPreferences;
@@ -656,11 +657,131 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         View ai = findViewById(R.id.workflow_ai_button);
         if (ai != null) {
             ai.setOnClickListener(v -> startAiSession());
+            ai.setOnLongClickListener(v -> {
+                stopAiSession();
+                return true;
+            });
         }
         View aiStop = findViewById(R.id.workflow_ai_stop_button);
         if (aiStop != null) {
             aiStop.setOnClickListener(v -> stopAiSession());
         }
+        View more = findViewById(R.id.workflow_more_button);
+        if (more != null) {
+            more.setOnClickListener(v -> showWorkflowMoreMenu());
+        }
+        applyWorkflowBarVisibility();
+    }
+
+    private void applyWorkflowBarVisibility() {
+        List<String> visible = WorkflowBarHelper.getVisibleIds(this);
+        setWorkflowActionVisible(WorkflowBarHelper.ID_PULL, R.id.workflow_git_pull_button, visible);
+        setWorkflowActionVisible(WorkflowBarHelper.ID_BUN_I, R.id.workflow_bun_install_button, visible);
+        setWorkflowActionVisible(WorkflowBarHelper.ID_BUN_DEV, R.id.workflow_bun_dev_button, visible);
+        setWorkflowActionVisible(WorkflowBarHelper.ID_REPOS, R.id.workflow_repos_button, visible);
+        setWorkflowActionVisible(WorkflowBarHelper.ID_RUN, R.id.workflow_run_button, visible);
+        setWorkflowActionVisible(WorkflowBarHelper.ID_CLONE, R.id.workflow_clone_button, visible);
+        setWorkflowActionVisible(WorkflowBarHelper.ID_NEW, R.id.workflow_new_button, visible);
+        setWorkflowActionVisible(WorkflowBarHelper.ID_AI, R.id.workflow_ai_button, visible);
+        setWorkflowActionVisible(WorkflowBarHelper.ID_AI_STOP, R.id.workflow_ai_stop_button, visible);
+        // Re-order children to match preference order, More always last.
+        ViewGroup row = findViewById(R.id.workflow_bar_row);
+        View moreBtn = findViewById(R.id.workflow_more_button);
+        if (row == null || moreBtn == null) {
+            return;
+        }
+        for (String id : visible) {
+            View child = workflowViewForId(id);
+            if (child != null) {
+                row.removeView(child);
+                row.addView(child);
+            }
+        }
+        row.removeView(moreBtn);
+        row.addView(moreBtn);
+    }
+
+    private void setWorkflowActionVisible(@NonNull String id, int viewId,
+                                          @NonNull List<String> visible) {
+        View v = findViewById(viewId);
+        if (v != null) {
+            v.setVisibility(visible.contains(id) ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    @Nullable
+    private View workflowViewForId(@NonNull String id) {
+        switch (id) {
+            case WorkflowBarHelper.ID_PULL: return findViewById(R.id.workflow_git_pull_button);
+            case WorkflowBarHelper.ID_BUN_I: return findViewById(R.id.workflow_bun_install_button);
+            case WorkflowBarHelper.ID_BUN_DEV: return findViewById(R.id.workflow_bun_dev_button);
+            case WorkflowBarHelper.ID_REPOS: return findViewById(R.id.workflow_repos_button);
+            case WorkflowBarHelper.ID_RUN: return findViewById(R.id.workflow_run_button);
+            case WorkflowBarHelper.ID_CLONE: return findViewById(R.id.workflow_clone_button);
+            case WorkflowBarHelper.ID_NEW: return findViewById(R.id.workflow_new_button);
+            case WorkflowBarHelper.ID_AI: return findViewById(R.id.workflow_ai_button);
+            case WorkflowBarHelper.ID_AI_STOP: return findViewById(R.id.workflow_ai_stop_button);
+            default: return null;
+        }
+    }
+
+    private void showWorkflowMoreMenu() {
+        getDrawer().closeDrawers();
+        final String[] items = new String[] {
+            getString(R.string.action_workflow_run),
+            getString(R.string.action_workflow_ai_stop),
+            getString(R.string.action_workflow_customize),
+            getString(R.string.action_workflow_reset_bar)
+        };
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.title_workflow_more)
+            .setItems(items, (dialog, which) -> {
+                switch (which) {
+                    case 0: showReposPicker(true); break;
+                    case 1: stopAiSession(); break;
+                    case 2: showCustomizeWorkflowBarDialog(); break;
+                    case 3:
+                        WorkflowBarHelper.resetToDefault(this);
+                        applyWorkflowBarVisibility();
+                        showToast(getString(R.string.msg_workflow_ai_long_press_stop), true);
+                        break;
+                    default: break;
+                }
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    private void showCustomizeWorkflowBarDialog() {
+        final String[] labels = new String[] {
+            getString(R.string.action_workflow_git_pull),
+            getString(R.string.action_workflow_bun_install),
+            getString(R.string.action_workflow_bun_dev),
+            getString(R.string.action_workflow_repos),
+            getString(R.string.action_workflow_run),
+            getString(R.string.action_workflow_clone),
+            getString(R.string.action_workflow_new),
+            getString(R.string.action_workflow_ai),
+            getString(R.string.action_workflow_ai_stop)
+        };
+        final boolean[] checked = WorkflowBarHelper.checkedFlags(
+            WorkflowBarHelper.getVisibleIds(this));
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.title_workflow_customize_bar)
+            .setMultiChoiceItems(labels, checked, (dialog, which, isChecked) -> {
+                checked[which] = isChecked;
+            })
+            .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                WorkflowBarHelper.setVisibleIds(this,
+                    WorkflowBarHelper.filterToCatalogOrder(checked));
+                applyWorkflowBarVisibility();
+            })
+            .setNeutralButton(R.string.action_workflow_reset_bar, (dialog, which) -> {
+                WorkflowBarHelper.resetToDefault(this);
+                applyWorkflowBarVisibility();
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
     }
 
     private void startAiSession() {

@@ -47,11 +47,11 @@ localhost servers on-device, optionally attach AI CLI. See `ROADMAP.md`.
 | node shim | `$PREFIX/bin/node` → bun if `nodejs` package not installed |
 | Default cwd | `~/repos` (exec-capable). `~/storage/shared` is browse/sync only (**noexec**) |
 | Preview | Drawer **Preview** → Scan + chips; **Copy LAN** / long-press chip → `http://<wifi-ip>:<port>` when bound on `0.0.0.0` |
-| AI helper | `opencode-setup` / `td-ai [port]` → OpenCode web on `:4096` + Preview. Drawer **AI** probes missing/installed/ready (skip start if listening); **Stop AI** kills `:4096`. On-demand into `$PREFIX`, not baked into APK |
+| AI helper | `opencode-setup` / `td-ai [port]` → OpenCode web on `:4096` + Preview. Setup downloads official `opencode-linux-*.tar.gz` from GitHub (no `bun install` / no postinstall), then `glibc` + ld-linux wrapper (`LD_PRELOAD=` clear). Optional `OPENCODE_VERSION=v1.18.31`. Drawer **AI** probes missing/installed/ready; long-press / **Stop AI** kills `:4096`. On-demand into `$PREFIX`, not baked into APK |
 | Dev server | `td-dev [script]` → `bun run` with Preview/LAN hints |
 | Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`); `pwa` / `pwa-react` add `vite-plugin-pwa` |
 | Clone | `td-clone <url> [name] [--bun-i]` → git clone into `~/repos`; drawer **Clone…** |
-| Workflow | Drawer: git pull / bun i / bun run dev / Repos / Run… / **Clone…** / **New…** / **AI** / **Stop AI**; port Snackbar → Preview |
+| Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize |
 
 **Do NOT "fix" these with more wrappers:**
 
@@ -70,6 +70,16 @@ localhost servers on-device, optionally attach AI CLI. See `ROADMAP.md`.
   (noexec). Keep runnable projects in `~/repos`.
 - OpenSSL/node looking at `com.termux` — shell env + redirector cover it;
   don't hardcode new paths.
+- `opencode-setup` / glibc `Permission denied` / `version LIBC not found` /
+  postinstall / SIGSYS on setup — OpenCode is a linux-glibc binary. Setup
+  **downloads the GitHub tarball** (never `bun install -g opencode-ai` or
+  `curl … opencode.ai/install`). It installs `glibc` and runs under
+  `ld-linux` with **`LD_PRELOAD=`** (empty). Do not `unset LD_PRELOAD` (the
+  path redirector reinjects when the key is absent). Never use stock `grun`
+  alone on this package id without path fixups.
+- `opencode` prints “postinstall script was not run” — leftover bun JS stub.
+  Re-run `opencode-setup` (removes the stub) or `rm -f $PREFIX/bin/opencode`
+  then setup again.
 
 ## 2. Useful Commands
 

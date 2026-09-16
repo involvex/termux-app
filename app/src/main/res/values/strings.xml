@@ -109,6 +109,12 @@
     <string name="action_workflow_run">Run…</string>
     <string name="action_workflow_new">New…</string>
     <string name="action_workflow_clone">Clone…</string>
+    <string name="action_workflow_more">⋯</string>
+    <string name="action_workflow_customize">Customize bar…</string>
+    <string name="action_workflow_reset_bar">Reset defaults</string>
+    <string name="title_workflow_more">More</string>
+    <string name="title_workflow_customize_bar">Quick actions</string>
+    <string name="msg_workflow_ai_long_press_stop">Long-press AI to stop</string>
     <string name="action_workflow_ai">AI</string>
     <string name="action_workflow_ai_stop">Stop AI</string>
     <string name="action_workflow_ai_paste_error">Paste into OpenCode</string>

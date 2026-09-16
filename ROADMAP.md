@@ -31,7 +31,7 @@ servers on-device, and optionally attach AI CLIs.
 
 ### 3. AI tools (done — bootstrap)
 
-- `opencode-setup` — `bun install -g opencode-ai@latest`
+- `opencode-setup` — download official `opencode-linux-*.tar.gz` + glibc wrapper
 - `td-ai [port]` — install if needed, start `opencode web` (default **4096**), print Preview hint
 - Not baked into the APK; installs into the Termux prefix on demand
 
@@ -86,6 +86,14 @@ servers on-device, and optionally attach AI CLIs.
   preloads path redirector so stock git works with this package id
 - Drawer **Clone…** → URL + name + optional **bun install**
 - Completes PC ↔ phone: push on desktop, clone/pull on phone
+
+### 11. OpenCode postinstall + customizable quick bar (done)
+
+- `opencode-setup` downloads GitHub `opencode-linux-*.tar.gz` (avoids bun
+  SIGSYS + postinstall stub; no `opencode-android-*`), then `glibc` +
+  ld-linux wrapper (`LD_PRELOAD=` so the path redirector does not reinject)
+- Drawer quick bar: fewer/taller defaults; **⋯** overflow; **Customize bar…**
+  picks which actions appear; long-press **AI** stops OpenCode
 
 ## Non-goals (for now)
 
