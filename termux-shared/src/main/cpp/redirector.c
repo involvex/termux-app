@@ -64,6 +64,107 @@ static const char* redirect_path(const char* path, char* buffer, size_t bufsize)
 }
 
 /*
+ * Kernel shebang resolution ignores LD_PRELOAD. Stock termux-exec rewrites
+ * #!/usr/bin/env, but when this redirector is first in LD_PRELOAD, RTLD_NEXT
+ * often skips termux-exec → libc, so npm/npx die with:
+ *   /usr/bin/env: bad interpreter: Permission denied / No such file
+ *
+ * Transform: #!/usr/bin/env CMD → execve($PREFIX/bin/env, [env, CMD, script, …])
+ * Allocations intentionally leak on success (execve replaces the image).
+ */
+static int transform_usr_bin_env_shebang(const char* path, char* const argv[],
+        char* interp_out, size_t interp_sz, char*** argv_out) {
+    if (!path || !argv || !interp_out || interp_sz < 8 || !argv_out) return 0;
+    *argv_out = NULL;
+
+    static int (*orig_open)(const char*, int, ...);
+    static ssize_t (*orig_read)(int, void*, size_t);
+    static int (*orig_close)(int);
+    if (!orig_open) orig_open = dlsym(RTLD_NEXT, "open");
+    if (!orig_read) orig_read = dlsym(RTLD_NEXT, "read");
+    if (!orig_close) orig_close = dlsym(RTLD_NEXT, "close");
+    if (!orig_open || !orig_read || !orig_close) return 0;
+
+    int fd = orig_open(path, O_RDONLY);
+    if (fd < 0) return 0;
+
+    char line[512];
+    ssize_t n = orig_read(fd, line, sizeof(line) - 1);
+    orig_close(fd);
+    if (n < 4) return 0;
+    line[n] = '\0';
+
+    char* p = line;
+    if (p[0] != '#' || p[1] != '!') return 0;
+    p += 2;
+    while (*p == ' ' || *p == '\t') p++;
+
+    const char* env_paths[] = { "/usr/bin/env", "/bin/env", NULL };
+    const char* matched = NULL;
+    size_t matched_len = 0;
+    for (int i = 0; env_paths[i]; i++) {
+        size_t len = strlen(env_paths[i]);
+        if (strncmp(p, env_paths[i], len) == 0
+            && (p[len] == ' ' || p[len] == '\t' || p[len] == '\0'
+                || p[len] == '\n' || p[len] == '\r')) {
+            matched = env_paths[i];
+            matched_len = len;
+            break;
+        }
+    }
+    if (!matched) return 0;
+
+    p += matched_len;
+    while (*p == ' ' || *p == '\t') p++;
+
+    /* Strip CR/LF from shebang args. */
+    char* end = p;
+    while (*end && *end != '\n' && *end != '\r') end++;
+    *end = '\0';
+    if (*p == '\0') return 0; /* #!/usr/bin/env with no command */
+
+    /* Build argv: env, <shebang-args…>, script, original argv[1…] */
+    int shebang_argc = 0;
+    char* tok_save = NULL;
+    char* tmp = strdup(p);
+    if (!tmp) return 0;
+    for (char* t = strtok_r(tmp, " \t", &tok_save); t; t = strtok_r(NULL, " \t", &tok_save))
+        shebang_argc++;
+    free(tmp);
+    if (shebang_argc <= 0) return 0;
+
+    int orig_argc = 0;
+    while (argv[orig_argc]) orig_argc++;
+    /* env + shebang args + script + argv[1..] + NULL */
+    int new_argc = 1 + shebang_argc + 1 + (orig_argc > 0 ? orig_argc - 1 : 0);
+    char** new_argv = (char**)malloc((size_t)(new_argc + 1) * sizeof(char*));
+    if (!new_argv) return 0;
+
+    snprintf(interp_out, interp_sz, "%s/bin/env", NEW_USR);
+    int ai = 0;
+    new_argv[ai++] = strdup(interp_out);
+
+    tok_save = NULL;
+    tmp = strdup(p);
+    if (!tmp) {
+        free(new_argv);
+        return 0;
+    }
+    for (char* t = strtok_r(tmp, " \t", &tok_save); t; t = strtok_r(NULL, " \t", &tok_save))
+        new_argv[ai++] = strdup(t);
+    free(tmp);
+
+    new_argv[ai++] = strdup(path);
+    for (int i = 1; i < orig_argc; i++)
+        new_argv[ai++] = argv[i]; /* borrow original pointers */
+    new_argv[ai] = NULL;
+
+    *argv_out = new_argv;
+    LOGI("rewrote shebang %s → %s for %s", matched, interp_out, path);
+    return 1;
+}
+
+/*
  * dpkg maintainer scripts ship with #!/data/data/com.termux/... shebangs.
  * Kernel shebang resolution ignores LD_PRELOAD, so rewrite scripts in-place
  * immediately before execve when they still contain the old package name.
@@ -297,6 +398,7 @@ static char** rewrite_envp_for_exec(const char* filename, char* const envp[]) {
                 continue;
             }
             int has_red = strstr(rewritten, "libinvapp-redirector.so") != NULL;
+            int has_bun_seccomp = strstr(rewritten, "libinvapp-bun-seccomp.so") != NULL;
             size_t nlen = strlen(REDIRECTOR_SO) + 1 + strlen(rewritten)
                 + strlen("LD_PRELOAD=") + 8;
             char* merged = (char*)malloc(nlen);
@@ -305,7 +407,9 @@ static char** rewrite_envp_for_exec(const char* filename, char* const envp[]) {
                 out[oi++] = (char*)entry;
                 continue;
             }
-            if (has_red) {
+            if (has_red || has_bun_seccomp) {
+                /* Keep as-is: either already has redirector, or Bun intentionally
+                 * preloads only the seccomp SIGSYS shim (must not reinject us). */
                 snprintf(merged, nlen, "LD_PRELOAD=%s", rewritten);
             } else if (rewritten[0]) {
                 snprintf(merged, nlen, "LD_PRELOAD=%s:%s", REDIRECTOR_SO, rewritten);
@@ -578,11 +682,21 @@ int execve(const char* filename, char* const argv[], char* const envp[]) {
     const char* redirected = redirect_path(filename, buf, sizeof(buf));
     rewrite_termux_paths_in_script(redirected);
     char** new_argv = rewrite_argv_for_exec(argv);
+    char* const* effective_argv = new_argv ? new_argv : argv;
+
+    char interp[512];
+    char** env_argv = NULL;
+    if (transform_usr_bin_env_shebang(redirected, (char* const*)effective_argv,
+            interp, sizeof(interp), &env_argv)) {
+        redirected = interp;
+        effective_argv = env_argv;
+    }
+
     char** new_envp = rewrite_envp_for_exec(redirected, envp);
     static int (*orig_execve)(const char*, char* const[], char* const[]);
     if (!orig_execve) orig_execve = dlsym(RTLD_NEXT, "execve");
     return orig_execve(redirected,
-        new_argv ? new_argv : (char**)argv,
+        (char**)effective_argv,
         new_envp ? new_envp : (char**)envp);
 }
 
@@ -593,11 +707,21 @@ int execv(const char* path, char* const argv[]) {
     /* execv uses environ; rewrite via execve so SSH/login get LD_* / HOME. */
     extern char** environ;
     char** new_argv = rewrite_argv_for_exec(argv);
+    char* const* effective_argv = new_argv ? new_argv : argv;
+
+    char interp[512];
+    char** env_argv = NULL;
+    if (transform_usr_bin_env_shebang(redirected, (char* const*)effective_argv,
+            interp, sizeof(interp), &env_argv)) {
+        redirected = interp;
+        effective_argv = env_argv;
+    }
+
     char** new_envp = rewrite_envp_for_exec(redirected, environ);
     static int (*orig_execve)(const char*, char* const[], char* const[]);
     if (!orig_execve) orig_execve = dlsym(RTLD_NEXT, "execve");
     return orig_execve(redirected,
-        new_argv ? new_argv : (char**)argv,
+        (char**)effective_argv,
         new_envp ? new_envp : environ);
 }
 
@@ -608,6 +732,22 @@ int execvp(const char* file, char* const argv[]) {
         char buf[4096];
         const char* redirected = redirect_path(file, buf, sizeof(buf));
         rewrite_termux_paths_in_script(redirected);
+
+        char* const* effective_argv = new_argv ? new_argv : argv;
+        char interp[512];
+        char** env_argv = NULL;
+        if (transform_usr_bin_env_shebang(redirected, (char* const*)effective_argv,
+                interp, sizeof(interp), &env_argv)) {
+            /* Prefer execve so envp rewrite + shebang transform stay consistent. */
+            extern char** environ;
+            char** new_envp = rewrite_envp_for_exec(interp, environ);
+            static int (*orig_execve)(const char*, char* const[], char* const[]);
+            if (!orig_execve) orig_execve = dlsym(RTLD_NEXT, "execve");
+            return orig_execve(interp,
+                env_argv,
+                new_envp ? new_envp : environ);
+        }
+
         static int (*orig_execvp)(const char*, char* const[]);
         if (!orig_execvp) orig_execvp = dlsym(RTLD_NEXT, "execvp");
         return orig_execvp(redirected, new_argv ? new_argv : (char**)argv);

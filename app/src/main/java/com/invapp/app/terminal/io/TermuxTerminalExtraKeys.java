@@ -10,6 +10,7 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import com.invapp.app.TermuxActivity;
 import com.invapp.app.terminal.TermuxTerminalSessionActivityClient;
 import com.invapp.app.terminal.TermuxTerminalViewClient;
+import com.invapp.app.utils.WorkflowHelper;
 import com.invapp.shared.logger.Logger;
 import com.invapp.shared.termux.extrakeys.ExtraKeysConstants;
 import com.invapp.shared.termux.extrakeys.ExtraKeysInfo;
@@ -100,6 +101,14 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
             TerminalView terminalView = mTermuxTerminalViewClient.getActivity().getTerminalView();
             if (terminalView != null && terminalView.mEmulator != null)
                 terminalView.mEmulator.toggleAutoScrollDisabled();
+        } else if ("PULL".equals(key)) {
+            mActivity.sendWorkflowCommandFromExtraKeys(WorkflowHelper.CMD_GIT_PULL);
+        } else if ("BUNI".equals(key)) {
+            mActivity.sendWorkflowCommandFromExtraKeys(WorkflowHelper.CMD_BUN_INSTALL);
+        } else if ("DEV".equals(key)) {
+            mActivity.sendWorkflowCommandFromExtraKeys(WorkflowHelper.CMD_BUN_RUN_DEV);
+        } else if ("REPOS".equals(key)) {
+            mActivity.showReposPickerFromExtraKeys();
         } else {
             super.onTerminalExtraKeyButtonClick(view, key, ctrlDown, altDown, shiftDown, fnDown);
         }

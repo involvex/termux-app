@@ -66,6 +66,54 @@
                         android:text="@string/action_open_preview" />
                 </LinearLayout>
 
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:scrollbars="none">
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:paddingLeft="4dp"
+                        android:paddingRight="4dp">
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/workflow_git_pull_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="@string/action_workflow_git_pull"
+                            android:textAllCaps="false" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/workflow_bun_install_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="@string/action_workflow_bun_install"
+                            android:textAllCaps="false" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/workflow_bun_dev_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="@string/action_workflow_bun_dev"
+                            android:textAllCaps="false" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/workflow_repos_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="@string/action_workflow_repos"
+                            android:textAllCaps="false" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/workflow_run_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="@string/action_workflow_run"
+                            android:textAllCaps="false" />
+                    </LinearLayout>
+                </HorizontalScrollView>
+
                 <ListView
                     android:id="@+id/terminal_sessions_list"
                     android:layout_width="match_parent"

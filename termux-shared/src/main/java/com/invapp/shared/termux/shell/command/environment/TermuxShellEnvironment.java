@@ -35,12 +35,21 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
     public static final String REDIRECTOR_LIB_NAME = "libinvapp-redirector.so";
 
     /**
+     * Bun-only seccomp shim: turns Android SIGSYS (openat2/fchmodat2) into ENOSYS.
+     * Must not be combined with the path redirector in Bun's LD_PRELOAD.
+     */
+    public static final String BUN_SECCOMP_LIB_NAME = "libinvapp-bun-seccomp.so";
+
+    /**
      * Absolute path where the redirector is installed inside the Termux prefix.
      * Must live under {@code $PREFIX} so Termux ELFs can LD_PRELOAD it (Android
      * linker namespaces often block preloading from the APK {@code nativeLibraryDir}).
      */
     public static final String REDIRECTOR_PREFIX_LIB_PATH =
         TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH + "/" + REDIRECTOR_LIB_NAME;
+
+    public static final String BUN_SECCOMP_PREFIX_LIB_PATH =
+        TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH + "/" + BUN_SECCOMP_LIB_NAME;
 
     public TermuxShellEnvironment() {
         super();
@@ -96,8 +105,42 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
             Logger.logInfo(LOG_TAG, "Installed redirector to " + dest.getAbsolutePath());
         }
 
+        installNativeLibIntoPrefix(context, BUN_SECCOMP_LIB_NAME, BUN_SECCOMP_PREFIX_LIB_PATH,
+            "invapp-bun-seccomp");
+
         patchLoginScriptToPreserveRedirector();
         installPackageManagerPathOverrides();
+    }
+
+    /** Copy an APK {@code jniLibs} shared object into {@code $PREFIX/lib}. */
+    private static void installNativeLibIntoPrefix(@NonNull Context context,
+            @NonNull String libName, @NonNull String destPath, @NonNull String label) {
+        String nativeLibDir = context.getApplicationInfo().nativeLibraryDir;
+        File src = new File(nativeLibDir, libName);
+        File dest = new File(destPath);
+        if (!src.exists()) {
+            Logger.logWarn(LOG_TAG, label + " not found in APK native libs: " + src.getAbsolutePath());
+            return;
+        }
+        boolean needsCopy = !dest.exists()
+            || dest.length() != src.length()
+            || dest.lastModified() < src.lastModified();
+        if (!needsCopy) {
+            return;
+        }
+        Error error = FileUtils.copyRegularFile(label, src.getAbsolutePath(),
+            dest.getAbsolutePath(), false);
+        if (error != null) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to install " + label + " into prefix\n" + error);
+            return;
+        }
+        try {
+            //noinspection OctalInteger
+            Os.chmod(dest.getAbsolutePath(), 0755);
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to chmod " + label + " in prefix", e);
+        }
+        Logger.logInfo(LOG_TAG, "Installed " + label + " to " + dest.getAbsolutePath());
     }
 
     /**

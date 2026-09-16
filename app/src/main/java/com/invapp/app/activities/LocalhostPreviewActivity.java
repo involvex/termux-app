@@ -1,25 +1,40 @@
 package com.invapp.app.activities;
 
 import android.annotation.SuppressLint;
+import android.content.Context;
+import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
+import android.util.TypedValue;
 import android.view.MenuItem;
+import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.invapp.R;
+import com.invapp.app.utils.LocalhostPortScanner;
+
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
- * In-app preview of loopback HTTP servers (Vite, Expo web, {@code opencode serve}).
+ * In-app preview of loopback HTTP servers (Vite, Expo web, {@code opencode web}).
  * Only {@code http://127.0.0.1} / {@code localhost} are allowed.
+ * Scans listening ports for one-tap open.
  */
 public final class LocalhostPreviewActivity extends AppCompatActivity {
 
@@ -28,6 +43,17 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
 
     private WebView mWebView;
     private EditText mPortInput;
+    private LinearLayout mPortChips;
+    private TextView mPortsEmpty;
+    private final ExecutorService mScanExecutor = Executors.newSingleThreadExecutor();
+    private final Handler mMainHandler = new Handler(Looper.getMainLooper());
+
+    @NonNull
+    public static Intent createIntent(@NonNull Context context, int port) {
+        Intent intent = new Intent(context, LocalhostPreviewActivity.class);
+        intent.putExtra(EXTRA_PORT, port);
+        return intent;
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -43,6 +69,9 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         mPortInput = findViewById(R.id.preview_port_input);
         Button goButton = findViewById(R.id.preview_go_button);
         Button reloadButton = findViewById(R.id.preview_reload_button);
+        Button scanButton = findViewById(R.id.preview_scan_button);
+        mPortChips = findViewById(R.id.preview_port_chips);
+        mPortsEmpty = findViewById(R.id.preview_ports_empty);
         mWebView = findViewById(R.id.preview_webview);
 
         WebSettings settings = mWebView.getSettings();
@@ -72,6 +101,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
 
         goButton.setOnClickListener(v -> loadFromPortInput());
         reloadButton.setOnClickListener(v -> mWebView.reload());
+        scanButton.setOnClickListener(v -> scanPortsAsync());
         mPortInput.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_GO
                     || actionId == EditorInfo.IME_ACTION_DONE) {
@@ -82,6 +112,54 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         });
 
         loadPort(port);
+        scanPortsAsync();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        scanPortsAsync();
+    }
+
+    private void scanPortsAsync() {
+        mScanExecutor.execute(() -> {
+            final List<Integer> ports = LocalhostPortScanner.scanListeningPorts();
+            mMainHandler.post(() -> renderPortChips(ports));
+        });
+    }
+
+    private void renderPortChips(@NonNull List<Integer> ports) {
+        if (mPortChips == null) {
+            return;
+        }
+        mPortChips.removeAllViews();
+        if (ports.isEmpty()) {
+            if (mPortsEmpty != null) {
+                mPortsEmpty.setVisibility(View.VISIBLE);
+            }
+            return;
+        }
+        if (mPortsEmpty != null) {
+            mPortsEmpty.setVisibility(View.GONE);
+        }
+        int pad = (int) TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, 6, getResources().getDisplayMetrics());
+        for (final Integer port : ports) {
+            Button chip = new Button(this, null, android.R.attr.buttonStyleSmall);
+            chip.setText(String.valueOf(port));
+            chip.setAllCaps(false);
+            chip.setPadding(pad * 2, pad, pad * 2, pad);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.setMargins(0, 0, pad, 0);
+            chip.setLayoutParams(lp);
+            chip.setOnClickListener(v -> {
+                mPortInput.setText(String.valueOf(port));
+                loadPort(port);
+            });
+            mPortChips.addView(chip);
+        }
     }
 
     private void loadFromPortInput() {
@@ -130,6 +208,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void onBackPressed() {
         if (mWebView != null && mWebView.canGoBack()) {
             mWebView.goBack();
@@ -140,6 +219,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        mScanExecutor.shutdownNow();
         if (mWebView != null) {
             mWebView.destroy();
             mWebView = null;

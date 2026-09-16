@@ -1,411 +1,362 @@
-# Termux App Agents Guide
+# AGENTS.md — Termux App (`com.involvex.termux_app` fork)
 
-This guide provides instructions for AI agents working on the Termux application development project. It covers workflows, tools, technologies, and best practices.
+> Agent operating guide for this repo. Source of truth for versions/commands is
+> `gradle.properties`, `app/build.gradle`, `settings.gradle`, `README.md`,
+> `ROADMAP.md`. No `CLAUDE.md` / `GEMINI.md` / `.github/copilot-instructions.md`
+> exist — this file consolidates `README.md`, `ROADMAP.md`, `SECURITY.md`,
+> `app/build.gradle`, and GitHub workflows.
 
-## Project Overview
+## 1. Project Overview
 
-**Termux** is an Android terminal application and Linux environment. This repository (`termux-app`) contains the app itself (UI and terminal emulation). The packages installed inside the app are managed in the separate [`termux-packages`](https://github.com/termux/termux-packages) repository.
+**Termux** is an Android terminal app + Linux environment. This repo (`termux-app`)
+holds the **app UI + terminal emulation**. Packages installable *inside* the app
+live in [`termux-packages`](https://github.com/termux/termux-packages) — do not
+add package logic here.
 
-### Key Components
+### Modules (`settings.gradle`)
 
-The project is organized as follows:
+| Module | Purpose | Namespace |
+|--------|---------|-----------|
+| `app` | Core app, bootstrap + Bun install, activities, drawer, Preview | `com.invapp` / appId `com.involvex.termux_app` |
+| `termux-shared` | Shared constants/utils for app + plugins. **All shared code goes here** | `com.invapp.shared` |
+| `terminal-view` | Terminal `View` widget | — |
+| `terminal-emulator` | Emulator core + JNI (`src/main/jni/Android.mk`) | `com.invapp.emulator` |
+| `termux-api` | Termux:API plugin integration | — |
 
-| Module | Description |
-|--------|-------------|
-| `app` | Core Termux application with terminal emulation |
-| `termux-shared` | Shared constants and utilities library for app and plugins |
-| `terminal-view` | Terminal view widget for rendering |
-| `terminal-emulator` | Native terminal emulator library |
-| `termux-api` | Termux:API plugin integration |
+Key shared entry points:
 
-### Architecture
+- `termux-shared/.../com/termux/shared/termux/TermuxConstants.java` — package
+  names, `$PREFIX`, forking guide (read its javadoc before renaming anything).
+- `app/src/main/cpp/` — `termux-bootstrap.c` + `bun-bootstrap.c` with
+  `.incbin` zips, built via `app/src/main/cpp/Android.mk` (`libinvapp-bun`,
+  redirector `libinvapp-redirector.so`).
+- `app/build.gradle` — version, variants, bootstrap/Bun download tasks.
 
-- **Target SDKs**: Android 7+ (primary), Android 5-6 support (deprecated)
-- **Java Version**: Java 8 (source compatibility)
-- **NDK**: Native code using Android NDK for terminal emulation
-- **Dependencies**: Google Material Components, Lifecycle, ViewPager, Guava, Markwon (markdown)
+### This fork — Terminal Dev (`com.involvex.termux_app`)
 
-## This fork (`com.involvex.termux_app`)
-
-This tree is a renamed Termux fork for **Terminal Dev**: develop on PC, continue on phone.
-
-### Runtime layout
+Stay in terminal, develop on PC + phone against same git remote, preview
+localhost servers on-device, optionally attach AI CLI. See `ROADMAP.md`.
 
 | Piece | Path / behavior |
 |-------|-----------------|
 | Package id | `com.involvex.termux_app` (`sharedUserId` still `com.invapp`) |
-| Path redirector | `LD_PRELOAD=$PREFIX/lib/libinvapp-redirector.so` for apt/SSH/node hardcoded `com.termux` paths |
-| Bun real binary | `$PREFIX/libexec/bun` (official `bun-linux-*-android.zip`, currently **1.4.2**) |
-| Bun wrapper | `$PREFIX/bin/bun` → `LD_PRELOAD= exec` real binary + OPENSSL + `npm_config_platform=android` |
-| bunx | `$PREFIX/bin/bunx` → `bun x` via the wrapper (no per-package mapping) |
+| Path redirector | `LD_PRELOAD=$PREFIX/lib/libinvapp-redirector.so` maps hardcoded `/data/data/com.termux` → this prefix (apt/SSH/node); also rewrites `#!/usr/bin/env` shebangs (npm/npx) |
+| Bun real binary | `$PREFIX/libexec/bun` — official `bun-linux-*-android.zip`, currently **1.4.2** |
+| Bun wrapper | `$PREFIX/bin/bun` → drops path redirector, preloads `libinvapp-bun-seccomp.so` (SIGSYS→ENOSYS for `openat2`/`fchmodat2`), sets OPENSSL + `--os=android --cpu=…` on install/add/create |
+| bunx | `$PREFIX/bin/bunx` → `bun x` via wrapper (no per-package mapping) |
 | Default cwd | `~/repos` (exec-capable). `~/storage/shared` is browse/sync only (**noexec**) |
-| Preview | Drawer **Preview** → `LocalhostPreviewActivity` for `http://127.0.0.1:<port>` |
+| Preview | Drawer **Preview** → `LocalhostPreviewActivity` (port field + Scan → listening-TCP chips) |
+| AI helper | `opencode-setup` / `td-ai [port]` → OpenCode web on `:4096` + Preview hint. On-demand into `$PREFIX`, not baked into APK |
+| Workflow | Drawer snippets: `git pull` / `bun i` / `bun run dev` / Repos / Run…; port Snackbar → Preview |
 
-### Android / Bun pitfalls (do not “fix” with more wrappers)
+**Do NOT "fix" these with more wrappers:**
 
-- **`Unknown signal 31` (SIGSYS)** — usually glibc/Linux Bun, `LD_PRELOAD` + Bun, or optional `linux-*` native bindings (e.g. `@rolldown/binding-linux-arm-gnueabihf`). Use the bundled Android Bun; never `curl … bun.sh/install \| bash`. The `bin/bun` shim injects `--os=android --cpu=arm64` on `install`/`add`/`create`. Windows lockfiles can still pin linux natives — delete `node_modules` + lock and reinstall on phone.
-- **`ls` folder names as solid green bars** — hacker theme v1 remapped ANSI blue→green (same as fg). Fixed in theme v2 (cyan/blue slots). New session after upgrade; or replace `~/.termux/colors.properties`.
-- **`Permission denied` on `tsc` / package bins** — project is under shared storage (`/storage/emulated/0`). Keep runnable projects in `~/repos`.
-- **OpenSSL / node looking at `com.termux`** — shell sets `OPENSSL_CONF` / `SSL_CERT_FILE` to this prefix; redirector covers other hardcoded paths for non-Bun tools.
+- `Unknown signal 31 (SIGSYS)` — usually Android seccomp trapping Bun's
+  `openat2`/`fchmodat2` during install (fixed via `libinvapp-bun-seccomp.so`),
+  or a glibc/Linux Bun / `LD_PRELOAD`+path-redirector combo. Use bundled
+  Android Bun; never `curl … bun.sh/install | bash`. If a Windows lockfile
+  pinned `linux-*` natives, delete `node_modules` + lockfile and reinstall
+  on the phone (`bun i` injects `--os=android`).
+- `/usr/bin/env: bad interpreter` on `npm`/`npx` — redirector rewrites those
+  shebangs; open a **new** session after update. Install Node with
+  `pkg install nodejs` if `npm` is missing.
+- Green-bar `ls` folders — hacker theme v1 ANSI blue→green clash. Fixed in v2;
+  new session or replace `~/.termux/colors.properties`.
+- `Permission denied` on `tsc`/bins — project under `/storage/emulated/0`
+  (noexec). Keep runnable projects in `~/repos`.
+- OpenSSL/node looking at `com.termux` — shell env + redirector cover it;
+  don't hardcode new paths.
 
-### Bun build notes
+## 2. Useful Commands
 
-- Gradle task `downloadBunBootstraps` fetches Android zips into `app/src/main/cpp/`.
-- NDK module `libinvapp-bun` embeds the zip via `.incbin`; `TermuxBunInstaller` extracts on app start / bootstrap.
-- Prefer `./gradlew :app:assembleDebug` after changing Bun version or `bun-bootstrap*`.
-
-### Mobile ↔ PC workflow
+### Git / GitHub CLI
 
 ```bash
-# On phone (new session starts in ~/repos)
+git status
+git log --oneline -10
+git checkout -b feature/description
+git commit -m "Fixed(terminal): Fix cursor positioning bug"
+git push origin feature/description
+gh pr create --title "Description" --body "Details"
+git --no-pager diff
+```
+
+### Gradle build / test / lint (Windows: use `gradlew.bat`)
+
+```bash
+./gradlew assembleDebug
+./gradlew assembleRelease
+./gradlew :app:assembleDebug            # after Bun/bootstrap changes
+./gradlew test                          # unit tests (JUnit + Robolectric)
+./gradlew lint
+./gradlew clean
+./gradlew versionName                   # prints e.g. 0.118.0
+./gradlew --refresh-dependencies
+./gradlew assembleDebug -DTERMUX_PACKAGE_VARIANT=apt-android-7
+```
+
+Env vars honored by `app/build.gradle`:
+
+| Var | Default | Effect |
+|-----|---------|--------|
+| `TERMUX_PACKAGE_VARIANT` | `apt-android-7` | `apt-android-7` (Android 7+) or `apt-android-5` (Android 5/6, deprecated) |
+| `TERMUX_APP_VERSION_NAME` | `0.118.0` | Override `versionName` (must stay semver) |
+| `TERMUX_APK_VERSION_TAG` | — | APK filename tag |
+| `TERMUX_SPLIT_APKS_FOR_DEBUG_BUILDS` | `1` | Per-ABI APKs for debug |
+| `TERMUX_SPLIT_APKS_FOR_RELEASE_BUILDS` | `0` | F-Droid needs single APK (#1904) |
+| `JITPACK_NDK_VERSION` | `29.0.14206865` | NDK override (JitPack) |
+
+Bootstrap/Bun tasks (run automatically via `preBuild`/`JavaCompile`/native
+build deps; run manually to prefetch):
+
+```bash
+./gradlew :app:downloadBootstraps
+./gradlew :app:downloadBunBootstraps
+```
+
+APK naming: `termux-app_<variant-or-tag>_<abi>.apk`
+(`universal`, `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86`).
+
+### Debugging / device
+
+```bash
+adb devices
+adb logcat
+adb install -r termux-app_apt-android-7-debug_arm64-v8a.apk
+# Inside Termux app:
+logcat                 # realtime (Ctrl+C to stop)
+logcat -d > logcat.txt # dump
+```
+
+In-app: Settings → `<APP_NAME>` → Debugging → Log Level (`Off`/`Normal`/
+`Debug`/`Verbose`). Set for **both** Termux and the plugin (plugins send
+intents; Termux executes). Revert to `Normal` after — `Verbose` may leak
+private data + slows execution. `More` → `Report Issue` → `YES` auto-attaches
+`stat` + logcat dump.
+
+### Phone day-to-day (new session starts in `~/repos`)
+
+```bash
 cd ~/repos
-git clone <repo> && cd <repo>
+git clone <url> myapp && cd myapp
 bun install
 bun run dev          # or bun run android / build
-# Drawer → Preview → port 3000 / 5000 / 8081
+# Drawer → Preview → Scan → tap port (e.g. 3000)
+td-ai                # OpenCode web on :4096 → Drawer → Preview → 4096
 ```
 
-On PC: same git remote — push/pull; no special Termux package sync required.
+PC: same remote, normal git + bun. Pull on phone to continue. No Termux
+package sync needed.
 
-See [ROADMAP.md](ROADMAP.md) for Preview / AI CLI phases.
+## 3. Technologies
 
-## Useful Commands
+Pin versions from `gradle.properties` + module `build.gradle` — do not bump
+without testing bootstrap + all ABIs.
 
-### Git Operations
+| Layer | Version / tool |
+|-------|----------------|
+| `minSdkVersion` | `21` (Android 5; 5–6 deprecated, no package updates) |
+| `targetSdkVersion` | `28` |
+| `compileSdkVersion` | `36` |
+| AGP | `9.4.0` (`com.android.tools.build:gradle`, root `build.gradle`) |
+| NDK | `29.0.14206865`, `ndk-build` (`Android.mk` per module) |
+| JDK (build) | `17` (Android Studio Flamingo+) |
+| Java compat | `1.8` + `coreLibraryDesugaring` (`desugar_jdk_libs:1.1.5`) |
+| App version | `versionCode 118`, `versionName 0.118.0` (semver-enforced at build) |
+| Bootstrap | `2026.02.12-r1+apt.android-7` (aarch64/arm/i686/x86_64, SHA-256 verified); android-5: `2022.04.28-r6` |
+| Bun | `1.4.2` official `bun-linux-{aarch64,x64}-android.zip` (SHA-256 verified, `.incbin` into `libinvapp-bun`, extracted by `TermuxBunInstaller`) |
+| Editor | 4-space, LF, UTF-8, final newline (`.editorconfig`); 2-space for `*.yaml` |
 
-```bash
-# View recent commits
-git log --oneline -10
+### Dependencies (current)
 
-# View current status
-git status
+**`app`:** `annotation:1.9.0`, `core:1.13.1`, `drawerlayout:1.2.0`,
+`preference:1.2.1`, `viewpager:1.0.0`, `material:1.12.0`,
+`guava:24.1-jre` (+ `listenablefuture:9999.0-empty…`), Markwon
+`4.6.2` (`core`, `ext-strikethrough`, `linkify`, `recycler`).
 
-# Create feature branch
-git checkout -b feature/description
+**`termux-shared`:** `appcompat:1.6.1`, above core/material/guava/markwon, plus
+`hiddenapibypass:6.1` (Android 10+ hidden API), `window:1.1.0`,
+`commons-io:2.5` (**do not exceed 2.5** — `java.nio.file.Path` missing on
+Android < 8), `termux-am-library:v2.0.0`, `terminal-view`.
 
-# Commit changes (following conventional commits)
-git commit -m "Fixed(something): Fix the issue"
+**`terminal-emulator`:** `annotation:1.9.0` only + JNI, `abiFilters` all four.
 
-# Push to remote
-git push origin feature/description
+**Tests:** `junit:4.13.2`, `robolectric:4.10` (`app`), `androidx.test.ext:junit:1.1.5`
+(`termux-shared`); `terminal-emulator` sets `unitTests.returnDefaultValues=true`.
 
-# Create pull request
-gh pr create --title "Description" --body "Details"
-```
+Native flags: `-std=c11 -Wall -Wextra -Werror -Os -fno-stack-protector
+-Wl,--gc-sections`; `jniLibs.useLegacyPackaging true`; release uses
+`proguard-android-optimize.txt` + `proguard-rules.pro` (`minifyEnabled true`,
+`shrinkResources false` for reproducible builds); `lint { disable
+'ProtectedPermissions' }`.
 
-### Android/Gradle Build Commands
+### CI/CD (`.github/workflows/`)
 
-```bash
-# Build debug APK
-./gradlew assembleDebug
+- `debug_build.yml` — per-commit debug APKs (Artifacts; login required).
+- `run_tests.yml` — unit tests on PRs.
+- `attach_debug_apks_to_release.yml` — attaches APKs to GitHub Releases.
+- `gradle-wrapper-validation.yml`, `dependency-submission.yml`,
+  `trigger_library_builds_on_jitpack.yml` (publishes `termux-shared`
+  `com.invapp:termux-shared:0.118.0`, `terminal-emulator` to JitPack).
+- Dependabot (`dependabot.yml`) for dependency bumps.
 
-# Build release APK
-./gradlew assembleRelease
+### Project layout
 
-# Run tests
-./gradlew test
-
-# Clean build artifacts
-./gradlew clean
-
-# Run with specific variant
-./gradlew assembleDebug -PpackageVariant=apt-android-7
-
-# Get current version name
-./gradlew versionName
-```
-
-### GitHub Actions
-
-The project uses GitHub Actions for CI/CD:
-- **debug_build.yml**: Builds debug APKs for all architectures
-- **run_tests.yml**: Runs unit tests on PRs
-- **attach_debug_apks_to_release.yml**: Attaches debug APKs to releases
-
-## Technologies
-
-### Android Development
-
-- **Android SDK**: API level 24+ (minSdkVersion), targetSdk 35 (as of latest)
-- **Build Tools**: Android Gradle Plugin 9.4.0
-- **Native Development**: C/C++ via NDK, using ndk-build
-
-### Dependencies
-
-**Core Libraries**:
-- AndroidX AppCompat 1.6.1
-- AndroidX Core 1.13.1
-- AndroidX Preference 1.2.1
-- Google Material Components 1.12.0
-- Guava 24.1-jre
-
-**Terminal Related**:
-- Termux AM Library (Android IPC)
-- Markwon 4.6.3 (markdown rendering)
-
-**System Services**:
-- Lsposed Hidden API Bypass (for Android 10+)
-
-### Project Structure
-
-```
+```text
 termux-app/
-├── .github/               # GitHub workflows, issue templates
-│   ├── ISSUE_TEMPLATE/    # Bug report and feature request templates
-│   └── workflows/         # CI/CD workflows
-├── app/                   # Main application module
-│   └── src/main/java/
-│       └── com/invapp/app/
-├── termux-shared/         # Shared utilities library
-├── termux-api/            # Termux:API plugin
-├── terminal-view/         # Terminal view component
-├── terminal-emulator/     # Native terminal emulator
-├── fastlane/              # Play Store deployment configuration
-├── build.gradle           # Project-level Gradle config
-├── settings.gradle        # Module declarations
-└── README.md              # Project documentation
+├── app/  # applicationId com.involvex.termux_app, Bootstrap/Bun, UI
+│   └── src/main/{java/com/invapp,cpp/{Android.mk,*.c,*.S,bootstrap-*.zip,bun-*.zip}}
+├── termux-shared/      # com.invapp.shared — constants/utils, no hardcodes elsewhere
+├── terminal-view/      # View widget
+├── terminal-emulator/  # core + src/main/jni/Android.mk
+├── termux-api/         # API plugin
+├── .github/workflows/  # CI above + ISSUE_TEMPLATE/
+├── fastlane/ docs/en/ site/  # store metadata, docs, sponsors page
+└── build.gradle settings.gradle gradle.properties README.md ROADMAP.md AGENTS.md
 ```
 
-## Best Practices and Guidelines
+## 4. Best Practices and Guidelines
 
-### Commit Message Convention
+### Commits — Conventional Commits + Keep a Changelog (enforced)
 
-All commits **must** follow [Conventional Commits](https://www.conventionalcommits.org) spec and [Keep a Changelog](https://github.com/olivierlacan/keep-a-changelog) format:
-
-```
-<type>[optional scope]: <description>
+```text
+<Type>[optional scope]: <Description in present tense, capital first letter>
 
 [optional body]
 
 [optional footer(s)]
 ```
 
-**Allowed Types** (must match changelog headings exactly):
-- **Added** - for new features
-- **Changed** - for changes in existing functionality
-- **Deprecated** - for soon-to-be removed features
-- **Removed** - for removed features
-- **Fixed** - for bug fixes
-- **Security** - for vulnerability fixes
+- Allowed `<Type>` exactly (matches changelog headings): `Added`, `Changed`,
+  `Deprecated`, `Removed`, `Fixed`, `Security`. Examples: `Added: Add foo`,
+  `Added|Fixed: Add foo and fix bar`, `Fixed(terminal): Fix cursor bug`,
+  `Changed!: Breaking API change` (`!` = breaking, highlighted in changelog).
+- Space after `:` required. `create-conventional-changelog` generates the
+  changelog — wrong types break it.
+- One logical change per commit; PRs squash-merge with a clean message.
 
-**Examples**:
-```
-Added: Add new terminal theme support
-Fixed(terminal): Fix cursor positioning bug
-Changed!: Change API for backward compatibility (breaking)
-```
+### Versioning — SemVer 2.0.0 (build-validated)
 
-### Version Management
+- Format `major.minor.patch(-prerelease)(+buildmetadata)`, always with patch:
+  `0.118.0`, `0.119.0-beta.1`, never `v0.1`. Tag as `v0.118.0`.
+- `app/build.gradle:validateVersionName()` fails the build on bad versions.
+- Keep `termux-shared`/`terminal-emulator` publish versions (`0.118.0`) in
+  sync when cutting releases.
 
-- Version format must follow [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
-- Format: `major.minor.patch(-prerelease)(+buildmetadata)`
-- Example: `0.118.0`, `0.119.0-beta.1`
+### Code style / quality
 
-### Code Quality
+- `.editorconfig`: LF, UTF-8, 4 spaces (2 for YAML), final newline. Use
+  Android Studio formatter; no wildcard imports; Android naming conventions.
+- Java 8 compat — no `java.nio.file`/new APIs without desugaring; test on
+  `minSdk 21` path.
+- `@Nullable`/`@NonNull` (AndroidX) on all public APIs; fail fast with
+  `IllegalArgumentException` on bad input.
+- No hardcoded paths/package names/APK names outside `termux-shared`.
+  Reference `TermuxConstants` (`$PREFIX`, `$HOME`, package, intents). PRs with
+  hardcoded `com.termux`/`com.invapp` values **will not be accepted**.
+- `termux-shared` additions: put app+plugin-shared code under
+  `com.invapp.shared.termux`, general utils outside; honor/update
+  `termux-shared/LICENSE.md` + third-party licenses.
+- Handle errors gracefully: never swallow; log with correct level, surface
+  user-actionable messages, keep `Verbose`-only PII out of `Normal` logs.
+- Performance: avoid allocations in terminal draw/input hot paths, reuse
+  buffers, prefer `StringBuilder`, offload I/O from UI thread; native code
+  must stay `-Werror`-clean.
+- Maintainability: small focused classes, no God activities; keep Preview /
+  Bun / bootstrap logic isolated so upstream merges stay easy.
 
-#### Code Style
-- Java 8 source compatibility
-- Use nullable annotations from AndroidX
-- Follow Android naming conventions
+### Security (see `README.md` + `SECURITY.md` + https://termux.dev/security)
 
-#### Lint and Analysis
-```bash
-# Run lint checks
-./gradlew lint
+- GitHub APKs are signed with public test key `app/testkey_untrusted.jks`
+  (`alias` / `xrj45yWGLbsO7W0v`, SHA256 `B6:DA:…:E1`). **Anyone can forge
+  updates over them** — only install from trusted sources; never use the test
+  key to impersonate upstream.
+- `sharedUserId com.invapp` + same signature required across app + all plugins
+  (API/Boot/Float/Styling/Tasker/Widget). Mixing sources → install failures
+  (`INSTALL_FAILED_SHARED_USER_INCOMPATIBLE`). Switching source = uninstall
+  all Termux APKs first (offer backup via https://wiki.termux.com/wiki/Backing_up_Termux).
+- Review-sensitive: hardcoded paths, native/JNI changes, intent extras +
+  `RUN_COMMAND` handling, storage `$PREFIX` traversal, WebView Preview
+  (loopback-only, cleartext localhost only — no public tunnels by default).
+- Dependencies via Dependabot; check advisories before bumping major versions.
+- Report vulnerabilities privately per https://termux.dev/security, not as
+  public issues.
 
-# Analyze with Android Studio
-# Use "Code Cleanup" and "Inspect Code" features
+### Plugins / build variants
 
-# Format code
-# Use Android Studio's built-in formatter
-```
+- All plugins share signature; test plugin interop when touching
+  `termux-shared`, intents, or permissions.
+- Variants: `apt-android-7` (primary) vs `apt-android-5` (deprecated). Never
+  mix bootstrap zips across variants — app crashes at startup
+  (`TermuxBootstrap.PackageVariant`).
 
 ### Testing
 
-- Unit tests are required for new functionality
-- Tests run via `./gradlew test`
-- Test framework: JUnit 4.13.2 + Robolectric 4.10
-- Located in `src/test/java/` directories
+- New functionality requires unit tests under `src/test/java/`.
+- Run `./gradlew test` + `./gradlew lint` before pushing; fix all warnings
+  from changed files. CI (`run_tests.yml`) gates PRs.
+- Prefer Robolectric for Android-dependent logic; keep emulator/parser tests
+  hermetic and fast.
 
-### Security Considerations
+### Contribution workflow
 
-**Important Security Notes**:
-1. APK files on GitHub are signed with a **test key** (`testkey_untrusted.jks`)
-   - This key is shared with the community and NOT an official release key
-   - Malicious actors can forge APKs with this key
-   - Only use builds from official sources
+1. Branch from `master`: `feature/…` / `fix/…`.
+2. Implement + tests; `./gradlew test lint`; format.
+3. Conventional commit; push; `gh pr create`.
+4. Fill template, link issues, attach `logcat.txt` for runtime bugs.
+5. Address review; keep PR focused (app vs `termux-packages` repo!).
 
-2. Dependencies:
-   - Regularly update dependencies via Dependabot
-   - Review security advisories for all dependencies
+## 5. Development Workflow
 
-3. Code Review Requirements:
-   - All PRs must be reviewed before merging
-   - Pay special attention to:
-     - Hardcoded paths or values
-     - Native code changes
-     - Security-sensitive features
+### Setup
 
-### Plugins and Package Variants
+1. Android Studio Flamingo+, JDK 17, SDK API 24+ (compile 36), NDK
+   `29.0.14206865`.
+2. `git clone <this-fork> && cd termux-app`.
+3. Open in Studio, let Gradle sync (downloads bootstrap + Bun zips with
+   checksum verification).
+4. Verify: `./gradlew :app:assembleDebug` + `./gradlew test`.
 
-Termux has multiple plugin apps that share the `com.invapp` package signature:
-- Termux:API
-- Termux:Boot
-- Termux:Float
-- Termux:Styling
-- Termux:Tasker
-- Termux:Widget
+### Release (maintainers)
 
-**Important**: All plugins must be installed from the same source to work together due to shared `sharedUserId`.
+1. Bump `versionName` (semver) + `versionCode`; sync library publish versions.
+2. Tag `vX.Y.Z`; CI builds APKs; `attach_debug_apks_to_release.yml` attaches
+   universal + per-ABI APKs.
+3. Update changelog (Keep a Changelog) + `README.md` latest-version line.
+4. Play Store is a separate repo (`termux-play-store`) — report its issues
+   there, not here.
 
-### Build Variants
+## 6. Troubleshooting
 
-Two bootstrap variants are supported:
-- `apt-android-7` - For Android 7+ (recommended)
-- `apt-android-5` - For Android 5/6 (deprecated)
+| Symptom | Fix |
+|---------|-----|
+| Wrong-version build fail | `versionName` must be full semver in every `build.gradle` |
+| Stale deps | `./gradlew clean` + `./gradlew --refresh-dependencies` |
+| NDK fail | Match `ndkVersion` in `gradle.properties`; check `Android.mk` paths |
+| Bootstrap missing/checksum | Let `downloadBootstraps` fetch from `termux-packages` releases; don't hand-place `$PREFIX` |
+| Bun signal 31 / not found | Use bundled `$PREFIX/libexec/bun`; `downloadBunBootstraps`; never `bun.sh/install` on device |
+| `Permission denied` bins | Move project to `~/repos` (shared storage is noexec) |
+| Phantom kill `[signal 9]` (Android 12+) | OS phantom/excessive-CPU killer — see issue #2366 / AG docs; disable trimming or upgrade to 12L/13 |
+| Plugin install fail | Same-source APKs only (sharedUserId+signature); uninstall all, reinstall set |
 
-To build with a specific variant:
-```bash
-./gradlew assembleDebug -DTERMUX_PACKAGE_VARIANT=apt-android-7
-```
+## 7. Code Review Checklist
 
-## Development Workflow
+- [ ] Conventional commit type/scope correct, present tense, `!` if breaking
+- [ ] Tests added/updated; `./gradlew test lint` clean
+- [ ] No hardcoded paths/package names (uses `termux-shared`/`TermuxConstants`)
+- [ ] Nullability annotations; errors handled, no PII in Normal logs
+- [ ] No security holes (intents, traversal, WebView scope, test-key misuse)
+- [ ] Perf: no hot-path allocations, I/O off UI thread, native `-Werror` clean
+- [ ] Backward compat kept or breaking change explicit + docs updated
+- [ ] Correct repo (app vs packages vs play-store); right issue template
+- [ ] Semver version/tag consistent if release-related
 
-### Setting Up Development Environment
+## 8. Useful Links
 
-1. **Install Requirements**:
-   - Android Studio Flamingo or later
-   - JDK 17
-   - Android SDK API 24+
-
-2. **Clone Repository**:
-   ```bash
-   git clone https://github.com/termux/termux-app.git
-   cd termux-app
-   ```
-
-3. **Import Project**:
-   - Open in Android Studio
-   - Let Gradle sync complete
-
-4. **Build Verification**:
-   ```bash
-   ./gradlew assembleDebug
-   ./gradlew test
-   ```
-
-### Creating a Pull Request
-
-1. Create a feature branch from `master`
-2. Implement changes following the code style
-3. Write/update tests as needed
-4. Run tests: `./gradlew test`
-5. Format code using Android Studio
-6. Commit with conventional commit message
-7. Push branch and create PR on GitHub
-8. Add reviewers and address feedback
-
-### Debugging
-
-1. **Enable Debug Logging**:
-   - Go to app settings → `<APP_NAME>` → `Debugging` → `Log Level`
-   - Set to `Verbose` for detailed logs
-
-2. **View Logs**:
-   ```bash
-   # In Termux app
-   logcat
-   
-   # Save to file
-   logcat -d > logcat.txt
-   ```
-
-3. **Report Issues**:
-   - Use the "Report Issue" menu option in the app
-   - Include full description and logs
-   - Select correct repository (app vs packages)
-
-## Release Process
-
-### GitHub Releases
-
-1. Create a new release from GitHub releases
-2. Use semantic version tag (e.g., `v0.118.0`)
-3. Attach debug APKs from CI artifacts
-4. Update changelog following Keep a Changelog format
-
-### Play Store (Experimental)
-
-The Play Store build:
-- Is in a separate repository: `termux-play-store`
-- Has different package name: `com.involvex.termux_app`
-- Has limited functionality due to policy requirements
-
-### Publishing Artifacts
-
-Debug APKs are automatically attached by `attach_debug_apks_to_release.yml` workflow.
-Architecture-specific APKs are built for:
-- `universal` (all architectures)
-- `arm64-v8a`
-- `armeabi-v7a`
-- `x86_64`
-- `x86`
-
-## Troubleshooting Common Issues
-
-### Build Failures
-
-1. **Wrong Version Format**:
-   - Ensure `versionName` in `app/build.gradle` follows semver
-   - Check version numbers in all modules match
-
-2. **Missing Dependencies**:
-   ```bash
-   ./gradlew clean
-   ./gradlew --refresh-dependencies
-   ```
-
-3. **NDK Issues**:
-   - Check `build.gradle` has correct NDK version
-   - Ensure `Android.mk` is properly configured
-
-### Runtime Issues
-
-1. **Bootstrap Missing**:
-   - Downloaded from `termux-packages` releases
-   - Checksum verified automatically during build
-
-2. **Permission Denied**:
-   - Check app has storage permissions
-   - Verify `$PREFIX` directory is accessible
-
-3. **Package Not Found**:
-   - Ensure using correct package source
-   - Check network connectivity
-
-## Useful Links
-
-- [Termux Wiki](https://wiki.termux.com/wiki/)
-- [Termux Packages Repo](https://github.com/termux/termux-packages)
-- [Termux API](https://github.com/termux/termux-api)
-- [Build Instructions](https://github.com/termux/termux-app/wiki)
-- [Termux Community](https://reddit.com/r/termux)
-
-## Code Review Checklist
-
-When reviewing code, check for:
-
-- [ ] Follows conventional commit format
-- [ ] Has appropriate tests
-- [ ] Handles errors gracefully
-- [ ] No hardcoded paths/values (must use `termux-shared`)
-- [ ] Proper nullability annotations
-- [ ] No security vulnerabilities
-- [ ] Backward compatible (or intentional breaking change marked with `!`)
-- [ ] Documentation updated if needed
-
-## Additional Resources
-
-- [LICENSE.md](LICENSE.md) - Project license (GPLv3 with exceptions)
-- [SECURITY.md](SECURITY.md) - Security policies and vulnerability reporting
-- [termux-shared/LICENSE.md](termux-shared/LICENSE.md) - termux-shared library license
+- Upstream: https://github.com/termux/termux-app · Wiki: https://wiki.termux.com/wiki/ · App wiki: https://github.com/termux/termux-app/wiki
+- Packages: https://github.com/termux/termux-packages · File layout: https://github.com/termux/termux-packages/wiki/Termux-file-system-layout
+- `RUN_COMMAND` intent: https://github.com/termux/termux-app/wiki/RUN_COMMAND-Intent · Libraries: https://github.com/termux/termux-app/wiki/Termux-Libraries
+- Community: https://reddit.com/r/termux · Matrix: `#termux_termux:gitter.im`, `#termux_dev:gitter.im` · https://twitter.com/termuxdevs · support@termux.dev
+- Security: https://termux.dev/security · Vuln disclosure: https://termux.github.io/general/2022/02/15/termux-apps-vulnerability-disclosures.html
+- Terminal refs: https://invisible-island.net/xterm/ctlseqs/ctlseqs.html · https://vt100.net/
+- License: `LICENSE.md` (GPLv3 + exceptions) · `termux-shared/LICENSE.md`

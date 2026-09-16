@@ -11,3 +11,9 @@ LOCAL_MODULE := invapp-redirector
 LOCAL_SRC_FILES := redirector.c
 LOCAL_LDLIBS := -ldl -llog
 include $(BUILD_SHARED_LIBRARY)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := invapp-bun-seccomp
+LOCAL_SRC_FILES := bun-seccomp.c
+LOCAL_LDLIBS := -ldl -llog
+include $(BUILD_SHARED_LIBRARY)

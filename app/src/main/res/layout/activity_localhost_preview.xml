@@ -32,7 +32,41 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/action_preview_reload" />
+
+        <Button
+            android:id="@+id/preview_scan_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/action_preview_scan" />
     </LinearLayout>
+
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fillViewport="false"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/preview_port_chips"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
+            android:paddingBottom="4dp" />
+    </HorizontalScrollView>
+
+    <TextView
+        android:id="@+id/preview_ports_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingLeft="12dp"
+        android:paddingRight="12dp"
+        android:paddingBottom="4dp"
+        android:text="@string/msg_preview_no_ports"
+        android:textSize="12sp"
+        android:visibility="gone" />
 
     <WebView
         android:id="@+id/preview_webview"

@@ -91,8 +91,22 @@
     <string name="hint_localhost_port">Port (e.g. 5000)</string>
     <string name="action_preview_go">Go</string>
     <string name="action_preview_reload">Reload</string>
+    <string name="action_preview_scan">Scan</string>
     <string name="msg_preview_only_localhost">Preview only allows localhost / 127.0.0.1</string>
     <string name="msg_preview_invalid_port">Enter a port between 1 and 65535</string>
+    <string name="msg_preview_no_ports">No listening ports found — start a dev server, then tap Scan</string>
+    <string name="msg_preview_port_detected">Dev server on :%1$d</string>
+    <string name="action_workflow_git_pull">git pull</string>
+    <string name="action_workflow_bun_install">bun i</string>
+    <string name="action_workflow_bun_dev">bun run dev</string>
+    <string name="action_workflow_repos">Repos</string>
+    <string name="action_workflow_run">Run…</string>
+    <string name="title_workflow_repos">Open repo</string>
+    <string name="title_workflow_run_script">Run script</string>
+    <string name="title_workflow_pick_repo_for_run">Pick project</string>
+    <string name="msg_workflow_no_session">No running terminal session</string>
+    <string name="msg_workflow_no_repos">No projects in ~/repos</string>
+    <string name="msg_workflow_no_scripts">No scripts in package.json</string>
 
     <string name="action_report_issue">Report Issue</string>
     <string name="msg_generating_report">Generating Report</string>

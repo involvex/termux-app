@@ -43,6 +43,8 @@ import com.invapp.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_ACTIVITY;
 import com.invapp.app.activities.HelpActivity;
 import com.invapp.app.activities.LocalhostPreviewActivity;
 import com.invapp.app.activities.SettingsActivity;
+import com.invapp.app.utils.PreferredPortWatcher;
+import com.invapp.app.utils.WorkflowHelper;
 import com.invapp.shared.termux.crash.TermuxCrashUtils;
 import com.invapp.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.invapp.app.terminal.TermuxSessionsListViewController;
@@ -67,7 +69,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.viewpager.widget.ViewPager;
 
+import java.io.File;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * A terminal emulator activity.
@@ -149,6 +153,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * The last toast shown, used cancel current toast before showing new in {@link #showToast(String, boolean)}.
      */
     Toast mLastToast;
+
+    /** Offers Preview when a preferred localhost port newly appears. */
+    private PreferredPortWatcher mPreferredPortWatcher;
 
     /**
      * If between onResume() and onStop(). Note that only one session is in the foreground of the terminal view at the
@@ -322,6 +329,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         TermuxCrashUtils.notifyAppCrashFromCrashLogFile(this, LOG_TAG);
 
         mIsOnResumeAfterOnCreate = false;
+
+        if (mPreferredPortWatcher != null) {
+            mPreferredPortWatcher.start();
+        }
     }
 
     @Override
@@ -333,6 +344,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mIsInvalidState) return;
 
         mIsVisible = false;
+
+        if (mPreferredPortWatcher != null) {
+            mPreferredPortWatcher.stop();
+        }
 
         if (mTermuxTerminalSessionActivityClient != null)
             mTermuxTerminalSessionActivityClient.onStop();
@@ -351,6 +366,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         super.onDestroy();
 
         Logger.logDebug(LOG_TAG, "onDestroy");
+
+        if (mPreferredPortWatcher != null) {
+            mPreferredPortWatcher.shutdown();
+            mPreferredPortWatcher = null;
+        }
 
         if (mIsInvalidState) return;
 
@@ -578,6 +598,99 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     new Intent(this, LocalhostPreviewActivity.class));
             });
         }
+        setWorkflowButtonViews();
+
+        View root = findViewById(R.id.activity_termux_root_view);
+        if (root != null && mPreferredPortWatcher == null) {
+            mPreferredPortWatcher = new PreferredPortWatcher(this, root);
+        }
+    }
+
+    private void setWorkflowButtonViews() {
+        View gitPull = findViewById(R.id.workflow_git_pull_button);
+        if (gitPull != null) {
+            gitPull.setOnClickListener(v -> sendWorkflowCommand(WorkflowHelper.CMD_GIT_PULL));
+        }
+        View bunInstall = findViewById(R.id.workflow_bun_install_button);
+        if (bunInstall != null) {
+            bunInstall.setOnClickListener(v -> sendWorkflowCommand(WorkflowHelper.CMD_BUN_INSTALL));
+        }
+        View bunDev = findViewById(R.id.workflow_bun_dev_button);
+        if (bunDev != null) {
+            bunDev.setOnClickListener(v -> sendWorkflowCommand(WorkflowHelper.CMD_BUN_RUN_DEV));
+        }
+        View repos = findViewById(R.id.workflow_repos_button);
+        if (repos != null) {
+            repos.setOnClickListener(v -> showReposPicker(false));
+        }
+        View run = findViewById(R.id.workflow_run_button);
+        if (run != null) {
+            run.setOnClickListener(v -> showReposPicker(true));
+        }
+    }
+
+    private void sendWorkflowCommand(@NonNull String command) {
+        getDrawer().closeDrawers();
+        if (!WorkflowHelper.writeToSession(getCurrentSession(), command)) {
+            showToast(getString(R.string.msg_workflow_no_session), false);
+        }
+    }
+
+    /** Used by extra-key specials (PULL / BUNI / DEV). */
+    public void sendWorkflowCommandFromExtraKeys(@NonNull String command) {
+        sendWorkflowCommand(command);
+    }
+
+    /** Used by extra-key {@code REPOS}. */
+    public void showReposPickerFromExtraKeys() {
+        showReposPicker(false);
+    }
+
+    /**
+     * @param forRunScripts if true, after picking a repo show package.json scripts sheet
+     */
+    private void showReposPicker(boolean forRunScripts) {
+        List<File> repos = WorkflowHelper.listRepos();
+        if (repos.isEmpty()) {
+            showToast(getString(R.string.msg_workflow_no_repos), true);
+            return;
+        }
+        String[] names = new String[repos.size()];
+        for (int i = 0; i < repos.size(); i++) {
+            names[i] = WorkflowHelper.displayRepoName(repos.get(i));
+        }
+        int title = forRunScripts
+            ? R.string.title_workflow_pick_repo_for_run
+            : R.string.title_workflow_repos;
+        new AlertDialog.Builder(this)
+            .setTitle(title)
+            .setItems(names, (dialog, which) -> {
+                File dir = repos.get(which);
+                if (forRunScripts) {
+                    showRunScriptPicker(dir);
+                } else {
+                    sendWorkflowCommand(WorkflowHelper.cdToRepo(dir));
+                }
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    private void showRunScriptPicker(@NonNull File projectDir) {
+        List<String> scripts = WorkflowHelper.listPackageScripts(projectDir);
+        if (scripts.isEmpty()) {
+            // Still cd into the project so the user can run commands manually.
+            sendWorkflowCommand(WorkflowHelper.cdToRepo(projectDir));
+            showToast(getString(R.string.msg_workflow_no_scripts), true);
+            return;
+        }
+        String[] names = scripts.toArray(new String[0]);
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.title_workflow_run_script)
+            .setItems(names, (dialog, which) ->
+                sendWorkflowCommand(WorkflowHelper.cdAndRunScript(projectDir, scripts.get(which))))
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
     }
 
     private void setNewSessionButtonView() {

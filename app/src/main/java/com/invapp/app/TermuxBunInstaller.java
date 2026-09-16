@@ -20,8 +20,10 @@ import java.util.zip.ZipInputStream;
  * wrapper.
  *
  * <p>Real binary lives at {@code $PREFIX/libexec/bun}. The {@code bin/bun}
- * wrapper clears {@code LD_PRELOAD} (path redirector breaks Bun / optional
- * native installs → SIGSYS 31) and sets OPENSSL + npm/bun platform hints.
+ * wrapper drops the path redirector and preloads {@code libinvapp-bun-seccomp.so}
+ * so Android seccomp SIGSYS (openat2/fchmodat2 during install bin-linking)
+ * becomes ENOSYS and Bun's fallbacks run. Also sets OPENSSL + Android
+ * {@code --os}/{@code --cpu} install filters.
  *
  * <p>Uses oven-sh {@code bun-linux-*-android.zip} (Bionic PIE), not glibc Linux
  * builds.
@@ -222,13 +224,21 @@ public final class TermuxBunInstaller {
             + "  echo \"bun: missing Android binary at $REAL (reopen the app)\" >&2\n"
             + "  exit 127\n"
             + "fi\n"
-            // Drop path redirector for Bun — LD_PRELOAD + optional linux natives → SIGSYS.
-            // Explicit empty LD_PRELOAD= (redirector honors clear on execve).
+            // Path redirector must NOT preload with Bun (optional linux natives / hooks).
+            // Preload only the seccomp SIGSYS→ENOSYS shim so bun install bin-linking works
+            // on Android (openat2/fchmodat2 would otherwise kill with signal 31).
+            + "SECCOMP_SO=\"$PREFIX/lib/libinvapp-bun-seccomp.so\"\n"
+            + "if [ -f \"$SECCOMP_SO\" ]; then\n"
+            + "  export LD_PRELOAD=\"$SECCOMP_SO\"\n"
+            + "else\n"
+            + "  LD_PRELOAD=\n"
+            + "  export LD_PRELOAD\n"
+            + "fi\n"
             + "set -- \"$@\"\n"
             + "cmd=\"${1-}\"\n"
             // Force Android optionalDependency filter. Bun reports platform=android but
             // still resolves linux-* natives (e.g. @rolldown/binding-linux-arm-gnueabihf)
-            // for many scaffolds / Windows lockfiles → SIGSYS 31 on extract/link.
+            // for many scaffolds / Windows lockfiles → bad optional extracts.
             + "case \"$cmd\" in\n"
             + "  install|i|add|update|remove|rm|create)\n"
             + "    shift\n"
@@ -243,10 +253,10 @@ public final class TermuxBunInstaller {
             + "        x86_64|amd64) extra=\"$extra --cpu=x64\" ;; *) extra=\"$extra --cpu=arm64\" ;; esac\n"
             + "    fi\n"
             + "    # shellcheck disable=SC2086\n"
-            + "    LD_PRELOAD= exec \"$REAL\" \"$cmd\"$extra \"$@\"\n"
+            + "    exec \"$REAL\" \"$cmd\"$extra \"$@\"\n"
             + "    ;;\n"
             + "esac\n"
-            + "LD_PRELOAD= exec \"$REAL\" \"$@\"\n";
+            + "exec \"$REAL\" \"$@\"\n";
         writeExec(new File(binDir, "bun"), bunWrapper);
 
         String bunx = ""
@@ -267,6 +277,54 @@ public final class TermuxBunInstaller {
             + "echo \"LD_PRELOAD in shell: ${LD_PRELOAD:-unset}\"\n"
             + "echo \"OPENSSL_CONF=${OPENSSL_CONF:-unset}\"\n";
         writeExec(new File(binDir, "bun-doctor"), bunDoctor);
+
+        // OpenCode bootstrap (optional AI CLI → Preview).
+        String opencodeSetup = ""
+            + "#!" + bash + "\n"
+            + "set -e\n"
+            + "PREFIX=\"" + prefix + "\"\n"
+            + "HOME=\"" + home + "\"\n"
+            + "export PATH=\"$PREFIX/bin:$HOME/.bun/bin:$PATH\"\n"
+            + "if ! command -v bun >/dev/null 2>&1; then\n"
+            + "  echo \"opencode-setup: bun missing — reopen the app\" >&2\n"
+            + "  exit 127\n"
+            + "fi\n"
+            + "echo \"Installing opencode-ai globally via bun…\"\n"
+            + "bun install -g opencode-ai@latest\n"
+            + "hash -r 2>/dev/null || true\n"
+            + "if command -v opencode >/dev/null 2>&1; then\n"
+            + "  opencode --version 2>&1 || true\n"
+            + "  echo \"OK. Run: td-ai   # starts web UI on :4096 for Preview\"\n"
+            + "else\n"
+            + "  echo \"Installed, but opencode not on PATH. Try: export PATH=\\\"$HOME/.bun/bin:$PATH\\\"\" >&2\n"
+            + "  exit 1\n"
+            + "fi\n";
+        writeExec(new File(binDir, "opencode-setup"), opencodeSetup);
+
+        String tdAi = ""
+            + "#!" + bash + "\n"
+            + "PREFIX=\"" + prefix + "\"\n"
+            + "HOME=\"" + home + "\"\n"
+            + "export PATH=\"$PREFIX/bin:$HOME/.bun/bin:$PATH\"\n"
+            + "PORT=\"${1:-4096}\"\n"
+            + "case \"$PORT\" in\n"
+            + "  ''|*[!0-9]*) echo \"usage: td-ai [port]\" >&2; exit 2 ;;\n"
+            + "esac\n"
+            + "if ! command -v opencode >/dev/null 2>&1; then\n"
+            + "  echo \"opencode not found — running opencode-setup…\"\n"
+            + "  opencode-setup || exit $?\n"
+            + "  export PATH=\"$PREFIX/bin:$HOME/.bun/bin:$PATH\"\n"
+            + "fi\n"
+            + "echo \"\"\n"
+            + "echo \"OpenCode web → http://127.0.0.1:$PORT/\"\n"
+            + "echo \"In the app: drawer → Preview → tap $PORT (or Scan)\"\n"
+            + "echo \"\"\n"
+            // Prefer web UI for Preview; fall back to serve if web subcommand missing.
+            + "if opencode web --help >/dev/null 2>&1; then\n"
+            + "  exec opencode web --port \"$PORT\" --hostname 127.0.0.1\n"
+            + "fi\n"
+            + "exec opencode serve --port \"$PORT\" --hostname 127.0.0.1\n";
+        writeExec(new File(binDir, "td-ai"), tdAi);
 
         ensureWorkspaceDirs();
         repairPrefixBinPermissions();

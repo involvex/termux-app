@@ -14,9 +14,10 @@ This repository is a **fork** of [termux/termux-app](https://github.com/termux/t
 **Working on this fork:**
 
 - **apt / OpenSSH** — path redirector maps hardcoded `/data/data/com.termux` to this package.
-- **Bun 1.4.2 (Android)** — embedded; real binary at `$PREFIX/libexec/bun`, shim at `$PREFIX/bin/bun` (clears `LD_PRELOAD`, sets OpenSSL + Android npm platform hints).
+- **Bun 1.4.2 (Android)** — embedded; real binary at `$PREFIX/libexec/bun`, shim at `$PREFIX/bin/bun` (seccomp SIGSYS shim + OpenSSL + `--os=android` install filters).
 - **Default session cwd** — `~/repos` (executable). Prefer this over `~/storage/shared` for Node/Bun projects (shared storage is **noexec**).
-- **Localhost Preview** — left drawer → **Preview** opens `http://127.0.0.1:<port>` (e.g. Vite `3000`, `opencode serve --port 5000`).
+- **Localhost Preview** — left drawer → **Preview** scans listening ports (one-tap chips) or enter a port manually.
+- **OpenCode helper** — `opencode-setup` then `td-ai` (web UI on `:4096`) → open in Preview.
 - **Termux:API** — use the matching companion with the same `sharedUserId` / signing as this app.
 
 Do **not** run `curl -fsSL https://bun.sh/install | bash` inside this app — that installs a glibc Linux binary and fails with signal 31 / “required file not found”.
