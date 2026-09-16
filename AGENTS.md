@@ -195,7 +195,7 @@ without testing bootstrap + all ABIs.
 | NDK | `29.0.14206865`, `ndk-build` (`Android.mk` per module) |
 | JDK (build) | `17` (Android Studio Flamingo+) |
 | Java compat | `1.8` + `coreLibraryDesugaring` (`desugar_jdk_libs:1.1.5`) |
-| App version | `versionCode 200`, `versionName 0.200.0` (semver-enforced at build) |
+| App version | `versionCode 201`, `versionName 0.201.0` (semver-enforced at build) |
 | Bootstrap | `2026.02.12-r1+apt.android-7` (aarch64/arm/i686/x86_64, SHA-256 verified); android-5: `2022.04.28-r6` |
 | Bun | `1.4.2` official `bun-linux-{aarch64,x64}-android.zip` (SHA-256 verified, `.incbin` into `libinvapp-bun`, extracted by `TermuxBunInstaller`) |
 | Editor | 4-space, LF, UTF-8, final newline (`.editorconfig`); 2-space for `*.yaml` |
@@ -275,7 +275,7 @@ termux-app/
 - Format `major.minor.patch(-prerelease)(+buildmetadata)`, always with patch:
   `0.200.0`, `0.201.0-beta.1`, never `v0.1`. Tag as `v0.200.0`.
 - `app/build.gradle:validateVersionName()` fails the build on bad versions.
-- Keep `termux-shared`/`terminal-emulator` versions (`0.200.0`) in
+- Keep `termux-shared`/`terminal-emulator` versions (`0.201.0`) in
   sync when cutting releases.
 
 ### Code style / quality

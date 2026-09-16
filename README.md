@@ -8,7 +8,7 @@
 dev workflow: clone under `~/repos`, run Bun / Node projects, preview localhost
 servers in-app, and optionally attach an AI CLI.
 
-Package id: `com.involvex.termux_app` · Latest: **v0.200.0** · Docs:
+Package id: `com.involvex.termux_app` · Latest: **v0.201.0** · Docs:
 [involvex.github.io/termux-app](https://involvex.github.io/termux-app/)
 
 > **Unofficial fork.** Based on [Termux](https://termux.dev) /

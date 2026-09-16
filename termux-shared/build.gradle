@@ -92,7 +92,7 @@ afterEvaluate {
                 from components.default
                 groupId = 'com.invapp'
                 artifactId = 'termux-shared'
-                version = '0.200.0'
+                version = '0.201.0'
                 artifact(sourceJar)
             }
         }

@@ -109,4 +109,12 @@ public class WidgetScriptsInstallerTest {
             .contains("/tasks/"));
         assertNull(WidgetScriptsInstaller.scriptPath("nope"));
     }
+
+    @Test
+    public void catalog_hasFourIconSlots() {
+        assertEquals(4, WidgetScriptsInstaller.allCatalogIds().length);
+        for (String id : WidgetScriptsInstaller.allCatalogIds()) {
+            assertTrue(id, id.length() > 0);
+        }
+    }
 }

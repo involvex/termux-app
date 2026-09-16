@@ -62,7 +62,7 @@ public final class WidgetScriptsUi {
                 (dialog, which, isChecked) -> checked[which] = isChecked)
             .setPositiveButton(R.string.action_widget_scripts_install, (dialog, which) -> {
                 List<String> ids = WidgetScriptsInstaller.filterCatalogOrder(checked);
-                int n = WidgetScriptsInstaller.installSelected(ids);
+                int n = WidgetScriptsInstaller.installSelected(context, ids);
                 Toast.makeText(context,
                     context.getString(R.string.msg_widget_scripts_installed, n),
                     Toast.LENGTH_SHORT).show();
@@ -77,7 +77,7 @@ public final class WidgetScriptsUi {
                         Toast.LENGTH_SHORT).show();
                     return;
                 }
-                WidgetScriptsInstaller.installSelected(ids);
+                WidgetScriptsInstaller.installSelected(context, ids);
                 String cmd = WidgetScriptsInstaller.runOnceCommand(ids.get(0));
                 if (cmd == null) {
                     return;
@@ -93,7 +93,7 @@ public final class WidgetScriptsUi {
             });
         } else {
             builder.setNeutralButton(R.string.action_widget_scripts_reset, (dialog, which) -> {
-                WidgetScriptsInstaller.resetToDefaults();
+                WidgetScriptsInstaller.resetToDefaults(context);
                 Toast.makeText(context, R.string.msg_widget_scripts_reset,
                     Toast.LENGTH_SHORT).show();
             });

@@ -1,6 +1,12 @@
 package com.invapp.app;
 
+import android.appwidget.AppWidgetManager;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.system.Os;
 
 import androidx.annotation.NonNull;
@@ -76,14 +82,24 @@ public final class WidgetScriptsInstaller {
             }
         }
         if (missing.isEmpty()) {
+            // Still seed icons / refresh if scripts already present but icons missing.
+            installDefaultIcons(Arrays.asList(allCatalogIds()), false);
             return;
         }
-        installSelected(missing);
-        Logger.logInfo(LOG_TAG, "Installed widget script templates: " + missing);
+        int n = installSelected(context, missing);
+        Logger.logInfo(LOG_TAG, "Installed widget script templates: " + missing + " (" + n + ")");
     }
 
     /** Overwrite selected templates (or all defaults if {@code ids} empty). */
     public static int installSelected(@Nullable List<String> ids) {
+        return installSelected(null, ids);
+    }
+
+    /**
+     * Install selected templates, seed matching PNG icons under
+     * {@code ~/.shortcuts/icons/}, and optionally refresh Termux:Widget.
+     */
+    public static int installSelected(@Nullable Context context, @Nullable List<String> ids) {
         ensureDirs();
         List<String> toInstall = ids == null || ids.isEmpty()
             ? Arrays.asList(allCatalogIds())
@@ -99,11 +115,99 @@ public final class WidgetScriptsInstaller {
                 n++;
             }
         }
+        installDefaultIcons(toInstall, true);
+        if (context != null && n > 0) {
+            requestWidgetRefresh(context);
+        }
         return n;
     }
 
     public static void resetToDefaults() {
-        installSelected(Arrays.asList(allCatalogIds()));
+        resetToDefaults(null);
+    }
+
+    public static void resetToDefaults(@Nullable Context context) {
+        installSelected(context, Arrays.asList(allCatalogIds()));
+    }
+
+    /**
+     * Ask Termux:Widget to reload {@code ~/.shortcuts} list (no-op if plugin
+     * missing). Safe to call from the main app across packages.
+     */
+    public static void requestWidgetRefresh(@NonNull Context context) {
+        if (!isWidgetAppInstalled(context)) {
+            return;
+        }
+        try {
+            Intent intent = new Intent(
+                TermuxConstants.TERMUX_WIDGET_APP.TERMUX_WIDGET_PROVIDER.ACTION_REFRESH_WIDGET);
+            intent.setComponent(new ComponentName(
+                TermuxConstants.TERMUX_WIDGET_PACKAGE_NAME,
+                "com.invapp.widget.TermuxWidgetProvider"));
+            intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,
+                AppWidgetManager.INVALID_APPWIDGET_ID);
+            context.sendBroadcast(intent);
+            Logger.logDebug(LOG_TAG, "Sent Termux:Widget refresh broadcast");
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "Widget refresh broadcast failed: " + e.getMessage());
+        }
+    }
+
+    /** Write simple colored PNG icons for known templates (idempotent unless force). */
+    static void installDefaultIcons(@NonNull List<String> ids, boolean overwrite) {
+        ensureDirs();
+        for (String id : ids) {
+            File icon = new File(TermuxConstants.TERMUX_SHORTCUT_SCRIPT_ICONS_DIR, id + ".png");
+            if (icon.isFile() && !overwrite) {
+                continue;
+            }
+            Integer color = iconColor(id);
+            if (color == null) {
+                continue;
+            }
+            writePngIcon(icon, color);
+        }
+    }
+
+    @Nullable
+    private static Integer iconColor(@NonNull String id) {
+        switch (id) {
+            case ID_CLIPBOARD_SPEAK: return 0xFF00C853; // green
+            case ID_CLIPBOARD_TO_FILE: return 0xFF2979FF; // blue
+            case ID_GIT_PULL_REPOS: return 0xFFFF6D00; // orange
+            case ID_TD_AI: return 0xFFAA00FF; // purple
+            default: return null;
+        }
+    }
+
+    private static void writePngIcon(@NonNull File dest, int colorArgb) {
+        try {
+            int size = 96;
+            Bitmap bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(bmp);
+            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            paint.setColor(0xFF121212);
+            canvas.drawRoundRect(0, 0, size, size, 16, 16, paint);
+            paint.setColor(colorArgb);
+            canvas.drawCircle(size / 2f, size / 2f, size * 0.32f, paint);
+            File tmp = new File(dest.getAbsolutePath() + ".new");
+            try (FileOutputStream out = new FileOutputStream(tmp)) {
+                bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
+            }
+            bmp.recycle();
+            if (dest.exists() && !dest.delete()) {
+                try {
+                    Os.remove(dest.getAbsolutePath());
+                } catch (Exception ignored) {
+                }
+            }
+            if (!tmp.renameTo(dest)) {
+                //noinspection ResultOfMethodCallIgnored
+                tmp.delete();
+            }
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "icon " + dest + ": " + e.getMessage());
+        }
     }
 
     @NonNull
