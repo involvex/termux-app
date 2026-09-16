@@ -82,6 +82,16 @@ Terminal emulator core components are Apache 2.0 — see `terminal-view` /
 `terminal-emulator`. Shared library exceptions:
 [`termux-shared/LICENSE.md`](termux-shared/LICENSE.md).
 
+## Sponsors
+
+Support InVxTermux development:
+
+- [GitHub Sponsors](https://github.com/sponsors/involvex)
+- [Buy Me a Coffee](https://buymeacoffee.com/involvex)
+- [PayPal](https://paypal.me/involvex)
+- [OpenCode](https://opencode.ai/go?ref=XS9FHCZT4C)
+- [Microsoft Rewards](https://rewards.bing.com/welcome?rh=14525F68&ref=rafsrchae&form=ML2XE3&OCID=ML2XE3&PUBL=RewardsDO&CREA=ML2XE3)
+
 ## Upstream Termux
 
 - App: https://github.com/termux/termux-app

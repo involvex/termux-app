@@ -46,3 +46,9 @@ extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/involvex/termux-app
+    - icon: fontawesome/brands/github-alt
+      link: https://github.com/sponsors/involvex
+    - icon: fontawesome/solid/mug-hot
+      link: https://buymeacoffee.com/involvex
+    - icon: fontawesome/brands/paypal
+      link: https://paypal.me/involvex

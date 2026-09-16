@@ -10,6 +10,9 @@ on:
       - master
       - android-10
 
+permissions:
+  contents: read
+
 jobs:
   validation:
     name: "Validation"

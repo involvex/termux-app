@@ -198,11 +198,26 @@ public class FileReceiverActivity extends AppCompatActivity {
             });
     }
 
+    /**
+     * Returns true if {@code fileName} is a single path component safe to join under
+     * {@link #TERMUX_RECEIVEDIR} (no separators or {@code ..}).
+     */
+    static boolean isSafeAttachmentFileName(String fileName) {
+        if (DataUtils.isNullOrEmpty(fileName)) {
+            return false;
+        }
+        return !fileName.contains("..")
+                && fileName.indexOf('/') < 0
+                && fileName.indexOf('\\') < 0;
+    }
+
     public File saveStreamWithName(InputStream in, String attachmentFileName) {
         File receiveDir = new File(TERMUX_RECEIVEDIR);
 
-        if (DataUtils.isNullOrEmpty(attachmentFileName)) {
-            showErrorDialogAndQuit("File name cannot be null or empty");
+        if (!isSafeAttachmentFileName(attachmentFileName)) {
+            showErrorDialogAndQuit(DataUtils.isNullOrEmpty(attachmentFileName)
+                    ? "File name cannot be null or empty"
+                    : "Invalid file name");
             return null;
         }
 
@@ -212,7 +227,13 @@ public class FileReceiverActivity extends AppCompatActivity {
         }
 
         try {
-            final File outFile = new File(receiveDir, attachmentFileName);
+            final File receiveDirCanonical = receiveDir.getCanonicalFile();
+            final File outFile = new File(receiveDir, attachmentFileName).getCanonicalFile();
+            final String receivePath = receiveDirCanonical.getPath() + File.separator;
+            if (!outFile.getPath().startsWith(receivePath)) {
+                showErrorDialogAndQuit("Invalid file name");
+                return null;
+            }
             try (FileOutputStream f = new FileOutputStream(outFile)) {
                 byte[] buffer = new byte[4096];
                 int readBytes;

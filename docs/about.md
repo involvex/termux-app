@@ -31,4 +31,13 @@ Released under **GPLv3** (with exceptions documented in
 |---|---|
 | Issues | https://github.com/involvex/termux-app/issues |
 | Security | [SECURITY.md](https://github.com/involvex/termux-app/blob/master/SECURITY.md) |
-| Sponsors | https://github.com/sponsors/involvex |
+
+## Sponsors
+
+Support InVxTermux development:
+
+- [GitHub Sponsors](https://github.com/sponsors/involvex)
+- [Buy Me a Coffee](https://buymeacoffee.com/involvex)
+- [PayPal](https://paypal.me/involvex)
+- [OpenCode](https://opencode.ai/go?ref=XS9FHCZT4C)
+- [Microsoft Rewards](https://rewards.bing.com/welcome?rh=14525F68&ref=rafsrchae&form=ML2XE3&OCID=ML2XE3&PUBL=RewardsDO&CREA=ML2XE3)

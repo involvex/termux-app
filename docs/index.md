@@ -37,3 +37,13 @@ td-dev
 - **Localhost Preview** with port chips and Copy LAN
 - Helpers: `td-scaffold`, `td-dev`, `td-clone`, `td-ai`
 - Hacker theme (matrix green on black)
+
+## Sponsors
+
+[GitHub Sponsors](https://github.com/sponsors/involvex) ·
+[Buy Me a Coffee](https://buymeacoffee.com/involvex) ·
+[PayPal](https://paypal.me/involvex) ·
+[OpenCode](https://opencode.ai/go?ref=XS9FHCZT4C) ·
+[Microsoft Rewards](https://rewards.bing.com/welcome?rh=14525F68&ref=rafsrchae&form=ML2XE3&OCID=ML2XE3&PUBL=RewardsDO&CREA=ML2XE3)
+
+More on [About / License](about.md).
