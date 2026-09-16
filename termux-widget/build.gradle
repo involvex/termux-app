@@ -1,0 +1,76 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "com.invapp.widget"
+
+    compileSdkVersion project.properties.compileSdkVersion.toInteger()
+
+    defaultConfig {
+        applicationId "com.involvex.termux_app.widget"
+        minSdkVersion project.properties.minSdkVersion.toInteger()
+        targetSdkVersion project.properties.targetSdkVersion.toInteger()
+        versionCode 1001
+        versionName "0.15.0"
+
+        // Must match the main app sharedUserId / signing cert.
+        manifestPlaceholders.TERMUX_PACKAGE_NAME = "com.involvex.termux_app"
+        manifestPlaceholders.TERMUX_APP_NAME = "InVxTermux"
+        manifestPlaceholders.TERMUX_WIDGET_APP_NAME = "Termux:Widget"
+    }
+
+    signingConfigs {
+        debug {
+            storeFile file('testkey_untrusted.jks')
+            keyAlias 'alias'
+            storePassword 'xrj45yWGLbsO7W0v'
+            keyPassword 'xrj45yWGLbsO7W0v'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources false
+            signingConfig signingConfigs.debug
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+
+        debug {
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    packagingOptions {
+        exclude "lib/*/libtermux.so"
+        exclude "lib/*/liblocal-socket.so"
+        exclude "lib/*/libinvapp-redirector.so"
+    }
+
+    lint {
+        disable 'ProtectedPermissions'
+        abortOnError false
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:1.1.5"
+
+    // required for TermuxWidgetControlsProviderService
+    implementation "org.reactivestreams:reactive-streams:1.0.3"
+    implementation "io.reactivex.rxjava2:rxjava:2.2.10"
+
+    implementation "androidx.annotation:annotation:1.9.1"
+    implementation "com.google.android.material:material:1.12.0"
+    implementation "com.google.guava:guava:24.1-jre"
+    implementation "com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava"
+
+    implementation project(":termux-shared")
+}

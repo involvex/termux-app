@@ -65,6 +65,9 @@ public class TermuxApplication extends Application {
             // Install official Android Bun into $PREFIX/bin when missing/outdated.
             TermuxBunInstaller.installIfNeeded(context);
 
+            // Seed ~/.shortcuts templates for Termux:Widget (idempotent).
+            WidgetScriptsInstaller.installDefaultsIfMissing(context);
+
             // Setup termux-am-socket server
             TermuxAmSocketServer.setupTermuxAmSocketServer(context);
         } else {

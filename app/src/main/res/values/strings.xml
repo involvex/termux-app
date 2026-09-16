@@ -112,6 +112,17 @@
     <string name="action_workflow_more">⋯</string>
     <string name="action_workflow_customize">Customize bar…</string>
     <string name="action_customize_extra_keys">Customize keys…</string>
+    <string name="title_widget_scripts">Widget scripts</string>
+    <string name="summary_widget_scripts">Install ~/.shortcuts templates for Termux:Widget; show API/Widget status</string>
+    <string name="msg_widget_scripts_help">Stock F-Droid Termux:Widget will not work with InVxTermux. Use a matching Widget APK (same signature / sharedUserId). Clipboard/TTS scripts need the Termux:API APK plus: pkg install termux-api</string>
+    <string name="msg_widget_scripts_run_hint">Run once executes the first checked script in this session. Reset templates from Settings → InVxTermux → Widget scripts.</string>
+    <string name="action_widget_scripts_install">Install</string>
+    <string name="action_widget_scripts_reset">Reset</string>
+    <string name="action_widget_scripts_run_once">Run once</string>
+    <string name="msg_widget_scripts_installed">Installed %1$d widget script(s)</string>
+    <string name="msg_widget_scripts_reset">Widget scripts reset to defaults</string>
+    <string name="msg_widget_scripts_none_selected">Select at least one script</string>
+    <string name="msg_widget_scripts_running">Running %1$s…</string>
     <string name="title_customize_extra_keys">Extra keys (page 2)</string>
     <string name="msg_customize_extra_keys">Page 1 stays ESC/nav. Swipe the key bar left/right for page 2. New session after shell completion install.</string>
     <string name="msg_extra_keys_updated">Extra keys updated</string>

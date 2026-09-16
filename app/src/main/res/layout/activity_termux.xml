@@ -259,6 +259,14 @@
                     android:layout_height="48dp"
                     android:text="@string/action_customize_extra_keys"
                     android:textAllCaps="false" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/right_drawer_widget_scripts_button"
+                    style="?android:attr/buttonBarButtonStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="@string/title_widget_scripts"
+                    android:textAllCaps="false" />
             </LinearLayout>
 
         </androidx.drawerlayout.widget.DrawerLayout>

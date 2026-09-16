@@ -23,6 +23,8 @@ package logic here. Docs: https://involvex.github.io/termux-app/
 | `terminal-view` | Terminal `View` widget | — |
 | `terminal-emulator` | Emulator core + JNI (`src/main/jni/Android.mk`) | `com.invapp.emulator` |
 | `termux-api` | Termux:API plugin integration | — |
+| `termux-widget` | Classic `~/.shortcuts` Termux:Widget | `com.involvex.termux_app.widget` |
+| `termux-terminal-widget` | Home-screen command-output widget (gardockt fork) | `com.involvex.termux_app.terminalwidget` |
 
 Key shared entry points:
 
@@ -54,7 +56,8 @@ See `ROADMAP.md`.
 | Dev server | `td-dev [script]` → `bun run` with Preview/LAN hints |
 | Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`); `pwa` / `pwa-react` add `vite-plugin-pwa` |
 | Clone | `td-clone <url> [name] [--bun-i]` → git clone into `~/repos`; drawer **Clone…** |
-| Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize bar / Customize keys. Extra-keys: 2-row nav page + swipe L/R for workflow page; end drawer = Tools (Preview/AI/Clone/New). Long-press / Ctrl+Alt+M → actions bottom sheet |
+| Widget scripts | `~/.shortcuts` templates (`clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, `tasks/td-ai`); Settings / right drawer; matching Widget APK + API/`pkg install termux-api` for clipboard/TTS |
+| Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize bar / Customize keys. Extra-keys: 2-row nav page + swipe L/R for workflow page; end drawer = Tools (Preview/AI/Clone/New/Widget scripts). Long-press / Ctrl+Alt+M → actions bottom sheet |
 | Completions | App installs `$PREFIX/etc/profile.d/invapp-completions.sh` + `bash_completion.d` for bun/pkg/npm/gh/git. Prefer `pkg install bash-completion` for richer git. **New session** after update. Never edit `~/.bashrc` |
 
 **Do NOT "fix" these with more wrappers:**
@@ -240,6 +243,8 @@ termux-app/
 ├── terminal-view/      # View widget
 ├── terminal-emulator/  # core + src/main/jni/Android.mk
 ├── termux-api/         # API plugin
+├── termux-widget/      # Classic ~/.shortcuts Termux:Widget
+├── termux-terminal-widget/ # Command-output home widget (not classic Termux:Widget)
 ├── .github/workflows/  # CI above + ISSUE_TEMPLATE/
 ├── fastlane/ docs/en/ site/  # store metadata, docs, sponsors page
 └── build.gradle settings.gradle gradle.properties README.md ROADMAP.md AGENTS.md
@@ -316,6 +321,15 @@ termux-app/
 
 - All plugins share signature; test plugin interop when touching
   `termux-shared`, intents, or permissions.
+- **Termux:API** (`com.involvex.termux_app.api`) — `:termux-api` module; users also
+  need `pkg install termux-api` for shell CLIs.
+- **Termux:Widget** (`com.involvex.termux_app.widget`) — `:termux-widget`
+  (classic `~/.shortcuts` one-tap scripts; same `sharedUserId` + test key).
+  Stock `com.termux.widget` will not install. Main app seeds templates via
+  `WidgetScriptsInstaller` (Settings / right drawer).
+- **InVx Terminal Widget** (`com.involvex.termux_app.terminalwidget`) —
+  `:termux-terminal-widget` (gardockt fork): command-output home widget via
+  `RUN_COMMAND` (not classic Termux:Widget).
 - Variants: `apt-android-7` (primary) vs `apt-android-5` (deprecated). Never
   mix bootstrap zips across variants — app crashes at startup
   (`TermuxBootstrap.PackageVariant`).

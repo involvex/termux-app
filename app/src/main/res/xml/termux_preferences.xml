@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <Preference
@@ -14,5 +15,11 @@
         app:title="@string/termux_terminal_view_preferences_title"
         app:summary="@string/termux_terminal_view_preferences_summary"
         app:fragment="com.invapp.app.fragments.settings.termux.TerminalViewPreferencesFragment"/>
+
+    <Preference
+        app:key="widget_scripts"
+        app:title="@string/title_widget_scripts"
+        app:summary="@string/summary_widget_scripts"
+        app:persistent="false"/>
 
 </PreferenceScreen>

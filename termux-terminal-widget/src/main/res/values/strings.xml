@@ -1,0 +1,41 @@
+<resources>
+    <string name="ok">OK</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="command">Command</string>
+    <string name="error">Error</string>
+    <string name="colors">Colors</string>
+    <string name="default_colors">Default colors</string>
+    <string name="custom_colors">Custom colors</string>
+    <string name="text_size">Text size</string>
+    <string name="default_text_size">Default text size</string>
+    <string name="refresh_interval">Refresh interval</string>
+    <string name="widget_refresh_backend">Widget refresh backend</string>
+    <string name="use_alarmmanager">Use AlarmManager (experimental, allows for intervals smaller than 15 minutes)</string>
+    <string name="permission_SCHEDULE_EXACT_ALARMS_note">Enable exact alarms in app settings to increase interval precision.</string>
+    <string name="foreground">Foreground</string>
+    <string name="background">Background</string>
+    <string name="seconds_short">s</string>
+
+    <string name="fmt_hours">%d hours</string>
+    <string name="fmt_minutes">%d minutes</string>
+    <string name="fmt_seconds">%d seconds</string>
+
+    <string name="error_invalid_refresh_interval">Invalid refresh interval</string>
+    <string name="error_invalid_refresh_interval_work">Invalid refresh interval (switch to AlarmManager backend to allow smaller intervals)</string>
+
+    <string name="command_runner_service_notification">Service notification</string>
+    <string name="service_is_running">Service is running</string>
+
+    <string name="main_widget_description">Display output of a given command.</string>
+    <string name="cannot_update_widget_service_not_running">Cannot update the widget, as the service is not running - open the app to start it</string>
+    <string name="error_creating_widget">Error while creating a widget</string>
+
+    <string name="error_termux_missing">This app will not work without InVxTermux (com.involvex.termux_app), which is not installed.</string>
+    <string name="error_termux_outdated">This app requires InVxTermux versionCode 109 or later. Please update InVxTermux.</string>
+    <string name="permission_required">Permission required</string>
+    <string name="required_permission_denied">Required permission has been denied, cannot continue</string>
+    <string name="permission_RUN_COMMAND_prompt">The app needs InVxTermux permission to run commands. Please grant RUN_COMMAND on the next screen.</string>
+
+    <string name="settings_saved">Settings saved</string>
+</resources>

@@ -101,6 +101,25 @@ https://github.com/involvex/termux-app
 - Drawer quick bar: fewer/taller defaults; **⋯** overflow; **Customize bar…**
   picks which actions appear; long-press **AI** stops OpenCode
 
+### 12. Widget ~/.shortcuts templates (done — Phase 1)
+
+- App seeds `clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, and
+  `tasks/td-ai` under `~/.shortcuts` on first launch
+- Settings + right-drawer picker: install / reset / status (Widget APK, API APK,
+  `pkg termux-api`); **Run once** from the drawer
+
+### 13. InVx Terminal Widget module (done)
+
+- `:termux-terminal-widget` — gardockt Termux Terminal Widget adapted for
+  InVxTermux (`com.involvex.termux_app.terminalwidget`, local `termux-shared`,
+  `RUN_COMMAND` for command-output home widgets)
+
+### 14. Classic Termux:Widget module (done)
+
+- `:termux-widget` — [involvex/termux-widget](https://github.com/involvex/termux-widget)
+  adapted as `com.involvex.termux_app.widget` / `com.invapp.widget` with
+  `sharedUserId` + same test key (one-tap `~/.shortcuts` scripts)
+
 ## Non-goals (for now)
 
 - Full in-app IDE / multi-tab browser

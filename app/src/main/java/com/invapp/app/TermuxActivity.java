@@ -670,6 +670,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 showCustomizeExtraKeysDialog();
             });
         }
+        View widgetScripts = findViewById(R.id.right_drawer_widget_scripts_button);
+        if (widgetScripts != null) {
+            widgetScripts.setOnClickListener(v -> {
+                getDrawer().closeDrawers();
+                WidgetScriptsUi.showPicker(this, command ->
+                    WorkflowHelper.writeToSession(getCurrentSession(), command));
+            });
+        }
     }
 
     private void setWorkflowButtonViews() {

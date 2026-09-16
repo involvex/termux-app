@@ -134,3 +134,25 @@ jobs:
           path: |
             ${{ env.APK_DIR_PATH }}/${{ env.APK_BASENAME_PREFIX }}_sha256sums
             ${{ env.APK_DIR_PATH }}/output-metadata.json
+
+      # Plugin APKs are variant-independent; upload once (android-7 matrix only).
+      - name: Attach Termux:API debug APK
+        if: matrix.package_variant == 'apt-android-7'
+        uses: actions/upload-artifact@v6
+        with:
+          name: termux-api_github-debug
+          path: termux-api/build/outputs/apk/debug/*.apk
+
+      - name: Attach InVx Terminal Widget debug APK
+        if: matrix.package_variant == 'apt-android-7'
+        uses: actions/upload-artifact@v6
+        with:
+          name: termux-terminal-widget_github-debug
+          path: termux-terminal-widget/build/outputs/apk/debug/*.apk
+
+      - name: Attach Termux:Widget debug APK
+        if: matrix.package_variant == 'apt-android-7'
+        uses: actions/upload-artifact@v6
+        with:
+          name: termux-widget_github-debug
+          path: termux-widget/build/outputs/apk/debug/*.apk

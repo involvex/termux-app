@@ -1310,10 +1310,10 @@ public final class TermuxConstants {
     public static final class TERMUX_WIDGET_APP {
 
         /** Termux:Widget app main activity name. */
-        public static final String TERMUX_WIDGET_MAIN_ACTIVITY_NAME = TERMUX_WIDGET_PACKAGE_NAME + ".activities.TermuxWidgetMainActivity"; // Default: "com.invapp.widget.activities.TermuxWidgetMainActivity"
+        public static final String TERMUX_WIDGET_MAIN_ACTIVITY_NAME = "com.invapp.widget.activities.TermuxWidgetMainActivity";
 
         /** Termux:Widget app launcher activity name. This is an `activity-alias` for {@link #TERMUX_WIDGET_MAIN_ACTIVITY_NAME} used for launchers with {@link Intent#CATEGORY_LAUNCHER}. */
-        public static final String TERMUX_WIDGET_LAUNCHER_ACTIVITY_NAME = TERMUX_WIDGET_PACKAGE_NAME + ".activities.TermuxWidgetLauncherActivity"; // Default: "com.invapp.widget.activities.TermuxWidgetLauncherActivity"
+        public static final String TERMUX_WIDGET_LAUNCHER_ACTIVITY_NAME = "com.invapp.widget.activities.TermuxWidgetLauncherActivity";
 
 
         /**  Intent {@code String} extra for the token of the Termux:Widget app shortcuts. */

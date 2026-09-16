@@ -92,3 +92,23 @@ jobs:
             --clobber; then
             exit_on_error "Attach APKs to release failed for '$APK_VERSION_TAG' release."
           fi
+
+          # Plugin APKs (variant-independent) — attach once with android-7 job.
+          if [ "${PACKAGE_VARIANT}" = "apt-android-7" ]; then
+            API_APK="$(ls ./termux-api/build/outputs/apk/debug/*.apk | head -n1)"
+            TW_APK="$(ls ./termux-terminal-widget/build/outputs/apk/debug/*.apk | head -n1)"
+            WIDGET_APK="$(ls ./termux-widget/build/outputs/apk/debug/*.apk | head -n1)"
+            if [ -z "$API_APK" ] || [ -z "$TW_APK" ] || [ -z "$WIDGET_APK" ]; then
+              exit_on_error "Missing plugin APKs (api='$API_APK' terminal-widget='$TW_APK' widget='$WIDGET_APK')"
+            fi
+            cp "$API_APK" "./termux-api_${RELEASE_VERSION_NAME}-github-debug.apk"
+            cp "$TW_APK" "./termux-terminal-widget_${RELEASE_VERSION_NAME}-github-debug.apk"
+            cp "$WIDGET_APK" "./termux-widget_${RELEASE_VERSION_NAME}-github-debug.apk"
+            if ! gh release upload "$RELEASE_VERSION_NAME" \
+              "./termux-api_${RELEASE_VERSION_NAME}-github-debug.apk" \
+              "./termux-terminal-widget_${RELEASE_VERSION_NAME}-github-debug.apk" \
+              "./termux-widget_${RELEASE_VERSION_NAME}-github-debug.apk" \
+              --clobber; then
+              exit_on_error "Attach plugin APKs to release failed."
+            fi
+          fi

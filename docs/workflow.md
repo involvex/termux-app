@@ -52,3 +52,9 @@ No public tunnels by default.
 
 Use the **bundled** Android Bun. Do **not** run the official `bun.sh` install
 script inside the app (glibc binary → signal 31 / missing interpreter).
+
+## Widget scripts
+
+Templates under `~/.shortcuts` for Termux:Widget one-taps (clipboard TTS, append
+clipboard, git pull repos, background `td-ai`). See [Install → Plugins](install.md#plugins-api--widget)
+for matching API/Widget APKs and `pkg install termux-api`.

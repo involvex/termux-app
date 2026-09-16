@@ -4,11 +4,13 @@ import android.content.Context;
 import android.os.Bundle;
 
 import androidx.annotation.Keep;
+import androidx.preference.Preference;
 import androidx.preference.PreferenceDataStore;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceManager;
 
 import com.invapp.R;
+import com.invapp.app.WidgetScriptsUi;
 import com.invapp.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 
 @Keep
@@ -23,6 +25,14 @@ public class TermuxPreferencesFragment extends PreferenceFragmentCompat {
         preferenceManager.setPreferenceDataStore(TermuxPreferencesDataStore.getInstance(context));
 
         setPreferencesFromResource(R.xml.termux_preferences, rootKey);
+
+        Preference widgetScripts = findPreference("widget_scripts");
+        if (widgetScripts != null) {
+            widgetScripts.setOnPreferenceClickListener(preference -> {
+                WidgetScriptsUi.showSettingsPicker(context);
+                return true;
+            });
+        }
     }
 
 }

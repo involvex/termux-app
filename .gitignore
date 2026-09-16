@@ -42,8 +42,20 @@ Thumbs.db
 # termux-api module
 termux-api/build/
 
+# termux-terminal-widget module (Gardockt fork, InVx package id)
+termux-terminal-widget/build/
+
+# termux-widget module (classic ~/.shortcuts Termux:Widget)
+termux-widget/build/
+
 # MkDocs output
 public/
 
 # OpenCode glibc DNS shim (arm64) shipped in APK assets
 !app/src/main/assets/opencode/*.so
+
+# Local debug scratch (OpenCode/glibc) — do not commit
+native-tmp/
+
+# Session-specific OpenCode debug doctors
+scripts/opencode-debug-doctor*.sh

@@ -25,6 +25,7 @@ Package id: `com.involvex.termux_app` · Latest: **v0.200.0** · Docs:
 - **Localhost Preview** — drawer → **Preview** (port scan / chips / Copy LAN)
 - **OpenCode helper** — `opencode-setup` then `td-ai` (web UI on `:4096`) → Preview
 - **Workflow helpers** — `td-scaffold`, `td-dev`, `td-clone`, customizable drawer quick bar
+- **Widget scripts** — `~/.shortcuts` templates (clipboard TTS / file / git pull / `td-ai`); Settings + drawer picker
 - **Hacker theme** — matrix green on black (launcher + terminal)
 
 Do **not** run `curl -fsSL https://bun.sh/install | bash` inside this app — that
@@ -46,6 +47,21 @@ Anyone can build APKs with the same key — only install from
 [`involvex/termux-app`](https://github.com/involvex/termux-app) if you trust that
 source. Uninstall any other Termux / InVxTermux builds before switching sources
 (`sharedUserId` + signature must match).
+
+### Plugins (API / Widget)
+
+- **Termux:API** (`com.involvex.termux_app.api`) is built from `:termux-api` in this
+  repo. After installing that APK, run `pkg install termux-api` for shell CLIs
+  (`termux-clipboard-get`, `termux-tts-speak`, …).
+- **Termux:Widget** (`com.involvex.termux_app.widget`) — `:termux-widget`
+  for classic `~/.shortcuts` one-tap scripts (same signature / `sharedUserId`).
+  Stock F-Droid `com.termux.widget` will **not** install beside InVxTermux.
+- **InVx Terminal Widget** (`com.involvex.termux_app.terminalwidget`) —
+  `:termux-terminal-widget` (command-output home widget). Grant **RUN_COMMAND**,
+  open the app once, then add the widget. Not the same as classic Termux:Widget.
+- The app seeds `~/.shortcuts` templates on launch; manage via
+  **Settings → Widget scripts** or the right-drawer **Widget scripts** button.
+  Details: [docs/install.md](docs/install.md#plugins-api--widget).
 
 This fork is **not** published on F-Droid or Google Play. Official Termux builds
 from other sources are a different app id / signature and will not share data
