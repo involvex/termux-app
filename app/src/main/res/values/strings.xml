@@ -92,10 +92,16 @@
     <string name="action_preview_go">Go</string>
     <string name="action_preview_reload">Reload</string>
     <string name="action_preview_scan">Scan</string>
+    <string name="action_preview_copy_lan">Copy LAN</string>
     <string name="msg_preview_only_localhost">Preview only allows localhost / 127.0.0.1</string>
     <string name="msg_preview_invalid_port">Enter a port between 1 and 65535</string>
     <string name="msg_preview_no_ports">No listening ports found — start a dev server, then tap Scan</string>
     <string name="msg_preview_port_detected">Dev server on :%1$d</string>
+    <string name="msg_preview_lan_copied">Copied %1$s</string>
+    <string name="msg_preview_lan_hint">LAN: %1$s (long-press a port chip to copy)</string>
+    <string name="msg_preview_lan_loopback_only">Port :%1$d is loopback-only — start the server on 0.0.0.0 to share on Wi‑Fi</string>
+    <string name="msg_preview_lan_no_wifi">No Wi‑Fi IP found — connect to a network first</string>
+    <string name="msg_preview_lan_unavailable">Could not build a LAN URL for this port</string>
     <string name="action_workflow_git_pull">git pull</string>
     <string name="action_workflow_bun_install">bun i</string>
     <string name="action_workflow_bun_dev">bun run dev</string>

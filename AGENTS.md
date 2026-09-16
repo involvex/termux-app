@@ -45,7 +45,7 @@ localhost servers on-device, optionally attach AI CLI. See `ROADMAP.md`.
 | Bun wrapper | `$PREFIX/bin/bun` → drops path redirector, preloads `libinvapp-bun-seccomp.so` (SIGSYS→ENOSYS for `openat2`/`fchmodat2`), sets OPENSSL + `--os=android --cpu=…` on install/add/create |
 | bunx | `$PREFIX/bin/bunx` → `bun x` via wrapper (no per-package mapping) |
 | Default cwd | `~/repos` (exec-capable). `~/storage/shared` is browse/sync only (**noexec**) |
-| Preview | Drawer **Preview** → `LocalhostPreviewActivity` (port field + Scan → listening-TCP chips) |
+| Preview | Drawer **Preview** → Scan + chips; **Copy LAN** / long-press chip → `http://<wifi-ip>:<port>` when bound on `0.0.0.0` |
 | AI helper | `opencode-setup` / `td-ai [port]` → OpenCode web on `:4096` + Preview hint. On-demand into `$PREFIX`, not baked into APK |
 | Workflow | Drawer snippets: `git pull` / `bun i` / `bun run dev` / Repos / Run…; port Snackbar → Preview |
 

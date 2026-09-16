@@ -25,7 +25,9 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.invapp.R;
+import com.invapp.app.utils.LanShareHelper;
 import com.invapp.app.utils.LocalhostPortScanner;
+import com.invapp.shared.interact.ShareUtils;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -33,8 +35,9 @@ import java.util.concurrent.Executors;
 
 /**
  * In-app preview of loopback HTTP servers (Vite, Expo web, {@code opencode web}).
- * Only {@code http://127.0.0.1} / {@code localhost} are allowed.
- * Scans listening ports for one-tap open.
+ * Only {@code http://127.0.0.1} / {@code localhost} are allowed in the WebView.
+ * Opt-in <strong>Copy LAN</strong> copies {@code http://&lt;wifi-ip&gt;:&lt;port&gt;}
+ * when the server listens on {@code 0.0.0.0} / {@code ::} — no public tunnels.
  */
 public final class LocalhostPreviewActivity extends AppCompatActivity {
 
@@ -45,6 +48,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
     private EditText mPortInput;
     private LinearLayout mPortChips;
     private TextView mPortsEmpty;
+    private TextView mLanHint;
     private final ExecutorService mScanExecutor = Executors.newSingleThreadExecutor();
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
 
@@ -70,8 +74,10 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         Button goButton = findViewById(R.id.preview_go_button);
         Button reloadButton = findViewById(R.id.preview_reload_button);
         Button scanButton = findViewById(R.id.preview_scan_button);
+        Button copyLanButton = findViewById(R.id.preview_copy_lan_button);
         mPortChips = findViewById(R.id.preview_port_chips);
         mPortsEmpty = findViewById(R.id.preview_ports_empty);
+        mLanHint = findViewById(R.id.preview_lan_hint);
         mWebView = findViewById(R.id.preview_webview);
 
         WebSettings settings = mWebView.getSettings();
@@ -102,6 +108,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         goButton.setOnClickListener(v -> loadFromPortInput());
         reloadButton.setOnClickListener(v -> mWebView.reload());
         scanButton.setOnClickListener(v -> scanPortsAsync());
+        copyLanButton.setOnClickListener(v -> copyLanUrlForCurrentPort());
         mPortInput.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_GO
                     || actionId == EditorInfo.IME_ACTION_DONE) {
@@ -113,18 +120,23 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
 
         loadPort(port);
         scanPortsAsync();
+        refreshLanHint();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         scanPortsAsync();
+        refreshLanHint();
     }
 
     private void scanPortsAsync() {
         mScanExecutor.execute(() -> {
             final List<Integer> ports = LocalhostPortScanner.scanListeningPorts();
-            mMainHandler.post(() -> renderPortChips(ports));
+            mMainHandler.post(() -> {
+                renderPortChips(ports);
+                refreshLanHint();
+            });
         });
     }
 
@@ -157,28 +169,97 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             chip.setOnClickListener(v -> {
                 mPortInput.setText(String.valueOf(port));
                 loadPort(port);
+                refreshLanHint();
+            });
+            chip.setOnLongClickListener(v -> {
+                copyLanUrlForPort(port);
+                return true;
             });
             mPortChips.addView(chip);
         }
     }
 
-    private void loadFromPortInput() {
+    private void copyLanUrlForCurrentPort() {
+        int port = readPortInputOrToast();
+        if (port < 0) {
+            return;
+        }
+        copyLanUrlForPort(port);
+    }
+
+    private void copyLanUrlForPort(int port) {
+        mScanExecutor.execute(() -> {
+            final boolean wildcard = LocalhostPortScanner.isWildcardListen(port);
+            final String ip = LanShareHelper.getSiteLocalIpv4();
+            mMainHandler.post(() -> {
+                if (!wildcard) {
+                    Toast.makeText(this,
+                        getString(R.string.msg_preview_lan_loopback_only, port),
+                        Toast.LENGTH_LONG).show();
+                    return;
+                }
+                if (ip == null) {
+                    Toast.makeText(this, R.string.msg_preview_lan_no_wifi,
+                        Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                String url = LanShareHelper.buildLanHttpUrl(ip, port);
+                if (url == null) {
+                    Toast.makeText(this, R.string.msg_preview_lan_unavailable,
+                        Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                ShareUtils.copyTextToClipboard(this, url,
+                    getString(R.string.msg_preview_lan_copied, url));
+            });
+        });
+    }
+
+    private void refreshLanHint() {
+        if (mLanHint == null) {
+            return;
+        }
+        mScanExecutor.execute(() -> {
+            final String ip = LanShareHelper.getSiteLocalIpv4();
+            mMainHandler.post(() -> {
+                if (ip == null) {
+                    mLanHint.setVisibility(View.GONE);
+                    return;
+                }
+                mLanHint.setText(getString(R.string.msg_preview_lan_hint, ip));
+                mLanHint.setVisibility(View.VISIBLE);
+            });
+        });
+    }
+
+    /** @return port or {@code -1} after toasting on error */
+    private int readPortInputOrToast() {
         String raw = mPortInput.getText() != null
             ? mPortInput.getText().toString().trim() : "";
         if (TextUtils.isEmpty(raw)) {
             Toast.makeText(this, R.string.msg_preview_invalid_port, Toast.LENGTH_SHORT).show();
-            return;
+            return -1;
         }
         try {
             int port = Integer.parseInt(raw);
             if (port < 1 || port > 65535) {
                 Toast.makeText(this, R.string.msg_preview_invalid_port, Toast.LENGTH_SHORT).show();
-                return;
+                return -1;
             }
-            loadPort(port);
+            return port;
         } catch (NumberFormatException e) {
             Toast.makeText(this, R.string.msg_preview_invalid_port, Toast.LENGTH_SHORT).show();
+            return -1;
         }
+    }
+
+    private void loadFromPortInput() {
+        int port = readPortInputOrToast();
+        if (port < 0) {
+            return;
+        }
+        loadPort(port);
+        refreshLanHint();
     }
 
     private void loadPort(int port) {

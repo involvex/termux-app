@@ -42,9 +42,10 @@ servers on-device, and optionally attach AI CLIs.
 - Snackbar when a preferred localhost port newly appears → open Preview
 - Repo picker (`~/repos`) and `package.json` script run sheet
 
-### 5. LAN share (next, opt-in)
+### 5. LAN share (done — opt-in)
 
-- Copy `http://<wifi-ip>:<port>` when server binds `0.0.0.0`
+- Preview **Copy LAN** / long-press port chip → clipboard `http://<wifi-ip>:<port>/`
+- Only when the server listens on `0.0.0.0` / `::` (loopback-only binds explain how to fix)
 - No public tunnels by default
 
 ## Non-goals (for now)

@@ -1,6 +1,7 @@
 package com.invapp.app.utils;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -14,7 +15,8 @@ import java.util.Set;
 
 /**
  * Lists TCP listen ports visible via {@code /proc/net/tcp{,6}}.
- * Used by Localhost Preview for one-tap open of Vite / Expo / OpenCode servers.
+ * Used by Localhost Preview for one-tap open of Vite / Expo / OpenCode servers
+ * and to detect wildcard binds eligible for opt-in LAN URL copy.
  */
 public final class LocalhostPortScanner {
 
@@ -35,11 +37,29 @@ public final class LocalhostPortScanner {
     @NonNull
     public static List<Integer> scanListeningPorts() {
         Set<Integer> ports = new LinkedHashSet<>();
-        collectFromProc("/proc/net/tcp", ports, false);
-        collectFromProc("/proc/net/tcp6", ports, true);
+        collectFromProc("/proc/net/tcp", ports, null, false);
+        collectFromProc("/proc/net/tcp6", ports, null, true);
         List<Integer> list = new ArrayList<>(ports);
         Collections.sort(list, preferredFirstComparator());
         return list;
+    }
+
+    /**
+     * Whether any LISTEN socket for {@code port} is bound to a wildcard address
+     * ({@code 0.0.0.0} / {@code ::}), so LAN clients can reach it when the
+     * process is otherwise reachable on Wi‑Fi.
+     */
+    public static boolean isWildcardListen(int port) {
+        if (port < 1 || port > 65535) {
+            return false;
+        }
+        Set<Integer> wild = new LinkedHashSet<>();
+        collectFromProc("/proc/net/tcp", null, wild, false);
+        if (wild.contains(port)) {
+            return true;
+        }
+        collectFromProc("/proc/net/tcp6", null, wild, true);
+        return wild.contains(port);
     }
 
     private static Comparator<Integer> preferredFirstComparator() {
@@ -75,7 +95,9 @@ public final class LocalhostPortScanner {
         return indexOfPreferred(port) >= 0;
     }
 
-    private static void collectFromProc(@NonNull String path, @NonNull Set<Integer> out,
+    private static void collectFromProc(@NonNull String path,
+                                        @Nullable Set<Integer> reachableOut,
+                                        @Nullable Set<Integer> wildcardOut,
                                         boolean ipv6) {
         try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
             String line = reader.readLine(); // header
@@ -109,10 +131,13 @@ public final class LocalhostPortScanner {
                 if (port < 1024 && indexOfPreferred(port) < 0) {
                     continue;
                 }
-                if (!isReachableViaLoopback(cols[1], ipv6)) {
-                    continue;
+                boolean wildcard = isWildcardBind(cols[1], ipv6);
+                if (wildcard && wildcardOut != null) {
+                    wildcardOut.add(port);
                 }
-                out.add(port);
+                if (reachableOut != null && isReachableViaLoopback(cols[1], ipv6)) {
+                    reachableOut.add(port);
+                }
             }
         } catch (Exception ignored) {
             // No /proc access or parse issues — Preview still works with manual port.
@@ -135,6 +160,24 @@ public final class LocalhostPortScanner {
         }
     }
 
+    /** {@code 0.0.0.0} or {@code ::} — reachable from LAN if firewall allows. */
+    static boolean isWildcardBind(@NonNull String localAddress, boolean ipv6) {
+        int colon = localAddress.lastIndexOf(':');
+        if (colon <= 0) {
+            return false;
+        }
+        String ipHex = localAddress.substring(0, colon).toUpperCase(Locale.US);
+        if (!ipv6) {
+            return "00000000".equals(ipHex);
+        }
+        for (int i = 0; i < ipHex.length(); i++) {
+            if (ipHex.charAt(i) != '0') {
+                return false;
+            }
+        }
+        return ipHex.length() > 0;
+    }
+
     /**
      * Accept wildcard and loopback binds (reachable as http://127.0.0.1:port).
      */
@@ -148,16 +191,7 @@ public final class LocalhostPortScanner {
             // 00000000 = 0.0.0.0, 0100007F = 127.0.0.1 (LE)
             return "00000000".equals(ipHex) || "0100007F".equals(ipHex);
         }
-        // :: / 0, ::1
-        boolean allZero = true;
-        for (int i = 0; i < ipHex.length(); i++) {
-            char c = ipHex.charAt(i);
-            if (c != '0') {
-                allZero = false;
-                break;
-            }
-        }
-        if (allZero) {
+        if (isWildcardBind(localAddress, true)) {
             return true;
         }
         // ::1 is 0000...0001 (31 zeros + 1) in network order in /proc
