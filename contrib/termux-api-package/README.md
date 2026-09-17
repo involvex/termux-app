@@ -28,3 +28,12 @@ before merging the script alone into `termux-api-package`.
 The app seeds an equivalent `$PREFIX/bin/termux-screenshot` from
 `TermuxBunInstaller` so users do not need a packages rebuild. Keep both in sync
 when changing flags or extras.
+
+## KeepAliveService start/stop
+
+Stock upstream scripts use short components (`com.termux.api/.KeepAliveService`).
+This fork’s API `applicationId` is `com.involvex.termux_app.api` but the Java
+class is `com.invapp.api.KeepAliveService`. Use the FQCN forms in
+`scripts/termux-api-start.in` and `scripts/termux-api-stop.in` (also seeded
+into `$PREFIX/bin` by the app). Add both to `script_files` in `CMakeLists.txt`
+when packaging for this fork (they replace the stock short-form scripts).

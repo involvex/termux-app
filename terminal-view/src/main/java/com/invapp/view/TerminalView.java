@@ -255,6 +255,13 @@ public final class TerminalView extends View {
                     startTextSelectionMode(event);
                 }
             }
+
+            @Override
+            public void onTwoFingerSwipeDown() {
+                if (mClient != null) {
+                    mClient.onTwoFingerSwipeDown();
+                }
+            }
         });
         mScroller = new Scroller(context);
         AccessibilityManager am = (AccessibilityManager) context.getSystemService(Context.ACCESSIBILITY_SERVICE);

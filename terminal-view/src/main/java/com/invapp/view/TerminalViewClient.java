@@ -50,6 +50,13 @@ public interface TerminalViewClient {
 
 
 
+    /**
+     * Two-finger swipe down on the terminal (opens Tools / end drawer when wired).
+     */
+    void onTwoFingerSwipeDown();
+
+
+
     boolean readControlKey();
 
     boolean readAltKey();

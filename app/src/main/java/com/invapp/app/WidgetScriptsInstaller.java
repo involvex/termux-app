@@ -39,6 +39,12 @@ public final class WidgetScriptsInstaller {
     public static final String ID_CLIPBOARD_TO_FILE = "clipboard-to-file";
     public static final String ID_GIT_PULL_REPOS = "git-pull-repos";
     public static final String ID_SCREEN_OCR = "screen-ocr";
+    public static final String ID_CAMERA_PHOTO = "camera-photo";
+    public static final String ID_WIFI_INFO = "wifi-info";
+    public static final String ID_BATTERY_STATUS = "battery-status";
+    public static final String ID_TORCH_TOGGLE = "torch-toggle";
+    public static final String ID_SHARE_CLIPBOARD = "share-clipboard";
+    public static final String ID_OPEN_SETTINGS = "open-settings";
 
     /** Background task scripts under {@code ~/.shortcuts/tasks/}. */
     public static final String ID_TD_AI = "td-ai";
@@ -51,12 +57,24 @@ public final class WidgetScriptsInstaller {
         ID_TD_AI
     };
 
+    /** Optional catalog entries (install via picker; not auto-seeded). */
+    public static final String[] OPTIONAL_FOREGROUND_IDS = {
+        ID_CAMERA_PHOTO, ID_WIFI_INFO, ID_BATTERY_STATUS,
+        ID_TORCH_TOGGLE, ID_SHARE_CLIPBOARD, ID_OPEN_SETTINGS
+    };
+
     /** Display labels parallel to {@link #allCatalogIds()}. */
     public static final String[] CATALOG_LABELS = {
         "clipboard-speak (TTS)",
         "clipboard-to-file",
         "git-pull-repos",
         "screen-ocr (clipboard)",
+        "camera-photo",
+        "wifi-info",
+        "battery-status",
+        "torch-toggle",
+        "share-clipboard",
+        "open-settings",
         "td-ai (background task)"
     };
 
@@ -66,7 +84,10 @@ public final class WidgetScriptsInstaller {
     public static String[] allCatalogIds() {
         return new String[] {
             ID_CLIPBOARD_SPEAK, ID_CLIPBOARD_TO_FILE, ID_GIT_PULL_REPOS,
-            ID_SCREEN_OCR, ID_TD_AI
+            ID_SCREEN_OCR,
+            ID_CAMERA_PHOTO, ID_WIFI_INFO, ID_BATTERY_STATUS,
+            ID_TORCH_TOGGLE, ID_SHARE_CLIPBOARD, ID_OPEN_SETTINGS,
+            ID_TD_AI
         };
     }
 
@@ -179,6 +200,12 @@ public final class WidgetScriptsInstaller {
             case ID_CLIPBOARD_TO_FILE: return 0xFF2979FF; // blue
             case ID_GIT_PULL_REPOS: return 0xFFFF6D00; // orange
             case ID_SCREEN_OCR: return 0xFF00BFA5; // teal
+            case ID_CAMERA_PHOTO: return 0xFFE91E63; // pink
+            case ID_WIFI_INFO: return 0xFF03A9F4; // light blue
+            case ID_BATTERY_STATUS: return 0xFF8BC34A; // light green
+            case ID_TORCH_TOGGLE: return 0xFFFFEB3B; // yellow
+            case ID_SHARE_CLIPBOARD: return 0xFF9C27B0; // purple-ish
+            case ID_OPEN_SETTINGS: return 0xFF607D8B; // blue grey
             case ID_TD_AI: return 0xFFAA00FF; // purple
             default: return null;
         }
@@ -274,7 +301,10 @@ public final class WidgetScriptsInstaller {
         if (ID_TD_AI.equals(id)) {
             return scriptFile(id, true);
         }
-        for (String known : DEFAULT_FOREGROUND_IDS) {
+        for (String known : allCatalogIds()) {
+            if (ID_TD_AI.equals(known)) {
+                continue;
+            }
             if (known.equals(id)) {
                 return scriptFile(id, false);
             }
@@ -379,6 +409,105 @@ public final class WidgetScriptsInstaller {
             + "  exit 1\n"
             + "fi\n"
             + "td-screen-ocr\n");
+        String needApi = ""
+            + "toast() { command -v termux-toast >/dev/null 2>&1 && termux-toast \"$1\" || true; }\n"
+            + "need_api() {\n"
+            + "  if ! command -v \"$1\" >/dev/null 2>&1; then\n"
+            + "    msg='Need Termux:API APK + pkg install termux-api'\n"
+            + "    toast \"$msg\"; echo \"$msg\" >&2\n"
+            + "    exit 1\n"
+            + "  fi\n"
+            + "}\n";
+        m.put(ID_CAMERA_PHOTO, ""
+            + "#!" + bash + "\n"
+            + "# invapp-widget: camera-photo\n"
+            + "set -e\n"
+            + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
+            + "HOME=\"" + home + "\"\n"
+            + needApi
+            + "need_api termux-camera-photo\n"
+            + "mkdir -p \"$HOME/repos\"\n"
+            + "OUT=\"$HOME/repos/camera-last.jpg\"\n"
+            + "toast 'Taking photo…'\n"
+            + "termux-camera-photo \"$OUT\"\n"
+            + "toast \"Saved → $OUT\"\n"
+            + "echo \"$OUT\"\n");
+        m.put(ID_WIFI_INFO, ""
+            + "#!" + bash + "\n"
+            + "# invapp-widget: wifi-info\n"
+            + "set -e\n"
+            + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
+            + needApi
+            + "need_api termux-wifi-connectioninfo\n"
+            + "need_api termux-clipboard-set\n"
+            + "toast 'Wi‑Fi info…'\n"
+            + "json=$(termux-wifi-connectioninfo || true)\n"
+            + "if [ -z \"$json\" ]; then toast 'No Wi‑Fi info'; exit 1; fi\n"
+            + "printf '%s\\n' \"$json\" | termux-clipboard-set\n"
+            + "ssid=$(printf '%s' \"$json\" | tr ',' '\\n' | sed -n 's/.*\"ssid\":[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p' | head -1)\n"
+            + "ip=$(printf '%s' \"$json\" | tr ',' '\\n' | sed -n 's/.*\"ip\":[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p' | head -1)\n"
+            + "if [ -n \"$ssid\" ] || [ -n \"$ip\" ]; then\n"
+            + "  toast \"${ssid:-wifi} ${ip}\"\n"
+            + "else\n"
+            + "  toast 'Wi‑Fi JSON → clipboard'\n"
+            + "fi\n"
+            + "printf '%s\\n' \"$json\"\n");
+        m.put(ID_BATTERY_STATUS, ""
+            + "#!" + bash + "\n"
+            + "# invapp-widget: battery-status\n"
+            + "set -e\n"
+            + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
+            + needApi
+            + "need_api termux-battery-status\n"
+            + "need_api termux-clipboard-set\n"
+            + "json=$(termux-battery-status || true)\n"
+            + "if [ -z \"$json\" ]; then toast 'No battery info'; exit 1; fi\n"
+            + "printf '%s\\n' \"$json\" | termux-clipboard-set\n"
+            + "pct=$(printf '%s' \"$json\" | tr ',' '\\n' | sed -n 's/.*\"percentage\":[[:space:]]*\\([0-9]*\\).*/\\1/p' | head -1)\n"
+            + "st=$(printf '%s' \"$json\" | tr ',' '\\n' | sed -n 's/.*\"status\":[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p' | head -1)\n"
+            + "toast \"Battery ${pct:-?}% ${st}\"\n"
+            + "printf '%s\\n' \"$json\"\n");
+        m.put(ID_TORCH_TOGGLE, ""
+            + "#!" + bash + "\n"
+            + "# invapp-widget: torch-toggle\n"
+            + "set -e\n"
+            + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
+            + "HOME=\"" + home + "\"\n"
+            + needApi
+            + "need_api termux-torch\n"
+            + "STATE=\"$HOME/.cache/invapp-torch.on\"\n"
+            + "mkdir -p \"$HOME/.cache\"\n"
+            + "if [ -f \"$STATE\" ]; then\n"
+            + "  termux-torch off\n"
+            + "  rm -f \"$STATE\"\n"
+            + "  toast 'Torch off'\n"
+            + "else\n"
+            + "  termux-torch on\n"
+            + "  touch \"$STATE\"\n"
+            + "  toast 'Torch on'\n"
+            + "fi\n");
+        m.put(ID_SHARE_CLIPBOARD, ""
+            + "#!" + bash + "\n"
+            + "# invapp-widget: share-clipboard\n"
+            + "set -e\n"
+            + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
+            + needApi
+            + "need_api termux-clipboard-get\n"
+            + "need_api termux-share\n"
+            + "text=$(termux-clipboard-get || true)\n"
+            + "if [ -z \"$text\" ]; then toast 'Clipboard empty'; exit 0; fi\n"
+            + "toast 'Sharing clipboard…'\n"
+            + "printf '%s' \"$text\" | termux-share -a send\n");
+        m.put(ID_OPEN_SETTINGS, ""
+            + "#!" + bash + "\n"
+            + "# invapp-widget: open-settings\n"
+            + "set -e\n"
+            + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
+            + "toast() { command -v termux-toast >/dev/null 2>&1 && termux-toast \"$1\" || true; }\n"
+            + "toast 'Opening Settings…'\n"
+            + "am start -a android.settings.SETTINGS >/dev/null 2>&1 \\\n"
+            + "  || am start -n com.android.settings/.Settings >/dev/null 2>&1 \\\n"
+            + "  || { toast 'Could not open Settings'; exit 1; }\n");
         m.put(ID_TD_AI, ""
             + "#!" + bash + "\n"
             + "# invapp-widget: td-ai (background task)\n"

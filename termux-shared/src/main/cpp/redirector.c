@@ -31,6 +31,24 @@ static const char* OLD_PKG = "com.termux";
 static const char* NEW_PKG = "com.involvex.termux_app";
 /* Lengths derived at runtime — do not hardcode (easy to get wrong). */
 
+/*
+ * Stock termux-api scripts use short components (package/.Class). Our API
+ * applicationId is com.involvex.termux_app.api but Java/namespace is
+ * com.invapp.api — short form resolves to the wrong class.
+ */
+static const char* OLD_API_LISTEN = "com.termux.api://listen";
+static const char* NEW_API_LISTEN = "com.involvex.termux_app.api://listen";
+static const char* OLD_API_COMPONENT = "com.termux.api/.TermuxApiReceiver";
+static const char* NEW_API_COMPONENT =
+    "com.involvex.termux_app.api/com.invapp.api.TermuxApiReceiver";
+static const char* OLD_KEEPALIVE_COMPONENT = "com.termux.api/.KeepAliveService";
+static const char* BROKEN_KEEPALIVE_COMPONENT =
+    "com.involvex.termux_app.api/.KeepAliveService";
+static const char* NEW_KEEPALIVE_COMPONENT =
+    "com.involvex.termux_app.api/com.invapp.api.KeepAliveService";
+
+static char* replace_all_alloc(const char* src, const char* from, const char* to);
+
 /* Derived paths for SSH/login sessions (sshd clears LD_* in the child env). */
 static const char* NEW_HOME = "/data/data/com.involvex.termux_app/files/home";
 static const char* NEW_USR = "/data/data/com.involvex.termux_app/files/usr";
@@ -214,7 +232,10 @@ static void rewrite_termux_paths_in_script(const char* path) {
     orig_close(fd);
     data[size] = '\0';
 
-    if (!strstr(data, OLD_PKG)) {
+    int has_old_pkg = strstr(data, OLD_PKG) != NULL;
+    int has_broken_keepalive = strstr(data, BROKEN_KEEPALIVE_COMPONENT) != NULL
+        || strstr(data, OLD_KEEPALIVE_COMPONENT) != NULL;
+    if (!has_old_pkg && !has_broken_keepalive) {
         free(data);
         return;
     }
@@ -222,8 +243,9 @@ static void rewrite_termux_paths_in_script(const char* path) {
     const size_t old_pkg_len = strlen(OLD_PKG);
     const size_t new_pkg_len = strlen(NEW_PKG);
 
-    /* Worst-case expansion bound. */
-    size_t out_cap = (size_t)size * (new_pkg_len + 1) + 1;
+    /* Worst-case expansion bound (package rewrite + KeepAlive FQCN). */
+    size_t out_cap = (size_t)size * (new_pkg_len + 1)
+        + strlen(NEW_KEEPALIVE_COMPONENT) * 4 + 64;
     char* out = (char*)malloc(out_cap);
     if (!out) {
         free(data);
@@ -252,6 +274,21 @@ static void rewrite_termux_paths_in_script(const char* path) {
         } else {
             out[oi++] = data[i++];
         }
+    }
+    out[oi] = '\0';
+
+    /* After package rewrite, short KeepAlive components are wrong (namespace ≠ id). */
+    char* fixed = replace_all_alloc(out, BROKEN_KEEPALIVE_COMPONENT, NEW_KEEPALIVE_COMPONENT);
+    if (fixed) {
+        free(out);
+        out = fixed;
+        oi = strlen(out);
+    }
+    fixed = replace_all_alloc(out, OLD_KEEPALIVE_COMPONENT, NEW_KEEPALIVE_COMPONENT);
+    if (fixed) {
+        free(out);
+        out = fixed;
+        oi = strlen(out);
     }
 
     fd = orig_open(path, O_WRONLY | O_TRUNC);
@@ -487,16 +524,22 @@ int chdir(const char* path) {
  * termux-am-socket embeds /data/data/com.termux/.../am.sock. Rewrite AF_UNIX
  * connect paths so the client reaches our real TermuxAm socket server.
  */
-/*
- * Stock termux-api-broadcast hardcodes com.termux.api://listen and
- * am -n com.termux.api/.TermuxApiReceiver. Our companion API app lives at
- * com.involvex.termux_app.api with class com.invapp.api.TermuxApiReceiver.
- */
-static const char* OLD_API_LISTEN = "com.termux.api://listen";
-static const char* NEW_API_LISTEN = "com.involvex.termux_app.api://listen";
-static const char* OLD_API_COMPONENT = "com.termux.api/.TermuxApiReceiver";
-static const char* NEW_API_COMPONENT =
-    "com.involvex.termux_app.api/com.invapp.api.TermuxApiReceiver";
+static int is_keepalive_short_component(const char* s) {
+    return s && (strcmp(s, OLD_KEEPALIVE_COMPONENT) == 0
+        || strcmp(s, BROKEN_KEEPALIVE_COMPONENT) == 0);
+}
+
+static int is_api_component_needing_rewrite(const char* s) {
+    return s && (strcmp(s, OLD_API_COMPONENT) == 0
+        || is_keepalive_short_component(s));
+}
+
+static const char* rewritten_api_component(const char* s) {
+    if (!s) return NULL;
+    if (strcmp(s, OLD_API_COMPONENT) == 0) return NEW_API_COMPONENT;
+    if (is_keepalive_short_component(s)) return NEW_KEEPALIVE_COMPONENT;
+    return NULL;
+}
 
 int connect(int sockfd, const struct sockaddr* addr, socklen_t addrlen) {
     static int (*orig_connect)(int, const struct sockaddr*, socklen_t);
@@ -565,7 +608,7 @@ static char** rewrite_argv_for_exec(char* const argv[]) {
 
     int needs = 0;
     for (size_t i = 0; i < count; i++) {
-        if (argv[i] && strcmp(argv[i], OLD_API_COMPONENT) == 0) {
+        if (is_api_component_needing_rewrite(argv[i])) {
             needs = 1;
             break;
         }
@@ -576,15 +619,16 @@ static char** rewrite_argv_for_exec(char* const argv[]) {
     if (!out) return (char**)argv;
 
     for (size_t i = 0; i < count; i++) {
-        if (argv[i] && strcmp(argv[i], OLD_API_COMPONENT) == 0) {
-            size_t n = strlen(NEW_API_COMPONENT) + 1;
+        const char* replacement = rewritten_api_component(argv[i]);
+        if (replacement) {
+            size_t n = strlen(replacement) + 1;
             char* copy = (char*)malloc(n);
             if (!copy) {
                 out[i] = (char*)argv[i];
             } else {
-                memcpy(copy, NEW_API_COMPONENT, n);
+                memcpy(copy, replacement, n);
                 out[i] = copy;
-                LOGI("rewrote API am component → %s", NEW_API_COMPONENT);
+                LOGI("rewrote API am component → %s", replacement);
             }
         } else {
             out[i] = (char*)argv[i];

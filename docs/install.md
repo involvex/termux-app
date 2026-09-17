@@ -63,7 +63,16 @@ On first launch the app seeds templates under `~/.shortcuts` (and
 | `clipboard-to-file` | Append clipboard to `~/repos/clipboard.txt` |
 | `git-pull-repos` | `git pull --ff-only` in each `~/repos/*` git repo |
 | `screen-ocr` | Capture/OCR screenshot → clipboard (`td-screen-ocr`, needs `tesseract`) |
+| `camera-photo` | `termux-camera-photo` → `~/repos/camera-last.jpg` (optional catalog) |
+| `wifi-info` | `termux-wifi-connectioninfo` → clipboard + toast (optional) |
+| `battery-status` | `termux-battery-status` → clipboard + toast (optional) |
+| `torch-toggle` | `termux-torch` on/off (optional) |
+| `share-clipboard` | Clipboard → `termux-share` (optional) |
+| `open-settings` | `am start` Android Settings (optional) |
 | `tasks/td-ai` | Background: start OpenCode via `td-ai` |
+
+Defaults seed on first launch; optional scripts install via the Widget scripts
+picker.
 
 `screen-ocr` / `td-screen-ocr` prefers `termux-screenshot` (Termux:API
 MediaProjection consent dialog, then PNG under `~/repos/screen-ocr/`), then

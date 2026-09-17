@@ -119,6 +119,14 @@ https://github.com/involvex/termux-app
   (needs matching Java API before merge to termux-api-package)
 - Termux:X11 is out of scope (does not capture the Android display)
 
+### 12c. KeepAlive FQCN + Tools gesture + more API widgets (done)
+
+- Seeded `termux-api-start` / `termux-api-stop` with KeepAlive FQCN; redirector
+  rewrites short/broken KeepAlive components
+- Two-finger swipe down / Ctrl+Alt+T opens Tools (end) drawer
+- Optional widget catalog: camera-photo, wifi-info, battery-status,
+  torch-toggle, share-clipboard, open-settings
+
 ### 13. InVx Terminal Widget module (done)
 
 - `:termux-terminal-widget` — gardockt Termux Terminal Widget adapted for

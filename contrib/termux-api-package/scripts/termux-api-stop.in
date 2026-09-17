@@ -1,0 +1,3 @@
+#!@TERMUX_PREFIX@/bin/sh
+# InVxTermux: applicationId com.involvex.termux_app.api, class com.invapp.api.KeepAliveService
+am stopservice -n com.involvex.termux_app.api/com.invapp.api.KeepAliveService

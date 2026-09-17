@@ -18,6 +18,7 @@ import android.widget.ListView;
 import android.widget.Toast;
 
 import androidx.core.view.GravityCompat;
+import androidx.drawerlayout.widget.DrawerLayout;
 
 import com.invapp.R;
 import com.invapp.app.TermuxActivity;
@@ -52,8 +53,6 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-
-import androidx.drawerlayout.widget.DrawerLayout;
 
 public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
@@ -259,6 +258,8 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
                 mActivity.getDrawer().openDrawer(GravityCompat.START);
             } else if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
                 mActivity.getDrawer().closeDrawers();
+            } else if (unicodeChar == 't'/* tools / end drawer */) {
+                toggleToolsDrawer();
             } else if (unicodeChar == 'k'/* keyboard */) {
                 onToggleSoftKeyboardRequest();
             } else if (unicodeChar == 'm'/* menu */) {
@@ -286,6 +287,26 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
 
         return false;
 
+    }
+
+    @Override
+    public void onTwoFingerSwipeDown() {
+        toggleToolsDrawer();
+    }
+
+    /** Toggle the end (Tools) drawer if drawers are unlocked. */
+    private void toggleToolsDrawer() {
+        DrawerLayout drawer = mActivity.getDrawer();
+        if (drawer.getDrawerLockMode(GravityCompat.END) == DrawerLayout.LOCK_MODE_LOCKED_CLOSED
+            && drawer.getDrawerLockMode(GravityCompat.START) == DrawerLayout.LOCK_MODE_LOCKED_CLOSED) {
+            return;
+        }
+        if (drawer.isDrawerOpen(GravityCompat.END)) {
+            drawer.closeDrawer(GravityCompat.END);
+        } else {
+            drawer.closeDrawer(GravityCompat.START);
+            drawer.openDrawer(GravityCompat.END);
+        }
     }
 
 

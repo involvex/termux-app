@@ -1115,6 +1115,20 @@ public final class TermuxBunInstaller {
             + "pwd\n";
         writeExec(new File(binDir, "td-clone"), tdClone);
 
+        // KeepAliveService: applicationId ≠ Java package — use FQCN.
+        String apiPkg = TermuxConstants.TERMUX_API_PACKAGE_NAME;
+        String keepaliveCmp = apiPkg + "/com.invapp.api.KeepAliveService";
+        String termuxApiStart = ""
+            + "#!" + bash + "\n"
+            + "# invapp: termux-api-start — KeepAliveService (FQCN)\n"
+            + "am startservice -n " + keepaliveCmp + "\n";
+        writeExec(new File(binDir, "termux-api-start"), termuxApiStart);
+        String termuxApiStop = ""
+            + "#!" + bash + "\n"
+            + "# invapp: termux-api-stop — KeepAliveService (FQCN)\n"
+            + "am stopservice -n " + keepaliveCmp + "\n";
+        writeExec(new File(binDir, "termux-api-stop"), termuxApiStop);
+
         // MediaProjection screenshot via Termux:API (consent dialog once).
         // Mirrors contrib/termux-api-package/scripts/termux-screenshot.in
         // (getopts + libexec/termux-api Screenshot).
@@ -1570,7 +1584,7 @@ public final class TermuxBunInstaller {
         String[] names = {
             "am.termuxam", "ksu", "am", "login", "apt", "apt-get", "dpkg",
             "bun", "bunx", "node", "td-ai", "td-dev", "td-scaffold", "td-clone",
-            "td-screen-ocr", "termux-screenshot",
+            "td-screen-ocr", "termux-screenshot", "termux-api-start", "termux-api-stop",
             "opencode-setup", "opencode-fix-net", "opencode", "bun-doctor"
         };
         for (String name : names) {
