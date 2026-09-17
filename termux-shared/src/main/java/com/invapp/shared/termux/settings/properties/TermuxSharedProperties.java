@@ -3,6 +3,7 @@ package com.invapp.shared.termux.settings.properties;
 import android.content.Context;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.invapp.shared.logger.Logger;
 import com.invapp.shared.data.DataUtils;
@@ -536,7 +537,25 @@ public abstract class TermuxSharedProperties {
      * @return Returns the internal value for value.
      */
     public static String getExtraKeysInternalPropertyValueFromValue(String value) {
-        return SharedProperties.getDefaultIfNullOrEmpty(value, TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS);
+        String unquoted = unquoteSurroundingQuotes(value);
+        return SharedProperties.getDefaultIfNullOrEmpty(unquoted, TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS);
+    }
+
+    /** Strip one pair of surrounding {@code '} or {@code "} from a property value. */
+    @Nullable
+    static String unquoteSurroundingQuotes(@Nullable String value) {
+        if (value == null) {
+            return null;
+        }
+        String v = value.trim();
+        if (v.length() >= 2) {
+            char a = v.charAt(0);
+            char b = v.charAt(v.length() - 1);
+            if ((a == '\'' && b == '\'') || (a == '"' && b == '"')) {
+                return v.substring(1, v.length() - 1);
+            }
+        }
+        return value;
     }
 
     /**

@@ -312,20 +312,20 @@ public final class TermuxWidgetProvider extends AppWidgetProvider {
         // If executable is under a directory with the basename matching TermuxConstants#TERMUX_SHORTCUT_TASKS_SCRIPTS_DIR_BASENAME
         File shortcutFile = new File(executionCommand.executable);
         File shortcutParentDirFile = shortcutFile.getParentFile();
+        String shortcutName = ShellUtils.getExecutableBasename(executionCommand.executable);
         if (shortcutParentDirFile != null && shortcutParentDirFile.getName().equals(TermuxConstants.TERMUX_SHORTCUT_TASKS_SCRIPTS_DIR_BASENAME)) {
             executionCommand.runner = Runner.APP_SHELL.getName();
-            // Show feedback for background task
-            Toast toast = Toast.makeText(context, context.getString(R.string.msg_executing_task,
-                    ShellUtils.getExecutableBasename(executionCommand.executable)),
-                    Toast.LENGTH_SHORT);
-            // Put the toast at the top of the screen, to avoid blocking eventual
-            // toasts made from the task with termux-toast.
-            // See https://github.com/termux/termux-widget/issues/33
-            toast.setGravity(Gravity.TOP, 0, 0);
-            toast.show();
         } else {
             executionCommand.runner = Runner.TERMINAL_SESSION.getName();
         }
+
+        // Always acknowledge the tap (foreground sessions and background tasks).
+        Toast toast = Toast.makeText(context, context.getString(R.string.msg_running_shortcut, shortcutName),
+                Toast.LENGTH_SHORT);
+        // Keep toast at top so termux-toast from the script remains visible below.
+        // See https://github.com/termux/termux-widget/issues/33
+        toast.setGravity(Gravity.TOP, 0, 0);
+        toast.show();
 
         // Create execution intent with the action TERMUX_SERVICE#ACTION_SERVICE_EXECUTE to be sent to the TERMUX_SERVICE
         executionCommand.executableUri = new Uri.Builder().scheme(TERMUX_SERVICE.URI_SCHEME_SERVICE_EXECUTE).path(executionCommand.executable).build();

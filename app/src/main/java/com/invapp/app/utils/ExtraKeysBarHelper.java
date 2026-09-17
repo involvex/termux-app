@@ -245,9 +245,41 @@ public final class ExtraKeysBarHelper {
         }
     }
 
+    /**
+     * Wrap a property value in single quotes so humans and parsers keep braces /
+     * spaces / colons intact. Readers should call {@link #unquotePropertyValue}.
+     */
+    @NonNull
+    public static String quotePropertyValue(@NonNull String value) {
+        // java.util.Properties does not treat quotes as delimiters; they are stored
+        // literally and stripped when the value is interpreted as extra-keys JSON.
+        return "'" + value + "'";
+    }
+
+    /** Strip a single pair of surrounding {@code '} or {@code "} if present. */
+    @NonNull
+    public static String unquotePropertyValue(@Nullable String value) {
+        if (value == null) {
+            return "";
+        }
+        String v = value.trim();
+        if (v.length() >= 2) {
+            char a = v.charAt(0);
+            char b = v.charAt(v.length() - 1);
+            if ((a == '\'' && b == '\'') || (a == '"' && b == '"')) {
+                return v.substring(1, v.length() - 1);
+            }
+        }
+        return value;
+    }
+
+    /**
+     * Insert or replace {@code key=value} in a properties file body.
+     * Values are written quoted ({@link #quotePropertyValue}).
+     */
     @NonNull
     static String upsertProperty(@NonNull String text, @NonNull String key, @NonNull String value) {
-        String line = key + "=" + value;
+        String line = key + " = " + quotePropertyValue(value);
         String[] lines = text.split("\n", -1);
         StringBuilder out = new StringBuilder();
         boolean replaced = false;

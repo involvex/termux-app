@@ -7,7 +7,7 @@
 | `Permission denied` on `tsc` / bins | Project is under shared storage (**noexec**). Move to `~/repos` |
 | OpenCode `Permission denied` / LIBC / postinstall / SIGSYS | Re-run `opencode-setup` (GitHub tarball + glibc). Do not `unset LD_PRELOAD` |
 | OpenCode `AI_APICallError` / “typo in the url or port” | Local `:4096` OK; Zen/provider broken. `rm -rf ~/.cache/opencode`, fix `@opencode-ai/plugin@local` → `latest`, re-auth, seed glibc DNS/CA, `opencode-setup`, retry from `~/repos/…` |
-| OpenCode `getifaddrs returned an error` | Android blocks netlink; `td-ai` / `opencode web --port 4096 --hostname 127.0.0.1 --print-logs`. No `--mdns` / `0.0.0.0`. Preview waits for `/global/health` (not `:5000`) |
+| OpenCode `getifaddrs returned an error` | Non-fatal for `0.0.0.0` bind; never `--mdns`. Override `OPENCODE_HOST=127.0.0.1 td-ai` if needed. Preview uses `127.0.0.1:4096` / `/global/health` |
 | Preview blank / wrong port | OpenCode is `:4096` — there is no `/api` on `:5000`. Drawer **AI** opens Preview after health; tap Reload if early |
 | Tab completion missing for bun/pkg/npm | Open a **new** session after app update. Optional: `pkg install bash-completion`. Completers live under `$PREFIX/etc/bash_completion.d/` |
 | Extra keys only show ESC/nav | Swipe the key bar **left** for workflow page (pull / bun i / …). **⋯ → Customize keys…** or swipe from the right edge for Tools |

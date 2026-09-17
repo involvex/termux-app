@@ -68,6 +68,10 @@ Manage them from **Settings → InVxTermux → Widget scripts** (install / reset
 API/Widget/`termux-api` status) or the right-drawer **Widget scripts** button
 (install + **Run once** in the current session).
 
+Tapping a home-screen shortcut always shows a short **Running: name** toast.
+Script start/end feedback uses `termux-toast` when Termux:API APK +
+`pkg install termux-api` are present.
+
 Install the **Termux:Widget** APK from `:termux-widget` (same signature /
 `sharedUserId` as the main app). Stock F-Droid `com.termux.widget` will not
 install. After install, add the home-screen widget and tap a script; open

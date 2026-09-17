@@ -25,7 +25,7 @@ public class ExtraKeysBarHelperTest {
     public void upsertPropertyReplacesExisting() {
         String text = "night-mode=true\nextra-keys=[[ESC]]\n";
         String out = ExtraKeysBarHelper.upsertProperty(text, "extra-keys", "[[['TAB']]]");
-        assertTrue(out.contains("extra-keys=[[['TAB']]]"));
+        assertTrue(out.contains("extra-keys = '[[['TAB']]]'"));
         assertFalse(out.contains("extra-keys=[[ESC]]"));
         assertTrue(out.contains("night-mode=true"));
     }
@@ -33,7 +33,29 @@ public class ExtraKeysBarHelperTest {
     @Test
     public void upsertPropertyAppendsMissing() {
         String out = ExtraKeysBarHelper.upsertProperty("night-mode=true\n", "extra-keys", "[]");
-        assertTrue(out.contains("extra-keys=[]"));
+        assertTrue(out.contains("extra-keys = '[]'"));
+    }
+
+    @Test
+    public void quoteAndUnquoteRoundTrip() {
+        String json = ExtraKeysBarHelper.buildExtraKeysJson(
+            Arrays.asList(ExtraKeysBarHelper.ID_PULL, ExtraKeysBarHelper.ID_AI));
+        String quoted = ExtraKeysBarHelper.quotePropertyValue(json);
+        assertTrue(quoted.startsWith("'"));
+        assertTrue(quoted.endsWith("'"));
+        assertEquals(json, ExtraKeysBarHelper.unquotePropertyValue(quoted));
+        assertEquals(json, ExtraKeysBarHelper.unquotePropertyValue("\"" + json + "\""));
+    }
+
+    @Test
+    public void upsertPropertyQuotesMultiPageJson() {
+        String json = ExtraKeysBarHelper.buildExtraKeysJson(
+            Arrays.asList(ExtraKeysBarHelper.ID_PULL));
+        String out = ExtraKeysBarHelper.upsertProperty("", "extra-keys", json);
+        assertTrue(out.contains("extra-keys = '"));
+        assertTrue(out.contains("PULL"));
+        String extracted = out.substring(out.indexOf("'") + 1, out.lastIndexOf("'"));
+        assertEquals(json, extracted);
     }
 
     @Test

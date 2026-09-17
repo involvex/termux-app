@@ -37,6 +37,8 @@ import java.util.concurrent.Executors;
 /**
  * In-app preview of loopback HTTP servers (Vite, Expo web, {@code opencode web}).
  * Only {@code http://127.0.0.1} / {@code localhost} are allowed in the WebView.
+ * LAN URLs (when servers bind {@code 0.0.0.0}, including OpenCode via {@code td-ai})
+ * are for other devices — use Copy LAN from Preview chips.
  * Opt-in <strong>Copy LAN</strong> copies {@code http://&lt;wifi-ip&gt;:&lt;port&gt;}
  * when the server listens on {@code 0.0.0.0} / {@code ::} — no public tunnels.
  */

@@ -76,6 +76,7 @@
     <string name="msg_no_shortcut_scripts">No files in\n&TERMUX_SHORTCUT_SCRIPTS_DIR_PATH_SHORT;</string>
     <string name="msg_bad_token">This shortcut is invalid - remove and add again.</string>
     <string name="msg_executing_task">Executing task: \"%1$s\"</string>
+    <string name="msg_running_shortcut">Running: %1$s</string>
     <string name="msg_executable_absolute_path">Executable Absolute Path: \"%1$s\"</string>
     <string name="msg_icon_absolute_path">Icon Absolute Path: \"%1$s\"</string>
     <string name="msg_request_create_pinned_shortcut">Requesting to create pinned shortcut for \"%1$s\"</string>

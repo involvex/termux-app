@@ -8,7 +8,7 @@ UI and open it in Preview. Server API docs:
 
 ```bash
 opencode-setup          # once — downloads official linux tarball + glibc wrapper
-td-ai                   # starts web UI on http://127.0.0.1:4096/ (default)
+td-ai                   # binds 0.0.0.0:4096; Preview → http://127.0.0.1:4096/
 ```
 
 Drawer → **AI** probes missing / installed / ready (`GET /global/health`);
@@ -37,7 +37,10 @@ There is **no** `/api` mount — sessions live under `/session`, etc.
 - **Never** `export PATH=$PREFIX/glibc/bin:$PATH` — those ELFs break the shell
   (`Permission denied` on `grep`/`ls`/`gcc`).
 - Wrapper sets `SSL_CERT_FILE` / `NODE_EXTRA_CA_CERTS` to Termux’s CA bundle
-- Bind **`127.0.0.1`** only — never `--mdns` / `0.0.0.0` on stock Android
+- Bind **`0.0.0.0`** by default so other devices on the same Wi‑Fi can open
+  OpenCode (drawer **Preview → Copy LAN**). In-app Preview stays on
+  `127.0.0.1:4096`. Never `--mdns`. Override: `OPENCODE_HOST=127.0.0.1 td-ai`.
+  Firewall/VPN may block LAN; `getifaddrs` log noise is non-fatal for bind.
 - OpenCode is **not** baked into the APK; it installs into `$PREFIX` on demand
 - Contrast: [and-code](https://github.com/yugahashimoto/and-code) runs the
   **musl** OpenCode tarball inside Alpine via **proot**. We stay on glibc +
@@ -99,8 +102,14 @@ Stay in a project dir (not `/` or `~`) — FFF/file picker breaks on root/home.
 
 ### `getifaddrs returned an error`
 
-Android 13+ blocks netlink. Use loopback (what `td-ai` does):
+Android 13+ may log this when probing interfaces. It is **non-fatal** for a
+plain `0.0.0.0` bind (what `td-ai` does). Never pass `--mdns`. For loopback-only:
 
 ```bash
+OPENCODE_HOST=127.0.0.1 td-ai
+# or:
 opencode web --port 4096 --hostname 127.0.0.1 --print-logs
 ```
+
+LAN clients: same Wi‑Fi → `http://<phone-ip>:4096/` (or Preview **Copy LAN**).
+Firewall / VPN / client isolation on the AP may still block access.

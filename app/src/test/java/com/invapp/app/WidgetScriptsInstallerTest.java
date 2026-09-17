@@ -43,6 +43,8 @@ public class WidgetScriptsInstallerTest {
         assertTrue(speak.contains("termux-tts-speak"));
         assertTrue(speak.contains("pkg install termux-api"));
         assertTrue(speak.contains("Clipboard empty"));
+        assertTrue(speak.contains("termux-toast"));
+        assertTrue(speak.contains("Speaking clipboard"));
 
         String toFile = WidgetScriptsInstaller.scriptBody(
             WidgetScriptsInstaller.ID_CLIPBOARD_TO_FILE);
@@ -56,12 +58,15 @@ public class WidgetScriptsInstallerTest {
         assertNotNull(pull);
         assertTrue(pull.contains("git pull --ff-only"));
         assertTrue(pull.contains("/repos"));
+        assertTrue(pull.contains("git pull ~/repos"));
 
         String tdAi = WidgetScriptsInstaller.scriptBody(
             WidgetScriptsInstaller.ID_TD_AI);
         assertNotNull(tdAi);
-        assertTrue(tdAi.contains("exec td-ai"));
+        assertTrue(tdAi.contains("td-ai &"));
         assertTrue(tdAi.contains("command -v td-ai"));
+        assertTrue(tdAi.contains("OpenCode ready"));
+        assertTrue(tdAi.contains("global/health"));
     }
 
     @Test

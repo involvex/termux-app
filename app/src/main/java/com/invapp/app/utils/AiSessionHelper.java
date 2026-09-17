@@ -30,6 +30,7 @@ import java.util.regex.Pattern;
  *
  * <p>Detects install presence and whether the Preview port is already listening,
  * and can SIGTERM listeners on that port (same app UID as Termux sessions).
+ * Health checks use loopback; {@code td-ai} may bind {@code 0.0.0.0} for LAN.
  */
 public final class AiSessionHelper {
 

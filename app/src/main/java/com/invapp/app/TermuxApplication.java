@@ -68,6 +68,9 @@ public class TermuxApplication extends Application {
             // Seed ~/.shortcuts templates for Termux:Widget (idempotent).
             WidgetScriptsInstaller.installDefaultsIfMissing(context);
 
+            // Seed ~/bin/termux-file-editor for share → Edit (FileReceiver).
+            TermuxFileEditorInstaller.installDefaultsIfMissing(context);
+
             // Setup termux-am-socket server
             TermuxAmSocketServer.setupTermuxAmSocketServer(context);
         } else {

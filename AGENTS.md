@@ -52,12 +52,13 @@ See `ROADMAP.md`.
 | node shim | `$PREFIX/bin/node` → bun if `nodejs` package not installed |
 | Default cwd | `~/repos` (exec-capable). `~/storage/shared` is browse/sync only (**noexec**) |
 | Preview | Drawer **Preview** → Scan + chips; **Copy LAN** / long-press chip → `http://<wifi-ip>:<port>` when bound on `0.0.0.0` |
-| AI helper | `opencode-setup` / `td-ai [port]` → OpenCode web on `:4096` + Preview. Setup downloads official `opencode-linux-*.tar.gz` from GitHub (no `bun install` / no postinstall), then `glibc` + ld-linux wrapper with **`LD_PRELOAD=` empty** and DNS shim via **`ld-linux --preload $PREFIX/lib/libinvapp-opencode-shim.so`** (arm64 shipped in APK assets). Optional `OPENCODE_VERSION=v1.18.31`. Drawer **AI** probes missing/installed/ready; long-press / **Stop AI** kills `:4096`. On-demand into `$PREFIX`, not baked into APK |
+| AI helper | `opencode-setup` / `td-ai [port]` → OpenCode web on `:4096` (binds **`0.0.0.0`** by default for LAN; Preview still uses `127.0.0.1`). Setup downloads official `opencode-linux-*.tar.gz` from GitHub (no `bun install` / no postinstall), then `glibc` + ld-linux wrapper with **`LD_PRELOAD=` empty** and DNS shim via **`ld-linux --preload $PREFIX/lib/libinvapp-opencode-shim.so`** (arm64 shipped in APK assets). Optional `OPENCODE_VERSION=v1.18.31`; bind override `OPENCODE_HOST=127.0.0.1`. Drawer **AI** probes missing/installed/ready; long-press / **Stop AI** kills `:4096`. On-demand into `$PREFIX`, not baked into APK |
 | Dev server | `td-dev [script]` → `bun run` with Preview/LAN hints |
 | Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`); `pwa` / `pwa-react` add `vite-plugin-pwa` |
 | Clone | `td-clone <url> [name] [--bun-i]` → git clone into `~/repos`; drawer **Clone…** |
-| Widget scripts | `~/.shortcuts` templates (`clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, `tasks/td-ai`); Settings / right drawer; matching Widget APK + API/`pkg install termux-api` for clipboard/TTS |
-| Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize bar / Customize keys. Extra-keys: 2-row nav page + swipe L/R for workflow page; end drawer = Tools (Preview/AI/Clone/New/Widget scripts). Long-press / Ctrl+Alt+M → actions bottom sheet |
+| File share → Edit | Seeds `~/bin/termux-file-editor` (nvim→vim→nano→less) for FileReceiver |
+| Widget scripts | `~/.shortcuts` templates (`clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, `tasks/td-ai`); Settings / right drawer; matching Widget APK + API/`pkg install termux-api` for clipboard/TTS/`termux-toast`. Widget tap always shows **Running: name** toast |
+| Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize bar / Customize keys (writes quoted `extra-keys` in `~/.termux/termux.properties`). Extra-keys: 2-row nav page + swipe L/R for workflow page; end drawer = Tools (Preview/AI/Clone/New/Widget scripts). Long-press / Ctrl+Alt+M → actions bottom sheet |
 | Completions | App installs `$PREFIX/etc/profile.d/invapp-completions.sh` + `bash_completion.d` for bun/pkg/npm/gh/git. Prefer `pkg install bash-completion` for richer git. **New session** after update. Never edit `~/.bashrc` |
 
 **Do NOT "fix" these with more wrappers:**
@@ -98,7 +99,9 @@ See `ROADMAP.md`.
   wrapper uses `--preload`, seed resolv/CA under `$PREFIX/glibc/etc`, export
   `SSL_CERT_FILE` / `NODE_EXTRA_CA_CERTS`. Ready check is
   `GET http://127.0.0.1:4096/global/health` (not `:5000/api`).
-- `getifaddrs returned an error` — bind `127.0.0.1` only; never `--mdns`.
+- `getifaddrs returned an error` — non-fatal for web bind on `0.0.0.0`;
+  never use `--mdns`. Override with `OPENCODE_HOST=127.0.0.1 td-ai` if needed.
+  Firewall/VPN may block LAN clients; Preview always uses loopback.
 
 ## 2. Useful Commands
 
@@ -175,7 +178,7 @@ git clone <url> myapp && cd myapp
 bun install
 bun run dev          # or bun run android / build
 # Drawer → Preview → Scan → tap port (e.g. 3000)
-td-ai                # OpenCode web on :4096 → Drawer → Preview → 4096
+td-ai                # OpenCode on 0.0.0.0:4096 → Preview 127.0.0.1 / LAN Copy
 ```
 
 PC: same remote, normal git + bun. Pull on phone to continue. No Termux
