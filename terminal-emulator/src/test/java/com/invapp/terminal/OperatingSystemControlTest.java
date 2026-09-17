@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 import android.util.Base64;
 
@@ -194,4 +194,3 @@ public class OperatingSystemControlTest extends TerminalTestCase {
 	}
 
 }
-

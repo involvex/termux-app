@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 import junit.framework.TestCase;
 
@@ -52,4 +52,3 @@ public class ByteQueueTest extends TestCase {
 	}
 
 }
-

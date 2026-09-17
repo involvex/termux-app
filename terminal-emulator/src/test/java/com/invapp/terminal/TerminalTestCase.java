@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 import junit.framework.AssertionFailedError;
 import junit.framework.TestCase;
@@ -317,4 +317,3 @@ public abstract class TerminalTestCase extends TestCase {
 		return this;
 	}
 }
-

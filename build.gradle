@@ -14,8 +14,14 @@ allprojects {
         mavenCentral()
         maven { url "https://jitpack.io" }
     }
+}
 
-    tasks.withType(JavaCompile).configureEach {
-        options.encoding = "UTF-8"
+// AGP creates JavaCompile tasks lazily — apply encoding after evaluation so
+// unit-test compilation (and CI without a UTF-8 locale default) stays UTF-8.
+subprojects {
+    afterEvaluate {
+        tasks.withType(JavaCompile).configureEach {
+            options.encoding = "UTF-8"
+        }
     }
 }

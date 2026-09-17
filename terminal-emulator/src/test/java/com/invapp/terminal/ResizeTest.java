@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 public class ResizeTest extends TerminalTestCase {
 
@@ -204,10 +204,9 @@ public class ResizeTest extends TerminalTestCase {
 		resize(2, rows).assertLinesAre("qq", "rr", "  ", "  ");
 		resize(5, rows).assertLinesAre("qqrr ", "     ", "     ", "     ");
 
-		withTerminalSized(cols, rows).enterString("ï¼±ï¼²").assertLinesAre("ï¼±ï¼² ", "     ", "     ", "     ");
-		resize(2, rows).assertLinesAre("ï¼±", "ï¼²", "  ", "  ");
-		resize(5, rows).assertLinesAre("ï¼±ï¼² ", "     ", "     ", "     ");
+		withTerminalSized(cols, rows).enterString("ＱＲ").assertLinesAre("ＱＲ ", "     ", "     ", "     ");
+		resize(2, rows).assertLinesAre("Ｑ", "Ｒ", "  ", "  ");
+		resize(5, rows).assertLinesAre("ＱＲ ", "     ", "     ", "     ");
 	}
 
 }
-

@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 public class ApcTest extends TerminalTestCase {
 
@@ -19,4 +19,3 @@ public class ApcTest extends TerminalTestCase {
     }
 
 }
-

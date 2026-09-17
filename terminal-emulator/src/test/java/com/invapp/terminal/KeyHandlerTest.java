@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 import android.view.KeyEvent;
 
@@ -201,4 +201,3 @@ public class KeyHandlerTest extends TestCase {
 	}
 
 }
-

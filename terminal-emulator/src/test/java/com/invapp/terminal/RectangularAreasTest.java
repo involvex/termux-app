@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 public class RectangularAreasTest extends TerminalTestCase {
 
@@ -115,4 +115,3 @@ public class RectangularAreasTest extends TerminalTestCase {
 	}
 
 }
-

@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 import junit.framework.TestCase;
 
@@ -16,18 +16,18 @@ public class WcWidthTest extends TestCase {
 	}
 
 	public void testSomeWidthOne() {
-		assertWidthIs(1, 'Ã¥');
-		assertWidthIs(1, 'Ã¤');
-		assertWidthIs(1, 'Ã¶');
+		assertWidthIs(1, 0x00E5); // a with ring
+		assertWidthIs(1, 0x00E4); // a with diaeresis
+		assertWidthIs(1, 0x00F6); // o with diaeresis
 		assertWidthIs(1, 0x23F2);
 	}
 
 	public void testSomeWide() {
-		assertWidthIs(2, 'ï¼¡');
-		assertWidthIs(2, 'ï¼¢');
-		assertWidthIs(2, 'ï¼£');
-		assertWidthIs(2, 'ä¸­');
-		assertWidthIs(2, 'æ–‡');
+		assertWidthIs(2, 0xFF21); // fullwidth A
+		assertWidthIs(2, 0xFF22); // fullwidth B
+		assertWidthIs(2, 0xFF23); // fullwidth C
+		assertWidthIs(2, 0x4E2D); // CJK
+		assertWidthIs(2, 0x6587); // CJK
 
 		assertWidthIs(2, 0x679C);
 		assertWidthIs(2, 0x679D);
@@ -79,4 +79,3 @@ public class WcWidthTest extends TestCase {
 	}
 
 }
-

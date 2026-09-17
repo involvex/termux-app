@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 /**
  * <pre>
@@ -76,4 +76,3 @@ public class DecSetTest extends TerminalTestCase {
 	}
 
 }
-

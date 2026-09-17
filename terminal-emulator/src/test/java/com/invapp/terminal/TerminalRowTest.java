@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 import junit.framework.TestCase;
 
@@ -421,13 +421,12 @@ public class TerminalRowTest extends TestCase {
 		row.setChar(COLUMNS - 1, 'a', 0);
 		assertEquals('Z', row.mText[row.findStartOfColumn(COLUMNS - 2)]);
 		assertEquals('a', row.mText[row.findStartOfColumn(COLUMNS - 1)]);
-		row.setChar(COLUMNS - 1, 'Ã¶', 0);
+		row.setChar(COLUMNS - 1, '\u00F6', 0);
 		assertEquals('Z', row.mText[row.findStartOfColumn(COLUMNS - 2)]);
-		assertEquals('Ã¶', row.mText[row.findStartOfColumn(COLUMNS - 1)]);
+		assertEquals('\u00F6', row.mText[row.findStartOfColumn(COLUMNS - 1)]);
 		// line.setChar(COLUMNS - 1, ONE_JAVA_CHAR_DISPLAY_WIDTH_TWO_1);
 		// assertEquals('Z', line.mText[line.findStartOfColumn(COLUMNS - 2)]);
 		// assertEquals(' ', line.mText[line.findStartOfColumn(COLUMNS - 1)]);
 	}
 
 }
-

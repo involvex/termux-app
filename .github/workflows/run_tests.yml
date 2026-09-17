@@ -16,6 +16,9 @@ permissions:
 jobs:
   testing:
     runs-on: ubuntu-latest
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
     steps:
     - name: Clone repository
       uses: actions/checkout@v6
@@ -28,6 +31,8 @@ jobs:
       run: |
         java -version
         echo "JAVA_HOME=$JAVA_HOME"
+        echo "LANG=$LANG file.encoding probe:"
+        java -XshowSettings:properties -version 2>&1 | grep file.encoding || true
     - name: Execute tests
       run: |
         ./gradlew test

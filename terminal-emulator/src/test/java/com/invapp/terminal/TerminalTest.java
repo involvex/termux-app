@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 import java.io.UnsupportedEncodingException;
 
@@ -348,4 +348,3 @@ public class TerminalTest extends TerminalTestCase {
 	}
 
 }
-

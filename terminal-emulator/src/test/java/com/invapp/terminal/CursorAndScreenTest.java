@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 import org.junit.Assert;
 
@@ -51,8 +51,8 @@ public class CursorAndScreenTest extends TerminalTestCase {
 	}
 
 	public void testDeleteCharacters() {
-		withTerminalSized(5, 2).enterString("æžce").assertLinesAre("æžce ", "     ");
-		withTerminalSized(5, 2).enterString("aæžce").assertLinesAre("aæžce", "     ");
+		withTerminalSized(5, 2).enterString("枝ce").assertLinesAre("枝ce ", "     ");
+		withTerminalSized(5, 2).enterString("a枝ce").assertLinesAre("a枝ce", "     ");
 		withTerminalSized(5, 2).enterString("nice").enterString("\033[G\033[P").assertLinesAre("ice  ", "     ");
 		withTerminalSized(5, 2).enterString("nice").enterString("\033[G\033[2P").assertLinesAre("ce   ", "     ");
 		withTerminalSized(5, 2).enterString("nice").enterString("\033[2G\033[2P").assertLinesAre("ne   ", "     ");
@@ -62,15 +62,15 @@ public class CursorAndScreenTest extends TerminalTestCase {
 		withTerminalSized(5, 2).enterString("n\u0302ice").enterString("\033[G\033[2P").assertLinesAre("ce   ", "     ");
 		withTerminalSized(5, 2).enterString("n\u0302ice").enterString("\033[G\033[P").assertLinesAre("ice  ", "     ");
 		withTerminalSized(5, 2).enterString("n\u0302ice").enterString("\033[2G\033[2P").assertLinesAre("n\u0302e   ", "     ");
-		// With wide æž char, checking that putting char at part replaces other with whitespace:
-		withTerminalSized(5, 2).enterString("æžce").enterString("\033[Ga").assertLinesAre("a ce ", "     ");
-		withTerminalSized(5, 2).enterString("æžce").enterString("\033[2Ga").assertLinesAre(" ace ", "     ");
-		// With wide æž char, deleting either part replaces other with whitespace:
-		withTerminalSized(5, 2).enterString("æžce").enterString("\033[G\033[P").assertLinesAre(" ce  ", "     ");
-		withTerminalSized(5, 2).enterString("æžce").enterString("\033[2G\033[P").assertLinesAre(" ce  ", "     ");
-		withTerminalSized(5, 2).enterString("æžce").enterString("\033[2G\033[2P").assertLinesAre(" e   ", "     ");
-		withTerminalSized(5, 2).enterString("æžce").enterString("\033[G\033[2P").assertLinesAre("ce   ", "     ");
-		withTerminalSized(5, 2).enterString("aæžce").enterString("\033[G\033[P").assertLinesAre("æžce ", "     ");
+		// With wide 枝 char, checking that putting char at part replaces other with whitespace:
+		withTerminalSized(5, 2).enterString("枝ce").enterString("\033[Ga").assertLinesAre("a ce ", "     ");
+		withTerminalSized(5, 2).enterString("枝ce").enterString("\033[2Ga").assertLinesAre(" ace ", "     ");
+		// With wide 枝 char, deleting either part replaces other with whitespace:
+		withTerminalSized(5, 2).enterString("枝ce").enterString("\033[G\033[P").assertLinesAre(" ce  ", "     ");
+		withTerminalSized(5, 2).enterString("枝ce").enterString("\033[2G\033[P").assertLinesAre(" ce  ", "     ");
+		withTerminalSized(5, 2).enterString("枝ce").enterString("\033[2G\033[2P").assertLinesAre(" e   ", "     ");
+		withTerminalSized(5, 2).enterString("枝ce").enterString("\033[G\033[2P").assertLinesAre("ce   ", "     ");
+		withTerminalSized(5, 2).enterString("a枝ce").enterString("\033[G\033[P").assertLinesAre("枝ce ", "     ");
 	}
 
 	public void testInsertMode() {
@@ -88,13 +88,13 @@ public class CursorAndScreenTest extends TerminalTestCase {
 		withTerminalSized(5, 2).enterString("n\u0302\u0302i\u0302ce").enterString("\033[GA").assertLinesAre("Ai\u0302ce ", "     ");
 		// ... and in last column:
 		withTerminalSized(5, 2).enterString("n\u0302\u0302ice!\u0302").enterString("\033[5GA").assertLinesAre("n\u0302\u0302iceA", "     ");
-		withTerminalSized(5, 2).enterString("nic\u0302e!\u0302").enterString("\033[4Gæž").assertLinesAre("nic\u0302æž", "     ");
-		withTerminalSized(5, 2).enterString("nicæž\u0302").enterString("\033[3GA").assertLinesAre("niAæž\u0302", "     ");
-		withTerminalSized(5, 2).enterString("nicæž\u0302").enterString("\033[3GA").assertLinesAre("niAæž\u0302", "     ");
-		// With wide æž char.
-		withTerminalSized(5, 2).enterString("nice").enterString("\033[G\033[4hæž").assertLinesAre("æžnic", "     ");
-		withTerminalSized(5, 2).enterString("nice").enterString("\033[2G\033[4hæž").assertLinesAre("næžic", "     ");
-		withTerminalSized(5, 2).enterString("næžce").enterString("\033[G\033[4ha").assertLinesAre("anæžc", "     ");
+		withTerminalSized(5, 2).enterString("nic\u0302e!\u0302").enterString("\033[4G枝").assertLinesAre("nic\u0302枝", "     ");
+		withTerminalSized(5, 2).enterString("nic枝\u0302").enterString("\033[3GA").assertLinesAre("niA枝\u0302", "     ");
+		withTerminalSized(5, 2).enterString("nic枝\u0302").enterString("\033[3GA").assertLinesAre("niA枝\u0302", "     ");
+		// With wide 枝 char.
+		withTerminalSized(5, 2).enterString("nice").enterString("\033[G\033[4h枝").assertLinesAre("枝nic", "     ");
+		withTerminalSized(5, 2).enterString("nice").enterString("\033[2G\033[4h枝").assertLinesAre("n枝ic", "     ");
+		withTerminalSized(5, 2).enterString("n枝ce").enterString("\033[G\033[4ha").assertLinesAre("an枝c", "     ");
 	}
 
 	/** HPA—Horizontal Position Absolute (http://www.vt100.net/docs/vt510-rm/HPA) */
@@ -264,4 +264,3 @@ public class CursorAndScreenTest extends TerminalTestCase {
 	}
 
 }
-

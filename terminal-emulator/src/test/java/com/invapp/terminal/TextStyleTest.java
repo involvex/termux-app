@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 import junit.framework.TestCase;
 
@@ -63,4 +63,3 @@ public class TextStyleTest extends TestCase {
 	}
 
 }
-

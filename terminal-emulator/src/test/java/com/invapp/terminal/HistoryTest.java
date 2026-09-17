@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 
 public class HistoryTest extends TerminalTestCase {
@@ -31,4 +31,3 @@ public class HistoryTest extends TerminalTestCase {
 	}
 
 }
-

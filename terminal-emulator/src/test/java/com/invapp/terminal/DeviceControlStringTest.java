@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 /**
  * "\033P" is a device control string.
@@ -51,4 +51,3 @@ public class DeviceControlStringTest extends TerminalTestCase {
 	}
 
 }
-

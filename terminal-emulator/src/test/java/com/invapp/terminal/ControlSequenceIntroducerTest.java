@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 import java.util.List;
 
@@ -129,4 +129,3 @@ public class ControlSequenceIntroducerTest extends TerminalTestCase {
     }
 
 }
-

@@ -1,4 +1,4 @@
-﻿package com.invapp.terminal;
+package com.invapp.terminal;
 
 public class ScreenBufferTest extends TerminalTestCase {
 
@@ -63,4 +63,3 @@ public class ScreenBufferTest extends TerminalTestCase {
 		assertEquals("", mTerminal.getScreen().getWordAtLocation(2, 2));
 	}
 }
-
