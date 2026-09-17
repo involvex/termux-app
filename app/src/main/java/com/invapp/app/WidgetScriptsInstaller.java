@@ -38,12 +38,13 @@ public final class WidgetScriptsInstaller {
     public static final String ID_CLIPBOARD_SPEAK = "clipboard-speak";
     public static final String ID_CLIPBOARD_TO_FILE = "clipboard-to-file";
     public static final String ID_GIT_PULL_REPOS = "git-pull-repos";
+    public static final String ID_SCREEN_OCR = "screen-ocr";
 
     /** Background task scripts under {@code ~/.shortcuts/tasks/}. */
     public static final String ID_TD_AI = "td-ai";
 
     public static final String[] DEFAULT_FOREGROUND_IDS = {
-        ID_CLIPBOARD_SPEAK, ID_CLIPBOARD_TO_FILE, ID_GIT_PULL_REPOS
+        ID_CLIPBOARD_SPEAK, ID_CLIPBOARD_TO_FILE, ID_GIT_PULL_REPOS, ID_SCREEN_OCR
     };
 
     public static final String[] DEFAULT_TASK_IDS = {
@@ -55,6 +56,7 @@ public final class WidgetScriptsInstaller {
         "clipboard-speak (TTS)",
         "clipboard-to-file",
         "git-pull-repos",
+        "screen-ocr (clipboard)",
         "td-ai (background task)"
     };
 
@@ -63,7 +65,8 @@ public final class WidgetScriptsInstaller {
     @NonNull
     public static String[] allCatalogIds() {
         return new String[] {
-            ID_CLIPBOARD_SPEAK, ID_CLIPBOARD_TO_FILE, ID_GIT_PULL_REPOS, ID_TD_AI
+            ID_CLIPBOARD_SPEAK, ID_CLIPBOARD_TO_FILE, ID_GIT_PULL_REPOS,
+            ID_SCREEN_OCR, ID_TD_AI
         };
     }
 
@@ -175,6 +178,7 @@ public final class WidgetScriptsInstaller {
             case ID_CLIPBOARD_SPEAK: return 0xFF00C853; // green
             case ID_CLIPBOARD_TO_FILE: return 0xFF2979FF; // blue
             case ID_GIT_PULL_REPOS: return 0xFFFF6D00; // orange
+            case ID_SCREEN_OCR: return 0xFF00BFA5; // teal
             case ID_TD_AI: return 0xFFAA00FF; // purple
             default: return null;
         }
@@ -362,6 +366,19 @@ public final class WidgetScriptsInstaller {
             + "  (cd \"$d\" && git pull --ff-only) && ok=$((ok+1)) || true\n"
             + "done\n"
             + "toast \"git pull done ($ok repos)\"\n");
+        m.put(ID_SCREEN_OCR, ""
+            + "#!" + bash + "\n"
+            + "# invapp-widget: screen-ocr\n"
+            + "set -e\n"
+            + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
+            + "toast() { command -v termux-toast >/dev/null 2>&1 && termux-toast \"$1\" || true; }\n"
+            + "toast 'Screen OCR…'\n"
+            + "if ! command -v td-screen-ocr >/dev/null 2>&1; then\n"
+            + "  msg='td-screen-ocr missing — reopen InVxTermux once'\n"
+            + "  toast \"$msg\"; echo \"$msg\" >&2\n"
+            + "  exit 1\n"
+            + "fi\n"
+            + "td-screen-ocr\n");
         m.put(ID_TD_AI, ""
             + "#!" + bash + "\n"
             + "# invapp-widget: td-ai (background task)\n"

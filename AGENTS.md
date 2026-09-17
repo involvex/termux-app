@@ -57,7 +57,7 @@ See `ROADMAP.md`.
 | Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`); `pwa` / `pwa-react` add `vite-plugin-pwa` |
 | Clone | `td-clone <url> [name] [--bun-i]` → git clone into `~/repos`; drawer **Clone…** |
 | File share → Edit | Seeds `~/bin/termux-file-editor` (nvim→vim→nano→less) for FileReceiver |
-| Widget scripts | `~/.shortcuts` templates (`clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, `tasks/td-ai`); Settings / right drawer; matching Widget APK + API/`pkg install termux-api` for clipboard/TTS/`termux-toast`. Widget tap always shows **Running: name** toast |
+| Widget scripts | `~/.shortcuts` templates (`clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, `screen-ocr`, `tasks/td-ai`); Settings / right drawer; matching Widget APK + API/`pkg install termux-api` for clipboard/TTS/`termux-toast`. `screen-ocr` → `td-screen-ocr` (MediaProjection `termux-screenshot` or latest Screenshots file + `pkg install tesseract`). Widget tap always shows **Running: name** toast |
 | Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize bar / Customize keys (writes quoted `extra-keys` in `~/.termux/termux.properties`). Extra-keys: 2-row nav page + swipe L/R for workflow page; end drawer = Tools (Preview/AI/Clone/New/Widget scripts). Long-press / Ctrl+Alt+M → actions bottom sheet |
 | Completions | App installs `$PREFIX/etc/profile.d/invapp-completions.sh` + `bash_completion.d` for bun/pkg/npm/gh/git. Prefer `pkg install bash-completion` for richer git. **New session** after update. Never edit `~/.bashrc` |
 
@@ -102,6 +102,13 @@ See `ROADMAP.md`.
 - `getifaddrs returned an error` — non-fatal for web bind on `0.0.0.0`;
   never use `--mdns`. Override with `OPENCODE_HOST=127.0.0.1 td-ai` if needed.
   Firewall/VPN may block LAN clients; Preview always uses loopback.
+- `screen-ocr` / screenshot OCR failing — needs Termux:API APK +
+  `pkg install termux-api tesseract`, and usually `termux-setup-storage` for
+  `--latest`. Eng lang pack ships with `tesseract`; other langs need
+  `<lang>.traineddata` under `$PREFIX/share/tessdata` (toast hints this).
+  Capture uses MediaProjection consent (not key injection, not Termux:X11).
+  If capture is denied, use `td-screen-ocr --latest` after a system
+  screenshot. X11 does not capture the Android screen.
 
 ## 2. Useful Commands
 

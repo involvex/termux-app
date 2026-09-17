@@ -62,7 +62,21 @@ On first launch the app seeds templates under `~/.shortcuts` (and
 | `clipboard-speak` | `termux-clipboard-get` → `termux-tts-speak` |
 | `clipboard-to-file` | Append clipboard to `~/repos/clipboard.txt` |
 | `git-pull-repos` | `git pull --ff-only` in each `~/repos/*` git repo |
+| `screen-ocr` | Capture/OCR screenshot → clipboard (`td-screen-ocr`, needs `tesseract`) |
 | `tasks/td-ai` | Background: start OpenCode via `td-ai` |
+
+`screen-ocr` / `td-screen-ocr` prefers `termux-screenshot` (Termux:API
+MediaProjection consent dialog, then PNG under `~/repos/screen-ocr/`), then
+falls back to the newest image under `~/storage/.../Screenshots` (run
+`termux-setup-storage` first). Install OCR with `pkg install tesseract`
+(includes **eng** traineddata). Other languages: copy
+`<lang>.traineddata` into `$PREFIX/share/tessdata` (see
+https://github.com/tesseract-ocr/tessdata); override with `OCR_LANG=deu`.
+Toasts hint when tesseract or the lang pack is missing. Termux:X11 is **not**
+required (and does not help) for this flow.
+
+Upstream-ready CLI twin for packages:
+[`contrib/termux-api-package/scripts/termux-screenshot.in`](../contrib/termux-api-package/scripts/termux-screenshot.in).
 
 Manage them from **Settings → InVxTermux → Widget scripts** (install / reset +
 API/Widget/`termux-api` status) or the right-drawer **Widget scripts** button

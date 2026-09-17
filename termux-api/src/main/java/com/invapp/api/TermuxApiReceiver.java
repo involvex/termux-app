@@ -30,6 +30,7 @@ import com.invapp.api.apis.NfcAPI;
 import com.invapp.api.apis.NotificationAPI;
 import com.invapp.api.apis.NotificationListAPI;
 import com.invapp.api.apis.SAFAPI;
+import com.invapp.api.apis.ScreenshotAPI;
 import com.invapp.api.apis.SensorAPI;
 import com.invapp.api.apis.ShareAPI;
 import com.invapp.api.apis.SmsInboxAPI;
@@ -192,6 +193,9 @@ public class TermuxApiReceiver extends BroadcastReceiver {
                 break;
             case "SAF":
                 SAFAPI.onReceive(this, context, intent);
+                break;
+            case "Screenshot":
+                ScreenshotAPI.onReceive(this, context, intent);
                 break;
             case "Sensor":
                 SensorAPI.onReceive(context, intent);

@@ -16,13 +16,14 @@ public class WidgetScriptsInstallerTest {
     @Test
     public void catalog_coversDefaults() {
         String[] ids = WidgetScriptsInstaller.allCatalogIds();
-        assertEquals(4, ids.length);
+        assertEquals(5, ids.length);
         assertEquals(WidgetScriptsInstaller.ID_CLIPBOARD_SPEAK, ids[0]);
         assertEquals(WidgetScriptsInstaller.ID_CLIPBOARD_TO_FILE, ids[1]);
         assertEquals(WidgetScriptsInstaller.ID_GIT_PULL_REPOS, ids[2]);
-        assertEquals(WidgetScriptsInstaller.ID_TD_AI, ids[3]);
+        assertEquals(WidgetScriptsInstaller.ID_SCREEN_OCR, ids[3]);
+        assertEquals(WidgetScriptsInstaller.ID_TD_AI, ids[4]);
         assertEquals(ids.length, WidgetScriptsInstaller.CATALOG_LABELS.length);
-        assertEquals(3, WidgetScriptsInstaller.DEFAULT_FOREGROUND_IDS.length);
+        assertEquals(4, WidgetScriptsInstaller.DEFAULT_FOREGROUND_IDS.length);
         assertEquals(1, WidgetScriptsInstaller.DEFAULT_TASK_IDS.length);
     }
 
@@ -60,6 +61,13 @@ public class WidgetScriptsInstallerTest {
         assertTrue(pull.contains("/repos"));
         assertTrue(pull.contains("git pull ~/repos"));
 
+        String ocr = WidgetScriptsInstaller.scriptBody(
+            WidgetScriptsInstaller.ID_SCREEN_OCR);
+        assertNotNull(ocr);
+        assertTrue(ocr.contains("td-screen-ocr"));
+        assertTrue(ocr.contains("Screen OCR"));
+        assertTrue(ocr.contains("command -v td-screen-ocr"));
+
         String tdAi = WidgetScriptsInstaller.scriptBody(
             WidgetScriptsInstaller.ID_TD_AI);
         assertNotNull(tdAi);
@@ -71,14 +79,18 @@ public class WidgetScriptsInstallerTest {
 
     @Test
     public void filterCatalogOrder_respectsChecks() {
-        boolean[] none = {false, false, false, false};
+        boolean[] none = {false, false, false, false, false};
         assertTrue(WidgetScriptsInstaller.filterCatalogOrder(none).isEmpty());
 
-        boolean[] speakAndAi = {true, false, false, true};
+        boolean[] speakAndAi = {true, false, false, false, true};
         List<String> ids = WidgetScriptsInstaller.filterCatalogOrder(speakAndAi);
         assertEquals(Arrays.asList(
             WidgetScriptsInstaller.ID_CLIPBOARD_SPEAK,
             WidgetScriptsInstaller.ID_TD_AI), ids);
+
+        boolean[] ocrOnly = {false, false, false, true, false};
+        assertEquals(Arrays.asList(WidgetScriptsInstaller.ID_SCREEN_OCR),
+            WidgetScriptsInstaller.filterCatalogOrder(ocrOnly));
 
         boolean[] shortArr = {true};
         assertEquals(Arrays.asList(WidgetScriptsInstaller.ID_CLIPBOARD_SPEAK),
@@ -95,6 +107,12 @@ public class WidgetScriptsInstallerTest {
         assertTrue(cmd.contains(".shortcuts"));
         assertTrue(cmd.contains(WidgetScriptsInstaller.ID_CLIPBOARD_SPEAK));
 
+        String ocr = WidgetScriptsInstaller.runOnceCommand(
+            WidgetScriptsInstaller.ID_SCREEN_OCR);
+        assertNotNull(ocr);
+        assertTrue(ocr.contains(WidgetScriptsInstaller.ID_SCREEN_OCR));
+        assertFalse(ocr.contains("tasks"));
+
         String task = WidgetScriptsInstaller.runOnceCommand(
             WidgetScriptsInstaller.ID_TD_AI);
         assertNotNull(task);
@@ -107,17 +125,22 @@ public class WidgetScriptsInstallerTest {
     public void scriptPath_taskVsForeground() {
         assertNotNull(WidgetScriptsInstaller.scriptPath(
             WidgetScriptsInstaller.ID_GIT_PULL_REPOS));
+        assertNotNull(WidgetScriptsInstaller.scriptPath(
+            WidgetScriptsInstaller.ID_SCREEN_OCR));
         assertTrue(WidgetScriptsInstaller.scriptPath(
             WidgetScriptsInstaller.ID_TD_AI).getPath().contains("tasks"));
         assertFalse(WidgetScriptsInstaller.scriptPath(
             WidgetScriptsInstaller.ID_CLIPBOARD_SPEAK).getPath().replace('\\', '/')
             .contains("/tasks/"));
+        assertFalse(WidgetScriptsInstaller.scriptPath(
+            WidgetScriptsInstaller.ID_SCREEN_OCR).getPath().replace('\\', '/')
+            .contains("/tasks/"));
         assertNull(WidgetScriptsInstaller.scriptPath("nope"));
     }
 
     @Test
-    public void catalog_hasFourIconSlots() {
-        assertEquals(4, WidgetScriptsInstaller.allCatalogIds().length);
+    public void catalog_hasFiveIconSlots() {
+        assertEquals(5, WidgetScriptsInstaller.allCatalogIds().length);
         for (String id : WidgetScriptsInstaller.allCatalogIds()) {
             assertTrue(id, id.length() > 0);
         }

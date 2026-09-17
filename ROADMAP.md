@@ -103,10 +103,21 @@ https://github.com/involvex/termux-app
 
 ### 12. Widget ~/.shortcuts templates (done — Phase 1)
 
-- App seeds `clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, and
-  `tasks/td-ai` under `~/.shortcuts` on first launch
+- App seeds `clipboard-speak`, `clipboard-to-file`, `git-pull-repos`,
+  `screen-ocr`, and `tasks/td-ai` under `~/.shortcuts` on first launch
 - Settings + right-drawer picker: install / reset / status (Widget APK, API APK,
   `pkg termux-api`); **Run once** from the drawer
+
+### 12b. Screenshot OCR + capture API (done)
+
+- `$PREFIX/bin/td-screen-ocr` + widget `screen-ocr`: OCR → clipboard via
+  `tesseract` + `termux-clipboard-set` (toasts hint missing eng/other lang packs)
+- Prefers `$PREFIX/bin/termux-screenshot` (Termux:API `Screenshot` /
+  MediaProjection consent → `~/repos/screen-ocr/latest.png`); falls back to
+  newest file under Screenshots (`termux-setup-storage`)
+- Upstream-ready CLI: `contrib/termux-api-package/scripts/termux-screenshot.in`
+  (needs matching Java API before merge to termux-api-package)
+- Termux:X11 is out of scope (does not capture the Android display)
 
 ### 13. InVx Terminal Widget module (done)
 
