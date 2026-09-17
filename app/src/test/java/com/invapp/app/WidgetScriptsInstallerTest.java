@@ -13,18 +13,22 @@ import static org.junit.Assert.assertTrue;
 
 public class WidgetScriptsInstallerTest {
 
+    private static final int CATALOG_SIZE = 16;
+
     @Test
     public void catalog_coversDefaultsAndOptionals() {
         String[] ids = WidgetScriptsInstaller.allCatalogIds();
-        assertEquals(11, ids.length);
+        assertEquals(CATALOG_SIZE, ids.length);
         assertEquals(WidgetScriptsInstaller.ID_CLIPBOARD_SPEAK, ids[0]);
         assertEquals(WidgetScriptsInstaller.ID_SCREEN_OCR, ids[3]);
         assertEquals(WidgetScriptsInstaller.ID_CAMERA_PHOTO, ids[4]);
         assertEquals(WidgetScriptsInstaller.ID_OPEN_SETTINGS, ids[9]);
-        assertEquals(WidgetScriptsInstaller.ID_TD_AI, ids[10]);
+        assertEquals(WidgetScriptsInstaller.ID_VIBRATE, ids[10]);
+        assertEquals(WidgetScriptsInstaller.ID_STOP_AI, ids[14]);
+        assertEquals(WidgetScriptsInstaller.ID_TD_AI, ids[15]);
         assertEquals(ids.length, WidgetScriptsInstaller.CATALOG_LABELS.length);
         assertEquals(4, WidgetScriptsInstaller.DEFAULT_FOREGROUND_IDS.length);
-        assertEquals(6, WidgetScriptsInstaller.OPTIONAL_FOREGROUND_IDS.length);
+        assertEquals(11, WidgetScriptsInstaller.OPTIONAL_FOREGROUND_IDS.length);
         assertEquals(1, WidgetScriptsInstaller.DEFAULT_TASK_IDS.length);
     }
 
@@ -102,29 +106,56 @@ public class WidgetScriptsInstallerTest {
         assertNotNull(settings);
         assertTrue(settings.contains("android.settings.SETTINGS"));
 
+        String vibrate = WidgetScriptsInstaller.scriptBody(
+            WidgetScriptsInstaller.ID_VIBRATE);
+        assertNotNull(vibrate);
+        assertTrue(vibrate.contains("termux-vibrate"));
+
+        String volume = WidgetScriptsInstaller.scriptBody(
+            WidgetScriptsInstaller.ID_VOLUME_INFO);
+        assertNotNull(volume);
+        assertTrue(volume.contains("termux-volume"));
+
+        String location = WidgetScriptsInstaller.scriptBody(
+            WidgetScriptsInstaller.ID_LOCATION);
+        assertNotNull(location);
+        assertTrue(location.contains("termux-location"));
+
+        String telephony = WidgetScriptsInstaller.scriptBody(
+            WidgetScriptsInstaller.ID_TELEPHONY_INFO);
+        assertNotNull(telephony);
+        assertTrue(telephony.contains("termux-telephony-deviceinfo"));
+
+        String stopAi = WidgetScriptsInstaller.scriptBody(
+            WidgetScriptsInstaller.ID_STOP_AI);
+        assertNotNull(stopAi);
+        assertTrue(stopAi.contains("pkill -f '[o]pencode web'"));
+        assertTrue(stopAi.contains("OpenCode stopped"));
+
         String tdAi = WidgetScriptsInstaller.scriptBody(
             WidgetScriptsInstaller.ID_TD_AI);
         assertNotNull(tdAi);
         assertTrue(tdAi.contains("td-ai &"));
         assertTrue(tdAi.contains("command -v td-ai"));
         assertTrue(tdAi.contains("OpenCode ready"));
+        assertTrue(tdAi.contains("already ready"));
         assertTrue(tdAi.contains("global/health"));
     }
 
     @Test
     public void filterCatalogOrder_respectsChecks() {
-        boolean[] none = new boolean[11];
+        boolean[] none = new boolean[CATALOG_SIZE];
         assertTrue(WidgetScriptsInstaller.filterCatalogOrder(none).isEmpty());
 
-        boolean[] speakAndAi = new boolean[11];
+        boolean[] speakAndAi = new boolean[CATALOG_SIZE];
         speakAndAi[0] = true;
-        speakAndAi[10] = true;
+        speakAndAi[15] = true;
         List<String> ids = WidgetScriptsInstaller.filterCatalogOrder(speakAndAi);
         assertEquals(Arrays.asList(
             WidgetScriptsInstaller.ID_CLIPBOARD_SPEAK,
             WidgetScriptsInstaller.ID_TD_AI), ids);
 
-        boolean[] camOnly = new boolean[11];
+        boolean[] camOnly = new boolean[CATALOG_SIZE];
         camOnly[4] = true;
         assertEquals(Arrays.asList(WidgetScriptsInstaller.ID_CAMERA_PHOTO),
             WidgetScriptsInstaller.filterCatalogOrder(camOnly));
@@ -152,6 +183,8 @@ public class WidgetScriptsInstallerTest {
 
         assertNotNull(WidgetScriptsInstaller.runOnceCommand(
             WidgetScriptsInstaller.ID_WIFI_INFO));
+        assertNotNull(WidgetScriptsInstaller.runOnceCommand(
+            WidgetScriptsInstaller.ID_STOP_AI));
 
         String task = WidgetScriptsInstaller.runOnceCommand(
             WidgetScriptsInstaller.ID_TD_AI);
@@ -169,6 +202,8 @@ public class WidgetScriptsInstallerTest {
             WidgetScriptsInstaller.ID_SCREEN_OCR));
         assertNotNull(WidgetScriptsInstaller.scriptPath(
             WidgetScriptsInstaller.ID_TORCH_TOGGLE));
+        assertNotNull(WidgetScriptsInstaller.scriptPath(
+            WidgetScriptsInstaller.ID_STOP_AI));
         assertTrue(WidgetScriptsInstaller.scriptPath(
             WidgetScriptsInstaller.ID_TD_AI).getPath().contains("tasks"));
         assertFalse(WidgetScriptsInstaller.scriptPath(
@@ -181,8 +216,8 @@ public class WidgetScriptsInstallerTest {
     }
 
     @Test
-    public void catalog_hasElevenIconSlots() {
-        assertEquals(11, WidgetScriptsInstaller.allCatalogIds().length);
+    public void catalog_hasIconSlotsForAllIds() {
+        assertEquals(CATALOG_SIZE, WidgetScriptsInstaller.allCatalogIds().length);
         for (String id : WidgetScriptsInstaller.allCatalogIds()) {
             assertTrue(id, id.length() > 0);
         }

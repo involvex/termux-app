@@ -125,7 +125,16 @@ https://github.com/involvex/termux-app
   rewrites short/broken KeepAlive components
 - Two-finger swipe down / Ctrl+Alt+T opens Tools (end) drawer
 - Optional widget catalog: camera-photo, wifi-info, battery-status,
-  torch-toggle, share-clipboard, open-settings
+  torch-toggle, share-clipboard, open-settings, vibrate, volume-info,
+  location, telephony-info, stop-ai
+
+### 12d. AI polish + release 0.202.0 (done)
+
+- Drawer AI when already ready: snackbar **Copy LAN** if `:4096` is wildcard-bound
+- `AiSessionHelper` ignores leftover bun JS `opencode` stubs; also finds
+  `$PREFIX/libexec/opencode`
+- `tasks/td-ai` exits early when `/global/health` is already healthy
+- Optional `stop-ai` widget companion
 
 ### 13. InVx Terminal Widget module (done)
 

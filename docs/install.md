@@ -69,7 +69,12 @@ On first launch the app seeds templates under `~/.shortcuts` (and
 | `torch-toggle` | `termux-torch` on/off (optional) |
 | `share-clipboard` | Clipboard → `termux-share` (optional) |
 | `open-settings` | `am start` Android Settings (optional) |
-| `tasks/td-ai` | Background: start OpenCode via `td-ai` |
+| `vibrate` | `termux-vibrate` short pulse (optional) |
+| `volume-info` | `termux-volume` → clipboard (optional) |
+| `location` | `termux-location` → clipboard + toast (optional) |
+| `telephony-info` | `termux-telephony-deviceinfo` → clipboard (optional) |
+| `stop-ai` | Stop OpenCode on `:4096` (optional) |
+| `tasks/td-ai` | Background: start OpenCode via `td-ai` (skips if already healthy) |
 
 Defaults seed on first launch; optional scripts install via the Widget scripts
 picker.

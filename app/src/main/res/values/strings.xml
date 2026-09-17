@@ -159,6 +159,9 @@
     <string name="msg_workflow_ai_starting">Starting OpenCode on :4096 — waiting for /global/health…</string>
     <string name="msg_workflow_ai_installing">Installing OpenCode — Preview opens when :4096 is healthy…</string>
     <string name="msg_workflow_ai_ready">OpenCode ready on :4096 — opening Preview</string>
+    <string name="msg_workflow_ai_lan_hint">OpenCode is on LAN — copy URL for another device?</string>
+    <string name="action_workflow_ai_copy_lan">Copy LAN</string>
+    <string name="msg_workflow_ai_lan_copied">Copied %1$s</string>
     <string name="msg_workflow_ai_stopped">Stopped OpenCode on :4096</string>
     <string name="msg_workflow_ai_not_running">Nothing listening on :4096</string>
     <string name="msg_workflow_ai_health_timeout">OpenCode :4096 not healthy yet — opening Preview anyway (Reload if blank)</string>

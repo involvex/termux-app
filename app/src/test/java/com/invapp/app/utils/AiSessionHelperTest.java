@@ -2,6 +2,9 @@ package com.invapp.app.utils;
 
 import org.junit.Test;
 
+import java.io.File;
+import java.io.FileWriter;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -51,5 +54,40 @@ public class AiSessionHelperTest {
         assertTrue(!AiSessionHelper.isOpenCodeHealthy(0));
         assertTrue(!AiSessionHelper.isOpenCodeHealthy(-1));
         assertTrue(!AiSessionHelper.isOpenCodeHealthy(70000));
+    }
+
+    @Test
+    public void isLikelyOpenCodeStub_detectsPostinstallPlaceholder() throws Exception {
+        File stub = File.createTempFile("opencode-stub", ".js");
+        try {
+            try (FileWriter w = new FileWriter(stub)) {
+                w.write("#!/usr/bin/env node\n");
+                w.write("console.log('postinstall script was not run');\n");
+                w.write("// opencode-ai placeholder\n");
+            }
+            assertTrue(stub.setExecutable(true));
+            assertTrue(AiSessionHelper.isLikelyOpenCodeStub(stub));
+            assertTrue(!AiSessionHelper.isUsableOpenCodeBinary(stub));
+        } finally {
+            //noinspection ResultOfMethodCallIgnored
+            stub.delete();
+        }
+    }
+
+    @Test
+    public void isLikelyOpenCodeStub_allowsLdLinuxWrapper() throws Exception {
+        File wrap = File.createTempFile("opencode-wrap", ".sh");
+        try {
+            try (FileWriter w = new FileWriter(wrap)) {
+                w.write("#!/data/data/com.involvex.termux_app/files/usr/bin/bash\n");
+                w.write("exec ld-linux --preload ... \"$PREFIX/libexec/opencode/opencode\" \"$@\"\n");
+            }
+            assertTrue(wrap.setExecutable(true));
+            assertTrue(!AiSessionHelper.isLikelyOpenCodeStub(wrap));
+            assertTrue(AiSessionHelper.isUsableOpenCodeBinary(wrap));
+        } finally {
+            //noinspection ResultOfMethodCallIgnored
+            wrap.delete();
+        }
     }
 }

@@ -177,6 +177,7 @@ public final class AiSessionHelper {
 
     /**
      * True if an {@code opencode} executable exists where {@code td-ai} looks.
+     * Ignores leftover bun JS stubs that print “postinstall script was not run”.
      */
     public static boolean isOpenCodeInstalled() {
         String bin = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH;
@@ -189,11 +190,81 @@ public final class AiSessionHelper {
         };
         for (String path : candidates) {
             File f = new File(path);
-            if (f.isFile() && f.canExecute()) {
+            if (isUsableOpenCodeBinary(f)) {
                 return true;
             }
         }
+        File libexec = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, "libexec/opencode");
+        if (libexec.isDirectory()) {
+            File[] kids = libexec.listFiles();
+            if (kids != null) {
+                for (File kid : kids) {
+                    if (kid == null) {
+                        continue;
+                    }
+                    if ("opencode".equals(kid.getName()) && isUsableOpenCodeBinary(kid)) {
+                        return true;
+                    }
+                    if (kid.isDirectory()) {
+                        File nested = new File(kid, "opencode");
+                        if (isUsableOpenCodeBinary(nested)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
         return false;
+    }
+
+    /**
+     * Executable and not a leftover npm/bun JS stub.
+     */
+    @VisibleForTesting
+    static boolean isUsableOpenCodeBinary(@Nullable File f) {
+        if (f == null || !f.isFile() || !f.canExecute()) {
+            return false;
+        }
+        return !isLikelyOpenCodeStub(f);
+    }
+
+    /**
+     * Detects the broken {@code opencode-ai} JS placeholder left by
+     * {@code bun install -g} (prints postinstall warning; not a real CLI).
+     */
+    @VisibleForTesting
+    static boolean isLikelyOpenCodeStub(@NonNull File f) {
+        try {
+            byte[] head = new byte[512];
+            int n;
+            try (InputStream in = new java.io.FileInputStream(f)) {
+                n = in.read(head);
+            }
+            if (n <= 0) {
+                return true;
+            }
+            // ELF / Mach-O / PE — real binary
+            if (n >= 4
+                && ((head[0] == 0x7f && head[1] == 'E' && head[2] == 'L' && head[3] == 'F')
+                || (head[0] == (byte) 0xCF && head[1] == (byte) 0xFA)
+                || (head[0] == 'M' && head[1] == 'Z'))) {
+                return false;
+            }
+            String text = new String(head, 0, n, StandardCharsets.UTF_8).toLowerCase(Locale.US);
+            if (text.contains("postinstall") || text.contains("opencode-ai")) {
+                return true;
+            }
+            // Shell/ld-linux wrappers from opencode-setup are fine.
+            if (text.startsWith("#!") && (text.contains("ld-linux")
+                || text.contains("libexec/opencode")
+                || text.contains("exec "))) {
+                return false;
+            }
+            // Bare node/bun JS without wrapper → stub.
+            return text.startsWith("#!") && (text.contains("node") || text.contains("bun"));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**

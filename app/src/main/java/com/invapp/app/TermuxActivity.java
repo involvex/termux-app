@@ -57,6 +57,8 @@ import com.invapp.app.activities.LocalhostPreviewActivity;
 import com.invapp.app.activities.SettingsActivity;
 import com.invapp.app.utils.AiSessionHelper;
 import com.invapp.app.utils.ExtraKeysBarHelper;
+import com.invapp.app.utils.LanShareHelper;
+import com.invapp.app.utils.LocalhostPortScanner;
 import com.invapp.app.utils.PreferredPortWatcher;
 import com.invapp.app.utils.WorkflowBarHelper;
 import com.invapp.app.utils.WorkflowHelper;
@@ -891,6 +893,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             case READY:
                 showToast(getString(R.string.msg_workflow_ai_ready), true);
                 openAiPreview();
+                maybeOfferAiLanCopy();
                 maybeOfferTerminalErrorPaste();
                 return;
             case INSTALLED:
@@ -960,6 +963,35 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void openAiPreview() {
         ActivityUtils.startActivity(this,
             LocalhostPreviewActivity.createIntent(this, WorkflowHelper.AI_PREVIEW_PORT));
+    }
+
+    /**
+     * When OpenCode is already healthy and bound on {@code 0.0.0.0}, offer
+     * copying the LAN URL (same Wi‑Fi) without opening Preview chips.
+     */
+    private void maybeOfferAiLanCopy() {
+        final int port = WorkflowHelper.AI_PREVIEW_PORT;
+        if (!LocalhostPortScanner.isWildcardListen(port)) {
+            return;
+        }
+        final String url = LanShareHelper.buildLanHttpUrl(
+            LanShareHelper.getSiteLocalIpv4(), port);
+        if (url == null) {
+            return;
+        }
+        View root = findViewById(R.id.activity_termux_root_view);
+        if (root == null) {
+            return;
+        }
+        Snackbar.make(root, R.string.msg_workflow_ai_lan_hint, Snackbar.LENGTH_LONG)
+            .setAction(R.string.action_workflow_ai_copy_lan, v -> {
+                ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                if (cm != null) {
+                    cm.setPrimaryClip(ClipData.newPlainText("opencode-lan", url));
+                }
+                showToast(getString(R.string.msg_workflow_ai_lan_copied, url), true);
+            })
+            .show();
     }
 
     /**

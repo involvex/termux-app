@@ -8,7 +8,7 @@
 dev workflow: clone under `~/repos`, run Bun / Node projects, preview localhost
 servers in-app, and optionally attach an AI CLI.
 
-Package id: `com.involvex.termux_app` · Latest: **v0.201.0** · Docs:
+Package id: `com.involvex.termux_app` · Latest: **v0.202.0** · Docs:
 [involvex.github.io/termux-app](https://involvex.github.io/termux-app/)
 
 > **Unofficial fork.** Based on [Termux](https://termux.dev) /
@@ -25,7 +25,7 @@ Package id: `com.involvex.termux_app` · Latest: **v0.201.0** · Docs:
 - **Localhost Preview** — drawer → **Preview** (port scan / chips / Copy LAN)
 - **OpenCode helper** — `opencode-setup` then `td-ai` (web UI on `:4096`) → Preview
 - **Workflow helpers** — `td-scaffold`, `td-dev`, `td-clone`, customizable drawer quick bar
-- **Widget scripts** — `~/.shortcuts` templates (clipboard TTS / file / git pull / `td-ai`); Settings + drawer picker
+- **Widget scripts** — `~/.shortcuts` templates (clipboard / OCR / git / API helpers / `td-ai`); Settings + drawer picker
 - **Hacker theme** — matrix green on black (launcher + terminal)
 
 Do **not** run `curl -fsSL https://bun.sh/install | bash` inside this app — that

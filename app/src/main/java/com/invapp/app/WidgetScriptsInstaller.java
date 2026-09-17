@@ -45,6 +45,11 @@ public final class WidgetScriptsInstaller {
     public static final String ID_TORCH_TOGGLE = "torch-toggle";
     public static final String ID_SHARE_CLIPBOARD = "share-clipboard";
     public static final String ID_OPEN_SETTINGS = "open-settings";
+    public static final String ID_VIBRATE = "vibrate";
+    public static final String ID_VOLUME_INFO = "volume-info";
+    public static final String ID_LOCATION = "location";
+    public static final String ID_TELEPHONY_INFO = "telephony-info";
+    public static final String ID_STOP_AI = "stop-ai";
 
     /** Background task scripts under {@code ~/.shortcuts/tasks/}. */
     public static final String ID_TD_AI = "td-ai";
@@ -60,7 +65,8 @@ public final class WidgetScriptsInstaller {
     /** Optional catalog entries (install via picker; not auto-seeded). */
     public static final String[] OPTIONAL_FOREGROUND_IDS = {
         ID_CAMERA_PHOTO, ID_WIFI_INFO, ID_BATTERY_STATUS,
-        ID_TORCH_TOGGLE, ID_SHARE_CLIPBOARD, ID_OPEN_SETTINGS
+        ID_TORCH_TOGGLE, ID_SHARE_CLIPBOARD, ID_OPEN_SETTINGS,
+        ID_VIBRATE, ID_VOLUME_INFO, ID_LOCATION, ID_TELEPHONY_INFO, ID_STOP_AI
     };
 
     /** Display labels parallel to {@link #allCatalogIds()}. */
@@ -75,6 +81,11 @@ public final class WidgetScriptsInstaller {
         "torch-toggle",
         "share-clipboard",
         "open-settings",
+        "vibrate",
+        "volume-info",
+        "location",
+        "telephony-info",
+        "stop-ai",
         "td-ai (background task)"
     };
 
@@ -87,6 +98,7 @@ public final class WidgetScriptsInstaller {
             ID_SCREEN_OCR,
             ID_CAMERA_PHOTO, ID_WIFI_INFO, ID_BATTERY_STATUS,
             ID_TORCH_TOGGLE, ID_SHARE_CLIPBOARD, ID_OPEN_SETTINGS,
+            ID_VIBRATE, ID_VOLUME_INFO, ID_LOCATION, ID_TELEPHONY_INFO, ID_STOP_AI,
             ID_TD_AI
         };
     }
@@ -206,6 +218,11 @@ public final class WidgetScriptsInstaller {
             case ID_TORCH_TOGGLE: return 0xFFFFEB3B; // yellow
             case ID_SHARE_CLIPBOARD: return 0xFF9C27B0; // purple-ish
             case ID_OPEN_SETTINGS: return 0xFF607D8B; // blue grey
+            case ID_VIBRATE: return 0xFFFF5722; // deep orange
+            case ID_VOLUME_INFO: return 0xFF3F51B5; // indigo
+            case ID_LOCATION: return 0xFF009688; // teal
+            case ID_TELEPHONY_INFO: return 0xFF795548; // brown
+            case ID_STOP_AI: return 0xFFF44336; // red
             case ID_TD_AI: return 0xFFAA00FF; // purple
             default: return null;
         }
@@ -508,12 +525,92 @@ public final class WidgetScriptsInstaller {
             + "am start -a android.settings.SETTINGS >/dev/null 2>&1 \\\n"
             + "  || am start -n com.android.settings/.Settings >/dev/null 2>&1 \\\n"
             + "  || { toast 'Could not open Settings'; exit 1; }\n");
+        m.put(ID_VIBRATE, ""
+            + "#!" + bash + "\n"
+            + "# invapp-widget: vibrate\n"
+            + "set -e\n"
+            + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
+            + needApi
+            + "need_api termux-vibrate\n"
+            + "toast 'Vibrate'\n"
+            + "termux-vibrate -d 300\n");
+        m.put(ID_VOLUME_INFO, ""
+            + "#!" + bash + "\n"
+            + "# invapp-widget: volume-info\n"
+            + "set -e\n"
+            + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
+            + needApi
+            + "need_api termux-volume\n"
+            + "need_api termux-clipboard-set\n"
+            + "json=$(termux-volume || true)\n"
+            + "if [ -z \"$json\" ]; then toast 'No volume info'; exit 1; fi\n"
+            + "printf '%s\\n' \"$json\" | termux-clipboard-set\n"
+            + "toast 'Volume JSON → clipboard'\n"
+            + "printf '%s\\n' \"$json\"\n");
+        m.put(ID_LOCATION, ""
+            + "#!" + bash + "\n"
+            + "# invapp-widget: location\n"
+            + "set -e\n"
+            + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
+            + needApi
+            + "need_api termux-location\n"
+            + "need_api termux-clipboard-set\n"
+            + "toast 'Getting location…'\n"
+            + "json=$(termux-location -p network 2>/dev/null || termux-location || true)\n"
+            + "if [ -z \"$json\" ]; then toast 'No location (grant permission)'; exit 1; fi\n"
+            + "printf '%s\\n' \"$json\" | termux-clipboard-set\n"
+            + "lat=$(printf '%s' \"$json\" | tr ',' '\\n' | sed -n 's/.*\"latitude\":[[:space:]]*\\([-0-9.]*\\).*/\\1/p' | head -1)\n"
+            + "lon=$(printf '%s' \"$json\" | tr ',' '\\n' | sed -n 's/.*\"longitude\":[[:space:]]*\\([-0-9.]*\\).*/\\1/p' | head -1)\n"
+            + "if [ -n \"$lat\" ] && [ -n \"$lon\" ]; then\n"
+            + "  toast \"${lat}, ${lon}\"\n"
+            + "else\n"
+            + "  toast 'Location → clipboard'\n"
+            + "fi\n"
+            + "printf '%s\\n' \"$json\"\n");
+        m.put(ID_TELEPHONY_INFO, ""
+            + "#!" + bash + "\n"
+            + "# invapp-widget: telephony-info\n"
+            + "set -e\n"
+            + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
+            + needApi
+            + "need_api termux-telephony-deviceinfo\n"
+            + "need_api termux-clipboard-set\n"
+            + "json=$(termux-telephony-deviceinfo || true)\n"
+            + "if [ -z \"$json\" ]; then toast 'No telephony info'; exit 1; fi\n"
+            + "printf '%s\\n' \"$json\" | termux-clipboard-set\n"
+            + "toast 'Telephony JSON → clipboard'\n"
+            + "printf '%s\\n' \"$json\"\n");
+        m.put(ID_STOP_AI, ""
+            + "#!" + bash + "\n"
+            + "# invapp-widget: stop-ai\n"
+            + "set -e\n"
+            + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
+            + "toast() { command -v termux-toast >/dev/null 2>&1 && termux-toast \"$1\" || true; }\n"
+            + "PORT=4096\n"
+            + "toast \"Stopping OpenCode :$PORT…\"\n"
+            + "if command -v fuser >/dev/null 2>&1; then\n"
+            + "  fuser -k \"${PORT}/tcp\" 2>/dev/null || true\n"
+            + "fi\n"
+            + "pkill -f '[o]pencode web' 2>/dev/null || true\n"
+            + "pkill -f '[o]pencode serve' 2>/dev/null || true\n"
+            + "sleep 0.3\n"
+            + "if curl -fsS --connect-timeout 1 --max-time 1 \\\n"
+            + "    \"http://127.0.0.1:${PORT}/global/health\" 2>/dev/null | grep -qi healthy; then\n"
+            + "  toast 'Still healthy — try drawer Stop AI'\n"
+            + "  exit 1\n"
+            + "fi\n"
+            + "toast 'OpenCode stopped'\n");
         m.put(ID_TD_AI, ""
             + "#!" + bash + "\n"
             + "# invapp-widget: td-ai (background task)\n"
             + "set -e\n"
             + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
             + "toast() { command -v termux-toast >/dev/null 2>&1 && termux-toast \"$1\" || true; }\n"
+            + "if curl -fsS --connect-timeout 1 --max-time 2 \\\n"
+            + "    http://127.0.0.1:4096/global/health 2>/dev/null | grep -qi healthy; then\n"
+            + "  toast 'OpenCode already ready :4096'\n"
+            + "  exit 0\n"
+            + "fi\n"
             + "toast 'Starting OpenCode…'\n"
             + "if ! command -v td-ai >/dev/null 2>&1; then\n"
             + "  msg='td-ai missing — open InVxTermux once to install helpers'\n"

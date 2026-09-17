@@ -57,8 +57,8 @@ See `ROADMAP.md`.
 | Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`); `pwa` / `pwa-react` add `vite-plugin-pwa` |
 | Clone | `td-clone <url> [name] [--bun-i]` → git clone into `~/repos`; drawer **Clone…** |
 | File share → Edit | Seeds `~/bin/termux-file-editor` (nvim→vim→nano→less) for FileReceiver |
-| Widget scripts | `~/.shortcuts` templates (defaults: `clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, `screen-ocr`, `tasks/td-ai`; optional catalog: camera/wifi/battery/torch/share/settings); Settings / right drawer; matching Widget APK + API/`pkg install termux-api`. `screen-ocr` → `td-screen-ocr`. **2-finger swipe down** (or Ctrl+Alt+T) opens Tools end drawer. Widget tap always shows **Running: name** toast |
-| Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize bar / Customize keys (writes quoted `extra-keys` in `~/.termux/termux.properties`). Extra-keys: 2-row nav page + swipe L/R for workflow page; end drawer = Tools (Preview/AI/Clone/New/Widget scripts). Long-press / Ctrl+Alt+M → actions bottom sheet |
+| Widget scripts | `~/.shortcuts` templates (defaults: `clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, `screen-ocr`, `tasks/td-ai`; optional catalog: camera/wifi/battery/torch/share/settings/vibrate/volume/location/telephony/`stop-ai`); Settings / right drawer; matching Widget APK + API/`pkg install termux-api`. `screen-ocr` → `td-screen-ocr`. **2-finger swipe down** (or Ctrl+Alt+T) opens Tools end drawer. Widget tap always shows **Running: name** toast |
+| Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize bar / Customize keys (writes quoted `extra-keys` in `~/.termux/termux.properties`). Extra-keys: 2-row nav page + swipe L/R for workflow page; end drawer = Tools (Preview/AI/Clone/New/Widget scripts). Long-press / Ctrl+Alt+M → actions bottom sheet. AI tap when ready opens Preview and may offer **Copy LAN** if `:4096` is wildcard-bound |
 | Completions | App installs `$PREFIX/etc/profile.d/invapp-completions.sh` + `bash_completion.d` for bun/pkg/npm/gh/git. Prefer `pkg install bash-completion` for richer git. **New session** after update. Never edit `~/.bashrc` |
 
 **Do NOT "fix" these with more wrappers:**
@@ -214,7 +214,7 @@ without testing bootstrap + all ABIs.
 | NDK | `29.0.14206865`, `ndk-build` (`Android.mk` per module) |
 | JDK (build) | `17` (Android Studio Flamingo+) |
 | Java compat | `1.8` + `coreLibraryDesugaring` (`desugar_jdk_libs:1.1.5`) |
-| App version | `versionCode 201`, `versionName 0.201.0` (semver-enforced at build) |
+| App version | `versionCode 202`, `versionName 0.202.0` (semver-enforced at build) |
 | Bootstrap | `2026.02.12-r1+apt.android-7` (aarch64/arm/i686/x86_64, SHA-256 verified); android-5: `2022.04.28-r6` |
 | Bun | `1.4.2` official `bun-linux-{aarch64,x64}-android.zip` (SHA-256 verified, `.incbin` into `libinvapp-bun`, extracted by `TermuxBunInstaller`) |
 | Editor | 4-space, LF, UTF-8, final newline (`.editorconfig`); 2-space for `*.yaml` |
@@ -294,7 +294,7 @@ termux-app/
 - Format `major.minor.patch(-prerelease)(+buildmetadata)`, always with patch:
   `0.200.0`, `0.201.0-beta.1`, never `v0.1`. Tag as `v0.200.0`.
 - `app/build.gradle:validateVersionName()` fails the build on bad versions.
-- Keep `termux-shared`/`terminal-emulator` versions (`0.201.0`) in
+  - Keep `termux-shared`/`terminal-emulator` versions (`0.202.0`) in
   sync when cutting releases.
 
 ### Code style / quality
