@@ -26,7 +26,7 @@ optionally attach an AI CLI.
 4. Drawer → **Preview** → Scan
 
 ```bash
-td-scaffold myapp react
+td-scaffold myapp react-ts
 td-dev
 # Drawer → Preview → 5173
 ```

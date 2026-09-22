@@ -1,5 +1,7 @@
 package com.invapp.app.utils;
 
+import android.content.Context;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -20,11 +22,6 @@ import java.util.Set;
  */
 public final class LocalhostPortScanner {
 
-    /** Common local-dev ports floated to the front of the chip list. */
-    private static final int[] PREFERRED = {
-        4096, 3000, 3001, 4173, 5000, 5173, 8000, 8080, 8081, 8888, 19000, 19006
-    };
-
     /** TCP state LISTEN in /proc/net/tcp. */
     private static final int TCP_LISTEN = 0x0A;
 
@@ -36,11 +33,21 @@ public final class LocalhostPortScanner {
      */
     @NonNull
     public static List<Integer> scanListeningPorts() {
+        return scanListeningPorts(PreviewPortPrefs.defaultPreferredList());
+    }
+
+    @NonNull
+    public static List<Integer> scanListeningPorts(@NonNull Context context) {
+        return scanListeningPorts(PreviewPortPrefs.getPreferredPorts(context));
+    }
+
+    @NonNull
+    public static List<Integer> scanListeningPorts(@NonNull List<Integer> preferred) {
         Set<Integer> ports = new LinkedHashSet<>();
-        collectFromProc("/proc/net/tcp", ports, null, false);
-        collectFromProc("/proc/net/tcp6", ports, null, true);
+        collectFromProc("/proc/net/tcp", ports, null, false, preferred);
+        collectFromProc("/proc/net/tcp6", ports, null, true, preferred);
         List<Integer> list = new ArrayList<>(ports);
-        Collections.sort(list, preferredFirstComparator());
+        Collections.sort(list, preferredFirstComparator(preferred));
         return list;
     }
 
@@ -54,18 +61,20 @@ public final class LocalhostPortScanner {
             return false;
         }
         Set<Integer> wild = new LinkedHashSet<>();
-        collectFromProc("/proc/net/tcp", null, wild, false);
+        List<Integer> preferred = PreviewPortPrefs.defaultPreferredList();
+        collectFromProc("/proc/net/tcp", null, wild, false, preferred);
         if (wild.contains(port)) {
             return true;
         }
-        collectFromProc("/proc/net/tcp6", null, wild, true);
+        collectFromProc("/proc/net/tcp6", null, wild, true, preferred);
         return wild.contains(port);
     }
 
-    private static Comparator<Integer> preferredFirstComparator() {
+    @NonNull
+    static Comparator<Integer> preferredFirstComparator(@NonNull List<Integer> preferred) {
         return (a, b) -> {
-            int ia = indexOfPreferred(a);
-            int ib = indexOfPreferred(b);
+            int ia = indexOfPreferred(preferred, a);
+            int ib = indexOfPreferred(preferred, b);
             boolean pa = ia >= 0;
             boolean pb = ib >= 0;
             if (pa && pb) {
@@ -81,9 +90,9 @@ public final class LocalhostPortScanner {
         };
     }
 
-    private static int indexOfPreferred(int port) {
-        for (int i = 0; i < PREFERRED.length; i++) {
-            if (PREFERRED[i] == port) {
+    private static int indexOfPreferred(@NonNull List<Integer> preferred, int port) {
+        for (int i = 0; i < preferred.size(); i++) {
+            if (preferred.get(i) == port) {
                 return i;
             }
         }
@@ -92,13 +101,18 @@ public final class LocalhostPortScanner {
 
     /** Whether this port is a known local-dev default (Vite/Expo/OpenCode/…). */
     public static boolean isPreferredPort(int port) {
-        return indexOfPreferred(port) >= 0;
+        return indexOfPreferred(PreviewPortPrefs.defaultPreferredList(), port) >= 0;
+    }
+
+    public static boolean isPreferredPort(@NonNull Context context, int port) {
+        return PreviewPortPrefs.isPreferred(context, port);
     }
 
     private static void collectFromProc(@NonNull String path,
                                         @Nullable Set<Integer> reachableOut,
                                         @Nullable Set<Integer> wildcardOut,
-                                        boolean ipv6) {
+                                        boolean ipv6,
+                                        @NonNull List<Integer> preferred) {
         try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
             String line = reader.readLine(); // header
             if (line == null) {
@@ -128,7 +142,7 @@ public final class LocalhostPortScanner {
                     continue;
                 }
                 // Skip privileged / noise unless preferred (e.g. never show 22 from weird binds)
-                if (port < 1024 && indexOfPreferred(port) < 0) {
+                if (port < 1024 && indexOfPreferred(preferred, port) < 0) {
                     continue;
                 }
                 boolean wildcard = isWildcardBind(cols[1], ipv6);

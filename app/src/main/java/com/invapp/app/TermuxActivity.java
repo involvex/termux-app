@@ -787,6 +787,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         final String[] items = new String[] {
             getString(R.string.action_workflow_run),
             getString(R.string.action_workflow_ai_stop),
+            getString(R.string.action_workflow_copy_last_error),
+            getString(R.string.action_workflow_export_last_error),
             getString(R.string.action_workflow_customize),
             getString(R.string.action_customize_extra_keys),
             getString(R.string.action_workflow_reset_bar)
@@ -797,9 +799,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 switch (which) {
                     case 0: showReposPicker(true); break;
                     case 1: stopAiSession(); break;
-                    case 2: showCustomizeWorkflowBarDialog(); break;
-                    case 3: showCustomizeExtraKeysDialog(); break;
-                    case 4:
+                    case 2: copyLastTerminalError(false); break;
+                    case 3: exportLastTerminalError(); break;
+                    case 4: showCustomizeWorkflowBarDialog(); break;
+                    case 5: showCustomizeExtraKeysDialog(); break;
+                    case 6:
                         WorkflowBarHelper.resetToDefault(this);
                         applyWorkflowBarVisibility();
                         break;
@@ -1019,6 +1023,43 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 openAiPreview();
             })
             .show();
+    }
+
+    /** Copy last error snippet from the current session (⋯ menu). */
+    private void copyLastTerminalError(boolean openPreview) {
+        TerminalSession session = getCurrentSession();
+        String transcript = ShellUtils.getTerminalSessionTranscriptText(session, false, true);
+        String snippet = AiSessionHelper.extractLastErrorSnippet(transcript);
+        if (snippet == null) {
+            showToast(getString(R.string.msg_workflow_no_error_snippet), true);
+            return;
+        }
+        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (cm != null) {
+            cm.setPrimaryClip(ClipData.newPlainText("termux-error", snippet));
+        }
+        showToast(getString(R.string.msg_workflow_ai_error_copied), true);
+        if (openPreview) {
+            openAiPreview();
+        }
+    }
+
+    /** Export last error markdown under {@code ~/repos/.td/last-error.md}. */
+    private void exportLastTerminalError() {
+        TerminalSession session = getCurrentSession();
+        String transcript = ShellUtils.getTerminalSessionTranscriptText(session, false, true);
+        String snippet = AiSessionHelper.extractLastErrorSnippet(transcript);
+        if (snippet == null) {
+            showToast(getString(R.string.msg_workflow_no_error_snippet), true);
+            return;
+        }
+        String cwd = session != null ? session.getCwd() : null;
+        String path = AiSessionHelper.exportLastErrorMarkdown(snippet, cwd, "drawer → More");
+        if (path == null) {
+            showToast(getString(R.string.msg_workflow_error_export_failed), true);
+        } else {
+            showToast(getString(R.string.msg_workflow_error_exported, path), true);
+        }
     }
 
     private void showCloneRepoDialog() {

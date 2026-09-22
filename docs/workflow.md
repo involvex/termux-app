@@ -35,7 +35,7 @@ Then: drawer → **Preview** → **Scan** → tap the port chip.
 
 | Command | Purpose |
 |---|---|
-| `td-scaffold [name] [template]` | Vite app under `~/repos` (`0.0.0.0:5173`); templates include `react`, `pwa`, `pwa-react`, … |
+| `td-scaffold [name] [template] [--here] [--no-install]` | Vite app under `~/repos` (default **`react-ts`**, `0.0.0.0:5173`); also `react`, `pwa`, `pwa-react`, … Seeds `.gitignore` + README |
 | `td-dev [script]` | `bun run` with Preview / LAN hints |
 | `td-clone <url> [name] [--bun-i]` | Clone into `~/repos` |
 
@@ -44,9 +44,10 @@ Clone… / New… / AI.
 
 ## LAN share
 
-Preview **Copy LAN** / long-press a port chip copies
+Preview **Copy LAN** / long-press a port chip (Copy LAN / Star / Forget) copies
 `http://<wifi-ip>:<port>/` when the server listens on `0.0.0.0` / `::`.
-No public tunnels by default.
+No public tunnels by default. Settings → **Preferred Preview ports** customizes
+Scan / snackbar priorities.
 
 ## Bun
 

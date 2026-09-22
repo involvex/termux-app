@@ -41,7 +41,7 @@ public final class PreferredPortWatcher {
                 return;
             }
             mExecutor.execute(() -> {
-                final List<Integer> ports = LocalhostPortScanner.scanListeningPorts();
+                final List<Integer> ports = LocalhostPortScanner.scanListeningPorts(mActivity);
                 mHandler.post(() -> onScanResult(ports));
             });
             mHandler.postDelayed(this, INTERVAL_MS);
@@ -93,8 +93,8 @@ public final class PreferredPortWatcher {
         }
     }
 
-    private static boolean isPreferred(int port) {
-        return LocalhostPortScanner.isPreferredPort(port);
+    private boolean isPreferred(int port) {
+        return LocalhostPortScanner.isPreferredPort(mActivity, port);
     }
 
     private void showOffer(final int port) {

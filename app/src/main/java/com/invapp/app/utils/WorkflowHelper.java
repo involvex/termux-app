@@ -47,9 +47,12 @@ public final class WorkflowHelper {
 
     /** create-vite (+ pwa overlays) templates we expose in the New… sheet. */
     public static final String[] VITE_TEMPLATES = {
-        "vanilla", "vanilla-ts", "react", "react-ts", "vue", "vue-ts",
+        "react-ts", "react", "vue", "vue-ts", "vanilla-ts", "vanilla",
         "pwa", "pwa-react"
     };
+
+    /** Default template for {@code td-scaffold} when omitted. */
+    public static final String DEFAULT_VITE_TEMPLATE = "react-ts";
 
     private WorkflowHelper() {}
 

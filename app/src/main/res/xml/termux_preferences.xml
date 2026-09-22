@@ -22,4 +22,10 @@
         app:summary="@string/summary_widget_scripts"
         app:persistent="false"/>
 
+    <Preference
+        app:key="preferred_ports"
+        app:title="@string/title_preferred_ports"
+        app:summary="@string/summary_preferred_ports"
+        app:persistent="false"/>
+
 </PreferenceScreen>

@@ -67,8 +67,9 @@ https://github.com/involvex/termux-app
 ### 7. Vite golden path + AI session UX (done)
 
 - `td-scaffold [name] [template]` — Vite app under `~/repos` (default
-  `vanilla`; also `react`, `vue`, `vanilla-ts`, …) with `dev` on
-  `0.0.0.0:5173` for Preview / Copy LAN
+  `react-ts`; also `react`, `vue`, `vanilla-ts`, `pwa`, …) with `dev` on
+  `0.0.0.0:5173` for Preview / Copy LAN; seeds `.gitignore` + README;
+  flags `--here` / `--no-install`
 - Drawer **New…** → name + template → runs `td-scaffold`
 - Drawer **AI** → `td-ai` in the current session + open Preview on `:4096`
 ### 8. Vite-PWA scaffold (done)

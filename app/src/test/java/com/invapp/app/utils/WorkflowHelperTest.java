@@ -44,18 +44,23 @@ public class WorkflowHelperTest {
     public void viteTemplates_includeVanillaReactAndPwa() {
         boolean vanilla = false;
         boolean react = false;
+        boolean reactTs = false;
         boolean pwa = false;
         boolean pwaReact = false;
         for (String t : WorkflowHelper.VITE_TEMPLATES) {
             if ("vanilla".equals(t)) vanilla = true;
             if ("react".equals(t)) react = true;
+            if ("react-ts".equals(t)) reactTs = true;
             if ("pwa".equals(t)) pwa = true;
             if ("pwa-react".equals(t)) pwaReact = true;
         }
         assertTrue(vanilla);
         assertTrue(react);
+        assertTrue(reactTs);
         assertTrue(pwa);
         assertTrue(pwaReact);
+        assertEquals("react-ts", WorkflowHelper.VITE_TEMPLATES[0]);
+        assertEquals("react-ts", WorkflowHelper.DEFAULT_VITE_TEMPLATE);
         assertEquals(4096, WorkflowHelper.AI_PREVIEW_PORT);
         assertEquals(5173, WorkflowHelper.VITE_DEFAULT_PORT);
         assertEquals("/global/health", WorkflowHelper.AI_HEALTH_PATH);

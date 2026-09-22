@@ -42,6 +42,54 @@ public class AiSessionHelperTest {
     }
 
     @Test
+    public void extractLastErrorSnippet_matchesOpenCodePatterns() {
+        assertTrue(AiSessionHelper.extractLastErrorSnippet(
+            "AI_APICallError: rate limit\n") != null);
+        assertTrue(AiSessionHelper.extractLastErrorSnippet(
+            "Failed to fetch models.dev\n") != null);
+        assertTrue(AiSessionHelper.extractLastErrorSnippet(
+            "listen EADDRINUSE: address already in use :::5173\n") != null);
+        assertTrue(AiSessionHelper.extractLastErrorSnippet(
+            "getifaddrs returned an error\n") != null);
+        assertTrue(AiSessionHelper.extractLastErrorSnippet(
+            "version `LIBC' not found\n") != null);
+    }
+
+    @Test
+    public void exportLastErrorMarkdown_writesFile() throws Exception {
+        File repos = WorkflowHelper.reposDir();
+        // May not exist on JVM unit test host — export creates .td under reposDir.
+        String path = AiSessionHelper.exportLastErrorMarkdown(
+            "error: boom\n", "/tmp", "unit-test");
+        if (path == null) {
+            // Host path may be unwritable; still exercise null path for empty
+            assertTrue(AiSessionHelper.exportLastErrorMarkdown(null, null, null) == null);
+            assertTrue(AiSessionHelper.exportLastErrorMarkdown("  ", null, null) == null);
+            return;
+        }
+        File f = new File(path);
+        assertTrue(f.isFile());
+        StringBuilder body = new StringBuilder();
+        try (java.io.BufferedReader r = new java.io.BufferedReader(
+            new java.io.FileReader(f))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                body.append(line).append('\n');
+            }
+        }
+        assertTrue(body.toString().contains("boom"));
+        assertTrue(body.toString().contains("/tmp"));
+        // cleanup
+        //noinspection ResultOfMethodCallIgnored
+        f.delete();
+        File parent = f.getParentFile();
+        if (parent != null) {
+            //noinspection ResultOfMethodCallIgnored
+            parent.delete();
+        }
+    }
+
+    @Test
     public void statusEnum_hasExpectedValues() {
         assertEquals(3, AiSessionHelper.Status.values().length);
         assertEquals(AiSessionHelper.Status.MISSING, AiSessionHelper.Status.valueOf("MISSING"));

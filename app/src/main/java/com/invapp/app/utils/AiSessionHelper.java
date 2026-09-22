@@ -50,7 +50,9 @@ public final class AiSessionHelper {
     /** Default wait when starting {@code td-ai} before opening Preview. */
     public static final int DEFAULT_HEALTH_WAIT_MS = 45_000;
     private static final Pattern ERROR_LINE = Pattern.compile(
-        "(?i).*(error|errno|exception|failed|fatal|EACCES|EPERM|SIGSYS|not found).*");
+        "(?i).*(error|errno|exception|failed|fatal|EACCES|EPERM|SIGSYS|EADDRINUSE|"
+            + "not found|AI_APICallError|Failed to fetch models\\.dev|"
+            + "getifaddrs|version ['`]LIBC['`] not found).*");
 
     private AiSessionHelper() {}
 
@@ -419,6 +421,41 @@ public final class AiSessionHelper {
             return sb.substring(0, maxChars - 1) + "…";
         }
         return sb.toString();
+    }
+
+    /**
+     * Write a markdown error report under {@code ~/repos/.td/last-error.md}.
+     *
+     * @return absolute path written, or null on failure / empty snippet
+     */
+    @Nullable
+    public static String exportLastErrorMarkdown(@Nullable String snippet,
+                                                 @Nullable String cwdHint,
+                                                 @Nullable String cmdHint) {
+        if (snippet == null || snippet.trim().isEmpty()) {
+            return null;
+        }
+        File tdDir = new File(WorkflowHelper.reposDir(), ".td");
+        if (!tdDir.exists() && !tdDir.mkdirs()) {
+            return null;
+        }
+        File out = new File(tdDir, "last-error.md");
+        StringBuilder md = new StringBuilder();
+        md.append("# Last terminal error\n\n");
+        md.append("- **When:** ").append(new java.util.Date()).append('\n');
+        if (cwdHint != null && !cwdHint.isEmpty()) {
+            md.append("- **Cwd:** `").append(cwdHint).append("`\n");
+        }
+        if (cmdHint != null && !cmdHint.isEmpty()) {
+            md.append("- **Hint:** ").append(cmdHint).append('\n');
+        }
+        md.append('\n').append("```\n").append(snippet.trim()).append("\n```\n");
+        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(out)) {
+            fos.write(md.toString().getBytes(StandardCharsets.UTF_8));
+            return out.getAbsolutePath();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static void collectListenInodes(@NonNull String path, int port,
