@@ -90,7 +90,7 @@ Toasts hint when tesseract or the lang pack is missing. Termux:X11 is **not**
 required (and does not help) for this flow.
 
 Upstream-ready CLI twin for packages:
-[`contrib/termux-api-package/scripts/termux-screenshot.in`](../contrib/termux-api-package/scripts/termux-screenshot.in).
+[`contrib/termux-api-package/scripts/termux-screenshot.in`](https://github.com/involvex/termux-app/blob/master/contrib/termux-api-package/scripts/termux-screenshot.in).
 
 Manage them from **Settings → InVxTermux → Widget scripts** (install / reset +
 API/Widget/`termux-api` status) or the right-drawer **Widget scripts** button
