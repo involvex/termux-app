@@ -69,7 +69,7 @@ dependencies {
 
     implementation "androidx.annotation:annotation:1.9.1"
     implementation "com.google.android.material:material:1.12.0"
-    implementation "com.google.guava:guava:24.1-jre"
+    implementation "com.google.guava:guava:32.0.0-jre"
     implementation "com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava"
 
     implementation project(":termux-shared")
