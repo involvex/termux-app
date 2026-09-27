@@ -11,6 +11,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.invapp.shared.R;
@@ -22,8 +23,6 @@ import com.invapp.shared.errors.Error;
 import com.invapp.shared.android.PermissionUtils;
 
 import java.nio.charset.Charset;
-
-import javax.annotation.Nullable;
 
 public class ShareUtils {
 

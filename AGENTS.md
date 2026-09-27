@@ -230,7 +230,7 @@ without testing bootstrap + all ABIs.
 
 **`app`:** `annotation:1.9.0`, `core:1.13.1`, `drawerlayout:1.2.0`,
 `preference:1.2.1`, `viewpager:1.0.0`, `material:1.12.0`,
-`guava:24.1-jre` (+ `listenablefuture:9999.0-empty…`), Markwon
+`guava:33.7.1-android` (+ `listenablefuture:9999.0-empty…`), Markwon
 `4.6.2` (`core`, `ext-strikethrough`, `linkify`, `recycler`).
 
 **`termux-shared`:** `appcompat:1.6.1`, above core/material/guava/markwon, plus
