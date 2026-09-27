@@ -50,9 +50,12 @@ public final class WidgetScriptsInstaller {
     public static final String ID_LOCATION = "location";
     public static final String ID_TELEPHONY_INFO = "telephony-info";
     public static final String ID_STOP_AI = "stop-ai";
+    public static final String ID_TD_UPGRADE = "td-upgrade";
+    public static final String ID_STOP_AGENT_WORKER = "stop-agent-worker";
 
     /** Background task scripts under {@code ~/.shortcuts/tasks/}. */
     public static final String ID_TD_AI = "td-ai";
+    public static final String ID_AGENT_WORKER = "agent-worker";
 
     public static final String[] DEFAULT_FOREGROUND_IDS = {
         ID_CLIPBOARD_SPEAK, ID_CLIPBOARD_TO_FILE, ID_GIT_PULL_REPOS, ID_SCREEN_OCR
@@ -66,7 +69,8 @@ public final class WidgetScriptsInstaller {
     public static final String[] OPTIONAL_FOREGROUND_IDS = {
         ID_CAMERA_PHOTO, ID_WIFI_INFO, ID_BATTERY_STATUS,
         ID_TORCH_TOGGLE, ID_SHARE_CLIPBOARD, ID_OPEN_SETTINGS,
-        ID_VIBRATE, ID_VOLUME_INFO, ID_LOCATION, ID_TELEPHONY_INFO, ID_STOP_AI
+        ID_VIBRATE, ID_VOLUME_INFO, ID_LOCATION, ID_TELEPHONY_INFO, ID_STOP_AI,
+        ID_TD_UPGRADE, ID_STOP_AGENT_WORKER
     };
 
     /** Display labels parallel to {@link #allCatalogIds()}. */
@@ -86,7 +90,10 @@ public final class WidgetScriptsInstaller {
         "location",
         "telephony-info",
         "stop-ai",
-        "td-ai (background task)"
+        "td-upgrade",
+        "stop-agent-worker",
+        "td-ai (background task)",
+        "agent-worker (background task)"
     };
 
     private WidgetScriptsInstaller() {}
@@ -99,8 +106,13 @@ public final class WidgetScriptsInstaller {
             ID_CAMERA_PHOTO, ID_WIFI_INFO, ID_BATTERY_STATUS,
             ID_TORCH_TOGGLE, ID_SHARE_CLIPBOARD, ID_OPEN_SETTINGS,
             ID_VIBRATE, ID_VOLUME_INFO, ID_LOCATION, ID_TELEPHONY_INFO, ID_STOP_AI,
-            ID_TD_AI
+            ID_TD_UPGRADE, ID_STOP_AGENT_WORKER,
+            ID_TD_AI, ID_AGENT_WORKER
         };
+    }
+
+    private static boolean isTaskId(@NonNull String id) {
+        return ID_TD_AI.equals(id) || ID_AGENT_WORKER.equals(id);
     }
 
     /** Install default templates if the shortcuts dirs are empty of our files. */
@@ -142,7 +154,7 @@ public final class WidgetScriptsInstaller {
             : ids;
         int n = 0;
         for (String id : toInstall) {
-            boolean task = ID_TD_AI.equals(id);
+            boolean task = isTaskId(id);
             String body = scriptBody(id);
             if (body == null) {
                 continue;
@@ -223,7 +235,10 @@ public final class WidgetScriptsInstaller {
             case ID_LOCATION: return 0xFF009688; // teal
             case ID_TELEPHONY_INFO: return 0xFF795548; // brown
             case ID_STOP_AI: return 0xFFF44336; // red
+            case ID_TD_UPGRADE: return 0xFF00897B; // teal dark
+            case ID_STOP_AGENT_WORKER: return 0xFFE53935; // red
             case ID_TD_AI: return 0xFFAA00FF; // purple
+            case ID_AGENT_WORKER: return 0xFF1E88E5; // blue
             default: return null;
         }
     }
@@ -263,7 +278,7 @@ public final class WidgetScriptsInstaller {
         String[] ids = allCatalogIds();
         boolean[] flags = new boolean[ids.length];
         for (int i = 0; i < ids.length; i++) {
-            boolean task = ID_TD_AI.equals(ids[i]);
+            boolean task = isTaskId(ids[i]);
             flags[i] = scriptFile(ids[i], task).isFile();
         }
         return flags;
@@ -315,11 +330,11 @@ public final class WidgetScriptsInstaller {
     /** Absolute path of an installed template script, or {@code null} if unknown id. */
     @Nullable
     public static File scriptPath(@NonNull String id) {
-        if (ID_TD_AI.equals(id)) {
+        if (isTaskId(id)) {
             return scriptFile(id, true);
         }
         for (String known : allCatalogIds()) {
-            if (ID_TD_AI.equals(known)) {
+            if (isTaskId(known)) {
                 continue;
             }
             if (known.equals(id)) {
@@ -600,6 +615,34 @@ public final class WidgetScriptsInstaller {
             + "  exit 1\n"
             + "fi\n"
             + "toast 'OpenCode stopped'\n");
+        m.put(ID_TD_UPGRADE, ""
+            + "#!" + bash + "\n"
+            + "# invapp-widget: td-upgrade\n"
+            + "set -e\n"
+            + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
+            + "toast() { command -v termux-toast >/dev/null 2>&1 && termux-toast \"$1\" || true; }\n"
+            + "toast 'td-upgrade running…'\n"
+            + "if ! command -v td-upgrade >/dev/null 2>&1; then\n"
+            + "  msg='td-upgrade missing — open InVxTermux once'\n"
+            + "  toast \"$msg\"; echo \"$msg\" >&2\n"
+            + "  exit 1\n"
+            + "fi\n"
+            + "td-upgrade\n"
+            + "toast 'td-upgrade done'\n");
+        m.put(ID_STOP_AGENT_WORKER, ""
+            + "#!" + bash + "\n"
+            + "# invapp-widget: stop-agent-worker\n"
+            + "set -e\n"
+            + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
+            + "toast() { command -v termux-toast >/dev/null 2>&1 && termux-toast \"$1\" || true; }\n"
+            + "toast 'Stopping Cursor agent worker…'\n"
+            + "if command -v td-agent-worker >/dev/null 2>&1; then\n"
+            + "  td-agent-worker stop\n"
+            + "else\n"
+            + "  pkill -f '[a]gent worker' 2>/dev/null || true\n"
+            + "  command -v termux-wake-unlock >/dev/null 2>&1 && termux-wake-unlock || true\n"
+            + "fi\n"
+            + "toast 'Agent worker stopped'\n");
         m.put(ID_TD_AI, ""
             + "#!" + bash + "\n"
             + "# invapp-widget: td-ai (background task)\n"
@@ -639,6 +682,31 @@ public final class WidgetScriptsInstaller {
             + "kill \"$pid\" 2>/dev/null || true\n"
             + "wait \"$pid\" 2>/dev/null || true\n"
             + "exit 1\n");
+        m.put(ID_AGENT_WORKER, ""
+            + "#!" + bash + "\n"
+            + "# invapp-widget: agent-worker (background task)\n"
+            + "set -e\n"
+            + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
+            + "toast() { command -v termux-toast >/dev/null 2>&1 && termux-toast \"$1\" || true; }\n"
+            + "if pgrep -f '[a]gent worker' >/dev/null 2>&1; then\n"
+            + "  toast 'Agent worker already running'\n"
+            + "  exit 0\n"
+            + "fi\n"
+            + "toast 'Starting Cursor agent worker…'\n"
+            + "if ! command -v td-agent-worker >/dev/null 2>&1; then\n"
+            + "  msg='td-agent-worker missing — open InVxTermux once'\n"
+            + "  toast \"$msg\"; echo \"$msg\" >&2\n"
+            + "  exit 1\n"
+            + "fi\n"
+            + "command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock || true\n"
+            + "td-agent-worker start &\n"
+            + "sleep 2\n"
+            + "if pgrep -f '[a]gent worker' >/dev/null 2>&1; then\n"
+            + "  toast 'Agent worker started — cursor.com/agents'\n"
+            + "  exit 0\n"
+            + "fi\n"
+            + "toast 'Worker may need: agent login (check session)'\n"
+            + "exit 0\n");
         return m;
     }
 

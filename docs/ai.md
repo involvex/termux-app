@@ -113,3 +113,8 @@ opencode web --port 4096 --hostname 127.0.0.1 --print-logs
 
 LAN clients: same Wi‑Fi → `http://<phone-ip>:4096/` (or Preview **Copy LAN**).
 Firewall / VPN / client isolation on the AP may still block access.
+
+## Cursor Agent CLI (separate from OpenCode)
+
+For Cursor cloud **My Machines** (`agent worker start`), see
+[Cursor Agent](cursor-agent.md). Drawer AI stays OpenCode.

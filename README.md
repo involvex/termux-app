@@ -24,8 +24,9 @@ Package id: `com.involvex.termux_app` · Latest: **v0.202.1** · Docs:
 - **Default cwd** — `~/repos` (executable). Prefer over `~/storage/shared` (**noexec**)
 - **Localhost Preview** — drawer → **Preview** (port scan / chips / Copy LAN)
 - **OpenCode helper** — `opencode-setup` then `td-ai` (web UI on `:4096`) → Preview
-- **Workflow helpers** — `td-scaffold`, `td-dev`, `td-clone`, customizable drawer quick bar
-- **Widget scripts** — `~/.shortcuts` templates (clipboard / OCR / git / API helpers / `td-ai`); Settings + drawer picker
+- **Cursor Agent worker** — `cursor-agent-setup` then `td-agent-worker start` → Cursor cloud My Machines
+- **Workflow helpers** — `td-scaffold`, `td-dev`, `td-clone`, `td-upgrade`, customizable drawer quick bar
+- **Widget scripts** — `~/.shortcuts` templates (clipboard / OCR / git / API helpers / `td-ai` / agent-worker); Settings + drawer picker
 - **Hacker theme** — matrix green on black (launcher + terminal)
 
 Do **not** run `curl -fsSL https://bun.sh/install | bash` inside this app — that
@@ -77,6 +78,9 @@ td-dev                    # then drawer → Preview → Scan
 
 ```bash
 td-ai                     # OpenCode on :4096 → Preview
+cursor-agent-setup        # Cursor Agent CLI (glibc)
+td-agent-worker start     # Cursor cloud My Machines
+td-upgrade                # pkg + opencode + agent + bun stamp
 ```
 
 ## Building

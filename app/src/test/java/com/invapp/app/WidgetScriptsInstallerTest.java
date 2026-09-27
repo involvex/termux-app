@@ -13,7 +13,7 @@ import static org.junit.Assert.assertTrue;
 
 public class WidgetScriptsInstallerTest {
 
-    private static final int CATALOG_SIZE = 16;
+    private static final int CATALOG_SIZE = 19;
 
     @Test
     public void catalog_coversDefaultsAndOptionals() {
@@ -25,10 +25,13 @@ public class WidgetScriptsInstallerTest {
         assertEquals(WidgetScriptsInstaller.ID_OPEN_SETTINGS, ids[9]);
         assertEquals(WidgetScriptsInstaller.ID_VIBRATE, ids[10]);
         assertEquals(WidgetScriptsInstaller.ID_STOP_AI, ids[14]);
-        assertEquals(WidgetScriptsInstaller.ID_TD_AI, ids[15]);
+        assertEquals(WidgetScriptsInstaller.ID_TD_UPGRADE, ids[15]);
+        assertEquals(WidgetScriptsInstaller.ID_STOP_AGENT_WORKER, ids[16]);
+        assertEquals(WidgetScriptsInstaller.ID_TD_AI, ids[17]);
+        assertEquals(WidgetScriptsInstaller.ID_AGENT_WORKER, ids[18]);
         assertEquals(ids.length, WidgetScriptsInstaller.CATALOG_LABELS.length);
         assertEquals(4, WidgetScriptsInstaller.DEFAULT_FOREGROUND_IDS.length);
-        assertEquals(11, WidgetScriptsInstaller.OPTIONAL_FOREGROUND_IDS.length);
+        assertEquals(13, WidgetScriptsInstaller.OPTIONAL_FOREGROUND_IDS.length);
         assertEquals(1, WidgetScriptsInstaller.DEFAULT_TASK_IDS.length);
     }
 
@@ -132,6 +135,17 @@ public class WidgetScriptsInstallerTest {
         assertTrue(stopAi.contains("pkill -f '[o]pencode web'"));
         assertTrue(stopAi.contains("OpenCode stopped"));
 
+        String upgrade = WidgetScriptsInstaller.scriptBody(
+            WidgetScriptsInstaller.ID_TD_UPGRADE);
+        assertNotNull(upgrade);
+        assertTrue(upgrade.contains("td-upgrade"));
+        assertTrue(upgrade.contains("command -v td-upgrade"));
+
+        String stopWorker = WidgetScriptsInstaller.scriptBody(
+            WidgetScriptsInstaller.ID_STOP_AGENT_WORKER);
+        assertNotNull(stopWorker);
+        assertTrue(stopWorker.contains("td-agent-worker stop"));
+
         String tdAi = WidgetScriptsInstaller.scriptBody(
             WidgetScriptsInstaller.ID_TD_AI);
         assertNotNull(tdAi);
@@ -140,6 +154,13 @@ public class WidgetScriptsInstallerTest {
         assertTrue(tdAi.contains("OpenCode ready"));
         assertTrue(tdAi.contains("already ready"));
         assertTrue(tdAi.contains("global/health"));
+
+        String agentWorker = WidgetScriptsInstaller.scriptBody(
+            WidgetScriptsInstaller.ID_AGENT_WORKER);
+        assertNotNull(agentWorker);
+        assertTrue(agentWorker.contains("td-agent-worker start"));
+        assertTrue(agentWorker.contains("termux-wake-lock"));
+        assertTrue(agentWorker.contains("cursor.com/agents"));
     }
 
     @Test
@@ -149,7 +170,7 @@ public class WidgetScriptsInstallerTest {
 
         boolean[] speakAndAi = new boolean[CATALOG_SIZE];
         speakAndAi[0] = true;
-        speakAndAi[15] = true;
+        speakAndAi[17] = true;
         List<String> ids = WidgetScriptsInstaller.filterCatalogOrder(speakAndAi);
         assertEquals(Arrays.asList(
             WidgetScriptsInstaller.ID_CLIPBOARD_SPEAK,
@@ -191,6 +212,17 @@ public class WidgetScriptsInstallerTest {
         assertNotNull(task);
         assertTrue(task.contains("tasks"));
 
+        String worker = WidgetScriptsInstaller.runOnceCommand(
+            WidgetScriptsInstaller.ID_AGENT_WORKER);
+        assertNotNull(worker);
+        assertTrue(worker.contains("tasks"));
+        assertTrue(worker.contains(WidgetScriptsInstaller.ID_AGENT_WORKER));
+
+        assertNotNull(WidgetScriptsInstaller.runOnceCommand(
+            WidgetScriptsInstaller.ID_TD_UPGRADE));
+        assertFalse(WidgetScriptsInstaller.runOnceCommand(
+            WidgetScriptsInstaller.ID_TD_UPGRADE).contains("tasks"));
+
         assertNull(WidgetScriptsInstaller.runOnceCommand("not-a-template"));
     }
 
@@ -206,6 +238,11 @@ public class WidgetScriptsInstallerTest {
             WidgetScriptsInstaller.ID_STOP_AI));
         assertTrue(WidgetScriptsInstaller.scriptPath(
             WidgetScriptsInstaller.ID_TD_AI).getPath().contains("tasks"));
+        assertTrue(WidgetScriptsInstaller.scriptPath(
+            WidgetScriptsInstaller.ID_AGENT_WORKER).getPath().contains("tasks"));
+        assertFalse(WidgetScriptsInstaller.scriptPath(
+            WidgetScriptsInstaller.ID_TD_UPGRADE).getPath().replace('\\', '/')
+            .contains("/tasks/"));
         assertFalse(WidgetScriptsInstaller.scriptPath(
             WidgetScriptsInstaller.ID_CLIPBOARD_SPEAK).getPath().replace('\\', '/')
             .contains("/tasks/"));

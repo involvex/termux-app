@@ -53,11 +53,12 @@ See `ROADMAP.md`.
 | Default cwd | `~/repos` (exec-capable). `~/storage/shared` is browse/sync only (**noexec**) |
 | Preview | Drawer **Preview** → Scan + chips; **Copy LAN** / long-press chip → `http://<wifi-ip>:<port>` when bound on `0.0.0.0` |
 | AI helper | `opencode-setup` / `td-ai [port]` → OpenCode web on `:4096` (binds **`0.0.0.0`** by default for LAN; Preview still uses `127.0.0.1`). Setup downloads official `opencode-linux-*.tar.gz` from GitHub (no `bun install` / no postinstall), then `glibc` + ld-linux wrapper with **`LD_PRELOAD=` empty** and DNS shim via **`ld-linux --preload $PREFIX/lib/libinvapp-opencode-shim.so`** (arm64 shipped in APK assets). Optional `OPENCODE_VERSION=v1.18.31`; bind override `OPENCODE_HOST=127.0.0.1`. Drawer **AI** probes missing/installed/ready; long-press / **Stop AI** kills `:4096`. On-demand into `$PREFIX`, not baked into APK |
+| Cursor Agent | `cursor-agent-setup` → official `agent-cli-package.tar.gz` (glibc Node 24; **never** Bun / `curl\|bash`). `$PREFIX/bin/agent` runs bundled `node` via `ld-linux` + same DNS shim. Cloud My Machines: `agent login` then `td-agent-worker start` → https://cursor.com/agents. Pin `CURSOR_AGENT_VERSION=…`; after `agent update` run `cursor-agent-setup --wrap-only`. Stack refresh: `td-upgrade` (pkg + opencode + agent rewrap + Bun stamp; no `bun upgrade`) |
 | Dev server | `td-dev [script]` → `bun run` with Preview/LAN hints |
 | Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`); `pwa` / `pwa-react` add `vite-plugin-pwa` |
 | Clone | `td-clone <url> [name] [--bun-i]` → git clone into `~/repos`; drawer **Clone…** |
 | File share → Edit | Seeds `~/bin/termux-file-editor` (nvim→vim→nano→less) for FileReceiver |
-| Widget scripts | `~/.shortcuts` templates (defaults: `clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, `screen-ocr`, `tasks/td-ai`; optional catalog: camera/wifi/battery/torch/share/settings/vibrate/volume/location/telephony/`stop-ai`); Settings / right drawer; matching Widget APK + API/`pkg install termux-api`. `screen-ocr` → `td-screen-ocr`. **2-finger swipe down** (or Ctrl+Alt+T) opens Tools end drawer. Widget tap always shows **Running: name** toast |
+| Widget scripts | `~/.shortcuts` templates (defaults: `clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, `screen-ocr`, `tasks/td-ai`; optional catalog: camera/wifi/battery/torch/share/settings/vibrate/volume/location/telephony/`stop-ai`/`td-upgrade`/`stop-agent-worker`/`tasks/agent-worker`); Settings / right drawer; matching Widget APK + API/`pkg install termux-api`. `screen-ocr` → `td-screen-ocr`. **2-finger swipe down** (or Ctrl+Alt+T) opens Tools end drawer. Widget tap always shows **Running: name** toast |
 | Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize bar / Customize keys (writes quoted `extra-keys` in `~/.termux/termux.properties`). Extra-keys: 2-row nav page + swipe L/R for workflow page; end drawer = Tools (Preview/AI/Clone/New/Widget scripts). Long-press / Ctrl+Alt+M → actions bottom sheet. AI tap when ready opens Preview and may offer **Copy LAN** if `:4096` is wildcard-bound |
 | Completions | App installs `$PREFIX/etc/profile.d/invapp-completions.sh` + `bash_completion.d` for bun/pkg/npm/gh/git. Prefer `pkg install bash-completion` for richer git. **New session** after update. Never edit `~/.bashrc` |
 
@@ -89,6 +90,15 @@ See `ROADMAP.md`.
   `ld-linux --preload …/libinvapp-opencode-shim.so` instead. Never
   `PATH=$PREFIX/glibc/bin:$PATH` (breaks the shell). Never use stock `grun`
   alone on this package id without path fixups.
+- `libdl.so.2` / Bun footer on Cursor Agent — the CLI is glibc Node 24 +
+  `*.linux-arm64-gnu.node`, not Android Bun. Use `cursor-agent-setup` (never
+  `curl https://cursor.com/install | bash` under Bun). Same empty
+  `LD_PRELOAD=` + `ld-linux --preload` shim as OpenCode. After `agent update`,
+  re-run `cursor-agent-setup --wrap-only` (or `td-upgrade`). Worker for Cursor
+  cloud: `td-agent-worker start` (not Preview).
+- `Cannot find module 'tree-sitter'` — incomplete extract (only `node`/`index.js`).
+  `rm -rf ~/.local/share/cursor-agent/versions/<ver>` then `cursor-agent-setup`
+  (setup now requires `node_modules/tree-sitter` + bash binding).
 - `opencode` prints “postinstall script was not run” — leftover bun JS stub.
   Re-run `opencode-setup` (removes the stub) or `rm -f $PREFIX/bin/opencode`
   then setup again.
@@ -202,6 +212,9 @@ bun install
 bun run dev          # or bun run android / build
 # Drawer → Preview → Scan → tap port (e.g. 3000)
 td-ai                # OpenCode on 0.0.0.0:4096 → Preview 127.0.0.1 / LAN Copy
+# Cursor cloud My Machines (optional):
+# cursor-agent-setup && agent login && td-agent-worker start
+# td-upgrade           # pkg + opencode + agent rewrap + Bun stamp
 ```
 
 PC: same remote, normal git + bun. Pull on phone to continue. No Termux
