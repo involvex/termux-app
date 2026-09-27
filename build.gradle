@@ -5,6 +5,19 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:9.4.0'
+
+        // Security: pin patched versions of AGP/lint transitive build-classpath deps
+        // (never shipped in the APK). Keeps Dependabot alerts closed until AGP itself
+        // bumps them. kotlin-gradle-plugin is intentionally not forced here since its
+        // only fix currently ships in a beta.
+        constraints {
+            classpath 'org.bitbucket.b_c:jose4j:0.9.6'
+            classpath 'org.jdom:jdom2:2.0.6.1'
+            classpath 'org.apache.httpcomponents:httpclient:4.5.14'
+            classpath 'org.apache.commons:commons-lang3:3.18.0'
+            classpath 'org.bouncycastle:bcprov-jdk18on:1.85'
+            classpath 'org.bouncycastle:bcpkix-jdk18on:1.85'
+        }
     }
 }
 
@@ -23,5 +36,11 @@ subprojects {
         tasks.withType(JavaCompile).configureEach {
             options.encoding = "UTF-8"
         }
+    }
+
+    // Security: Robolectric pulls bcprov 1.72 onto the test classpath (test JVM only,
+    // never shipped). Force the patched version so Dependabot alerts stay closed.
+    configurations.configureEach {
+        resolutionStrategy.force 'org.bouncycastle:bcprov-jdk18on:1.85'
     }
 }
