@@ -28,6 +28,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -170,10 +171,11 @@ final class TermuxInstaller {
                                     if (parts.length != 2)
                                         throw new RuntimeException("Malformed symlink line: " + line);
                                     String oldPath = parts[0].replace("/com.termux/", "/" + TermuxConstants.TERMUX_PACKAGE_NAME + "/");
-                                    String newPath = TERMUX_STAGING_PREFIX_DIR_PATH + "/" + parts[1];
+                                    File newPathFile = resolveZipEntryTargetFile(TERMUX_STAGING_PREFIX_DIR, parts[1]);
+                                    String newPath = newPathFile.getPath();
                                     symlinks.add(Pair.create(oldPath, newPath));
 
-                                    error = ensureDirectoryExists(new File(newPath).getParentFile());
+                                    error = ensureDirectoryExists(newPathFile.getParentFile());
                                     if (error != null) {
                                         showBootstrapErrorDialog(activity, whenDone, Error.getErrorMarkdownString(error));
                                         return;
@@ -181,7 +183,7 @@ final class TermuxInstaller {
                                 }
                             } else {
                                 String zipEntryName = zipEntry.getName();
-                                File targetFile = new File(TERMUX_STAGING_PREFIX_DIR_PATH, zipEntryName);
+                                File targetFile = resolveZipEntryTargetFile(TERMUX_STAGING_PREFIX_DIR, zipEntryName);
                                 boolean isDirectory = zipEntry.isDirectory();
 
                                 error = ensureDirectoryExists(isDirectory ? targetFile : targetFile.getParentFile());
@@ -466,6 +468,33 @@ final class TermuxInstaller {
             }
         }
         return out.toByteArray();
+    }
+
+    /**
+     * Resolve a zip archive entry name to a file under {@code destDir}, rejecting entries whose
+     * canonical path would escape {@code destDir} (zip slip / directory traversal). Also used for
+     * symlink locations listed in SYMLINKS.txt.
+     *
+     * @param destDir   The directory the entry must stay under.
+     * @param entryName The raw archive entry name, relative to {@code destDir}.
+     * @return The target file, guaranteed to be {@code destDir} itself or under it.
+     * @throws IOException If {@code destDir} is not set, the entry name is null or the entry
+     *                     resolves outside of {@code destDir}.
+     */
+    static File resolveZipEntryTargetFile(File destDir, String entryName) throws IOException {
+        if (destDir == null)
+            throw new IOException("Destination directory not set");
+        if (entryName == null)
+            throw new IOException("Zip entry name is null");
+        File targetFile = new File(destDir, entryName);
+        String destCanonicalPath = destDir.getCanonicalPath();
+        String targetCanonicalPath = targetFile.getCanonicalPath();
+        if (!targetCanonicalPath.equals(destCanonicalPath)
+            && !targetCanonicalPath.startsWith(destCanonicalPath + File.separator)) {
+            throw new IOException("Zip entry \"" + entryName + "\" escapes destination directory \""
+                + destDir.getPath() + "\"");
+        }
+        return targetFile;
     }
 
     public static byte[] loadZipBytes() {
