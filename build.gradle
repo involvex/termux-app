@@ -8,8 +8,8 @@ buildscript {
 
         // Security: pin patched versions of AGP/lint transitive build-classpath deps
         // (never shipped in the APK). Keeps Dependabot alerts closed until AGP itself
-        // bumps them. kotlin-gradle-plugin is intentionally not forced here since its
-        // only fix currently ships in a beta.
+        // bumps them. kotlin-gradle-plugin 2.4.20 is forced since its fix graduated
+        // from beta to stable (2026-09-07).
         constraints {
             classpath 'org.bitbucket.b_c:jose4j:0.9.6'
             classpath 'org.jdom:jdom2:2.0.6.1'
@@ -17,6 +17,7 @@ buildscript {
             classpath 'org.apache.commons:commons-lang3:3.18.0'
             classpath 'org.bouncycastle:bcprov-jdk18on:1.85'
             classpath 'org.bouncycastle:bcpkix-jdk18on:1.85'
+            classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.20'
         }
     }
 }
@@ -42,8 +43,8 @@ subprojects {
     // The root buildscript constraints above do not cover AGP's per-module
     // androidLintTool classpath (which resolves its own bcpkix/httpclient/commons-lang3
     // copies) or Robolectric's bcprov 1.72 on the test classpath (test JVM only,
-    // never shipped). Keeps Dependabot alerts closed. kotlin-gradle-plugin is
-    // intentionally not forced since its only fix currently ships in a beta.
+    // never shipped). Keeps Dependabot alerts closed. kotlin-gradle-plugin 2.4.20
+    // (stable) is forced since the lint classpath resolves 2.2.10 transitively.
     configurations.configureEach {
         resolutionStrategy.force(
             'org.bitbucket.b_c:jose4j:0.9.6',
@@ -51,7 +52,8 @@ subprojects {
             'org.apache.httpcomponents:httpclient:4.5.14',
             'org.apache.commons:commons-lang3:3.18.0',
             'org.bouncycastle:bcprov-jdk18on:1.85',
-            'org.bouncycastle:bcpkix-jdk18on:1.85'
+            'org.bouncycastle:bcpkix-jdk18on:1.85',
+            'org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.20'
         )
     }
 }
