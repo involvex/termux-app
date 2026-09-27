@@ -94,9 +94,15 @@ public class StorageGetAPI {
             Logger.logVerbose(LOG_TAG, "onActivityResult: requestCode: " + requestCode + ", resultCode: "  + resultCode + ", data: "  + IntentUtils.getIntentString(resultData));
 
             super.onActivityResult(requestCode, resultCode, resultData);
-            if (resultCode == RESULT_OK) {
+            if (resultCode == RESULT_OK && resultData != null) {
                 Uri data = resultData.getData();
-                try {
+                // Only accept uris handed back by the system document picker (content://) and a
+                // known output file, so a crafted result cannot resolve arbitrary uris/files.
+                if (data == null || outputFile == null || !"content".equalsIgnoreCase(data.getScheme())) {
+                    Logger.logError(LOG_TAG, "Ignoring invalid storage-get result: uriScheme="
+                        + (data == null ? "null" : data.getScheme())
+                        + ", outputFileSet=" + (outputFile != null));
+                } else {
                     try (InputStream in = getContentResolver().openInputStream(data)) {
                         try (OutputStream out = new FileOutputStream(outputFile)) {
                             byte[] buffer = new byte[8192];
@@ -109,9 +115,9 @@ public class StorageGetAPI {
                                 }
                             }
                         }
+                    } catch (IOException e) {
+                        Logger.logStackTraceWithMessage(LOG_TAG, "Error copying " + data + " to " + outputFile, e);
                     }
-                } catch (IOException e) {
-                    Logger.logStackTraceWithMessage(LOG_TAG, "Error copying " + data + " to " + outputFile, e);
                 }
             }
             finish();
