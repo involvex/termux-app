@@ -158,6 +158,7 @@ final class TermuxInstaller {
 
                     final byte[] buffer = new byte[8096];
                     final List<Pair<String, String>> symlinks = new ArrayList<>(50);
+                    final String stagingCanonicalPath = TERMUX_STAGING_PREFIX_DIR.getCanonicalPath();
 
                     final byte[] zipBytes = loadZipBytes();
                     try (ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
@@ -183,7 +184,12 @@ final class TermuxInstaller {
                                 }
                             } else {
                                 String zipEntryName = zipEntry.getName();
-                                File targetFile = resolveZipEntryTargetFile(TERMUX_STAGING_PREFIX_DIR, zipEntryName);
+                                File targetFile = new File(TERMUX_STAGING_PREFIX_DIR, zipEntryName);
+                                String targetCanonicalPath = targetFile.getCanonicalPath();
+                                if (!targetCanonicalPath.startsWith(stagingCanonicalPath + File.separator)) {
+                                    throw new IOException("Zip entry \"" + zipEntryName + "\" escapes destination directory \""
+                                        + TERMUX_STAGING_PREFIX_DIR_PATH + "\"");
+                                }
                                 boolean isDirectory = zipEntry.isDirectory();
 
                                 error = ensureDirectoryExists(isDirectory ? targetFile : targetFile.getParentFile());
@@ -471,14 +477,14 @@ final class TermuxInstaller {
     }
 
     /**
-     * Resolve a zip archive entry name to a file under {@code destDir}, rejecting entries whose
-     * canonical path would escape {@code destDir} (zip slip / directory traversal). Also used for
-     * symlink locations listed in SYMLINKS.txt.
+     * Resolve a relative path to a file under {@code destDir}, rejecting paths whose canonical path
+     * would escape {@code destDir} (path traversal). Used for symlink locations listed in
+     * SYMLINKS.txt.
      *
-     * @param destDir   The directory the entry must stay under.
-     * @param entryName The raw archive entry name, relative to {@code destDir}.
+     * @param destDir   The directory the path must stay under.
+     * @param entryName The raw relative path, relative to {@code destDir}.
      * @return The target file, guaranteed to be {@code destDir} itself or under it.
-     * @throws IOException If {@code destDir} is not set, the entry name is null or the entry
+     * @throws IOException If {@code destDir} is not set, the path is null or the path
      *                     resolves outside of {@code destDir}.
      */
     static File resolveZipEntryTargetFile(File destDir, String entryName) throws IOException {
