@@ -38,9 +38,20 @@ subprojects {
         }
     }
 
-    // Security: Robolectric pulls bcprov 1.72 onto the test classpath (test JVM only,
-    // never shipped). Force the patched version so Dependabot alerts stay closed.
+    // Security: force patched versions on every resolvable project configuration.
+    // The root buildscript constraints above do not cover AGP's per-module
+    // androidLintTool classpath (which resolves its own bcpkix/httpclient/commons-lang3
+    // copies) or Robolectric's bcprov 1.72 on the test classpath (test JVM only,
+    // never shipped). Keeps Dependabot alerts closed. kotlin-gradle-plugin is
+    // intentionally not forced since its only fix currently ships in a beta.
     configurations.configureEach {
-        resolutionStrategy.force 'org.bouncycastle:bcprov-jdk18on:1.85'
+        resolutionStrategy.force(
+            'org.bitbucket.b_c:jose4j:0.9.6',
+            'org.jdom:jdom2:2.0.6.1',
+            'org.apache.httpcomponents:httpclient:4.5.14',
+            'org.apache.commons:commons-lang3:3.18.0',
+            'org.bouncycastle:bcprov-jdk18on:1.85',
+            'org.bouncycastle:bcpkix-jdk18on:1.85'
+        )
     }
 }
