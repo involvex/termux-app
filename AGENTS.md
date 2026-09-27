@@ -221,7 +221,7 @@ without testing bootstrap + all ABIs.
 | NDK | `29.0.14206865`, `ndk-build` (`Android.mk` per module) |
 | JDK (build) | `17` (Android Studio Flamingo+) |
 | Java compat | `1.8` + `coreLibraryDesugaring` (`desugar_jdk_libs:1.1.5`) |
-| App version | `versionCode 202`, `versionName 0.202.0` (semver-enforced at build) |
+| App version | `versionCode 203`, `versionName 0.202.1` (semver-enforced at build) |
 | Bootstrap | `2026.02.12-r1+apt.android-7` (aarch64/arm/i686/x86_64, SHA-256 verified); android-5: `2022.04.28-r6` |
 | Bun | `1.4.2` official `bun-linux-{aarch64,x64}-android.zip` (SHA-256 verified, `.incbin` into `libinvapp-bun`, extracted by `TermuxBunInstaller`) |
 | Editor | 4-space, LF, UTF-8, final newline (`.editorconfig`); 2-space for `*.yaml` |
@@ -236,7 +236,17 @@ without testing bootstrap + all ABIs.
 **`termux-shared`:** `appcompat:1.6.1`, above core/material/guava/markwon, plus
 `hiddenapibypass:6.1` (Android 10+ hidden API), `window:1.1.0`,
 `commons-io:2.5` (**do not exceed 2.5** — `java.nio.file.Path` missing on
-Android < 8), `termux-am-library:v2.0.0`, `terminal-view`.
+Android < 8; Dependabot `#2`/`#11` dismissed `tolerable_risk`, revisit at
+minSdk 26), `termux-am-library:v2.0.0`, `terminal-view`.
+
+**Build classpath (root `build.gradle`, never shipped in APK):** buildscript
+`constraints` + `subprojects` `resolutionStrategy.force` pin `jose4j:0.9.6`,
+`jdom2:2.0.6.1`, `httpclient:4.5.14`, `commons-lang3:3.18.0`,
+`bcprov-jdk18on:1.85`, `bcpkix-jdk18on:1.85` (covers AGP's per-module
+`androidLintTool` copies + Robolectric's `bcprov` on the test classpath) and
+`kotlin-gradle-plugin:2.4.20` (stable; lint classpath resolves `2.2.10`
+transitively; Dependabot `#19` dismissed `tolerable_risk` before the stable
+fix shipped).
 
 **`terminal-emulator`:** `annotation:1.9.0` only + JNI, `abiFilters` all four.
 
@@ -301,7 +311,7 @@ termux-app/
 - Format `major.minor.patch(-prerelease)(+buildmetadata)`, always with patch:
   `0.200.0`, `0.201.0-beta.1`, never `v0.1`. Tag as `v0.200.0`.
 - `app/build.gradle:validateVersionName()` fails the build on bad versions.
-  - Keep `termux-shared`/`terminal-emulator` versions (`0.202.0`) in
+  - Keep `termux-shared`/`terminal-emulator` versions (`0.202.1`) in
   sync when cutting releases.
 
 ### Code style / quality
