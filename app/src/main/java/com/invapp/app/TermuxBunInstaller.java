@@ -994,8 +994,8 @@ public final class TermuxBunInstaller {
             + "HOME=\"" + home + "\"\n"
             + "export PATH=\"$PREFIX/bin:$HOME/.bun/bin:$PATH\"\n"
             // OpenCode: bind 0.0.0.0 for LAN; Preview still uses 127.0.0.1
-            // https://opencode.ai/docs/server/ — health: GET /global/health
-            // Never use --mdns (getifaddrs noise / failures on Android).
+            // V2 health: GET /api/info ({"data":...}, Basic opencode:service.json password).
+            // V1 fallback: GET /global/health. Never use --mdns on Android.
             + "PORT=\"${1:-4096}\"\n"
             + "case \"$PORT\" in\n"
             + "  ''|*[!0-9]*) echo \"usage: td-ai [port]\" >&2; exit 2 ;;\n"
@@ -1017,16 +1017,38 @@ public final class TermuxBunInstaller {
             + "export SSL_CERT_FILE=\"${SSL_CERT_FILE:-$PREFIX/etc/tls/cert.pem}\"\n"
             + "export NODE_EXTRA_CA_CERTS=\"${NODE_EXTRA_CA_CERTS:-$PREFIX/etc/tls/cert.pem}\"\n"
             + "export CURL_CA_BUNDLE=\"${CURL_CA_BUNDLE:-$PREFIX/etc/tls/cert.pem}\"\n"
-            // Already healthy? Do not start a second server.
-            + "if curl -fsS --connect-timeout 1 --max-time 2 \"$LOCAL/global/health\" 2>/dev/null | grep -qi healthy; then\n"
+            // Repair split installs: wrapper must exist in both $PREFIX/bin and ~/.bun/bin.
+            // opencode-setup writes both, but interrupted runs leave only one behind.
+            + "if [ ! -x \"$PREFIX/bin/opencode\" ] && [ -x \"$HOME/.bun/bin/opencode\" ]; then\n"
+            + "  cp -f \"$HOME/.bun/bin/opencode\" \"$PREFIX/bin/opencode\" 2>/dev/null || true\n"
+            + "  chmod 700 \"$PREFIX/bin/opencode\" 2>/dev/null || true\n"
+            + "fi\n"
+            + "if [ ! -x \"$HOME/.bun/bin/opencode\" ] && [ -x \"$PREFIX/bin/opencode\" ]; then\n"
+            + "  cp -f \"$PREFIX/bin/opencode\" \"$HOME/.bun/bin/opencode\" 2>/dev/null || true\n"
+            + "  chmod 700 \"$HOME/.bun/bin/opencode\" 2>/dev/null || true\n"
+            + "fi\n"
+            // Auth for V2 /api/info: service.json password (session-scoped pairing secret).
+            + "AUTH_ARGS=\"\"\n"
+            + "if [ -f \"$HOME/.config/opencode/service.json\" ]; then\n"
+            + "  OC_PW=$(sed -n 's/.*\"password\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p' \"$HOME/.config/opencode/service.json\" | head -1)\n"
+            + "  if [ -n \"$OC_PW\" ]; then AUTH_ARGS=\"-u opencode:$OC_PW\"; fi\n"
+            + "fi\n"
+            // Already healthy? Do not start a second server (V2 first, V1 fallback).
+            + "if curl -fsS $AUTH_ARGS --connect-timeout 1 --max-time 2 \"$LOCAL/api/info\" 2>/dev/null | grep -qi '\"data\"\\|version'; then\n"
             + "  echo \"td-ai: OpenCode already healthy → $LOCAL/\"\n"
+            + "  echo \"  api: $LOCAL/api/info\"\n"
+            + "  echo \"  bind: $HOST:$PORT (Preview: $LOCAL — LAN: drawer → Preview → Copy LAN)\"\n"
+            + "  exit 0\n"
+            + "fi\n"
+            + "if curl -fsS --connect-timeout 1 --max-time 2 \"$LOCAL/global/health\" 2>/dev/null | grep -qi healthy; then\n"
+            + "  echo \"td-ai: OpenCode already healthy → $LOCAL/ (V1)\"\n"
             + "  echo \"  health: $LOCAL/global/health\"\n"
             + "  echo \"  openapi: $LOCAL/doc\"\n"
             + "  echo \"  bind: $HOST:$PORT (Preview: $LOCAL — LAN: drawer → Preview → Copy LAN)\"\n"
             + "  exit 0\n"
             + "fi\n"
             + "if (echo >/dev/tcp/127.0.0.1/\"$PORT\") >/dev/null 2>&1; then\n"
-            + "  echo \"td-ai: :$PORT is up but /global/health failed — stop other listeners or: drawer → Stop AI\" >&2\n"
+            + "  echo \"td-ai: :$PORT is up but /api/info + /global/health failed — stop other listeners or: drawer → Stop AI\" >&2\n"
             + "  exit 1\n"
             + "fi\n"
             + "if ! command -v bun >/dev/null 2>&1; then\n"
@@ -1049,9 +1071,10 @@ public final class TermuxBunInstaller {
             + "  [ -n \"$LAN_IP\" ] && LAN_HINT=\"http://$LAN_IP:$PORT\"\n"
             + "fi\n"
             + "echo \"\"\n"
-            + "echo \"OpenCode web → bind $HOST:$PORT\"\n"
+            + "echo \"OpenCode → bind $HOST:$PORT\"\n"
             + "echo \"  Preview  $LOCAL/\"\n"
-            + "echo \"  health   GET $LOCAL/global/health\"\n"
+            + "echo \"  api      GET $LOCAL/api/info (V2; Basic opencode:service.json)\"\n"
+            + "echo \"  health   GET $LOCAL/global/health (V1 fallback)\"\n"
             + "echo \"  openapi  GET $LOCAL/doc\"\n"
             + "if [ -n \"$LAN_HINT\" ]; then\n"
             + "  echo \"  LAN      $LAN_HINT  (same Wi‑Fi; firewall/VPN may block)\"\n"
@@ -1060,13 +1083,25 @@ public final class TermuxBunInstaller {
             + "fi\n"
             + "echo \"  No --mdns. Override bind: OPENCODE_HOST=127.0.0.1 td-ai\"\n"
             + "echo \"\"\n"
-            // Prefer web UI for Preview; fall back to serve (API-only).
-            + "if opencode web --help >/dev/null 2>&1; then\n"
-            + "  exec opencode web --port \"$PORT\" --hostname \"$HOST\" --print-logs\n"
+            // V2: single headless server. `serve` works on both V1 + V2;
+            // `web` is V1-only (removed in V2) so it is only a fallback.
+            // When `pair` exists (V2), auto-pair this host for overlay clients.
+            + "if opencode pair --help >/dev/null 2>&1; then\n"
+            + "  LAN_FOR_PAIR=\"$LAN_HINT\"\n"
+            + "  if [ -z \"$LAN_FOR_PAIR\" ] && command -v ip >/dev/null 2>&1; then\n"
+            + "    _IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i==\"src\"){print $(i+1); exit}}')\n"
+            + "    [ -n \"$_IP\" ] && LAN_FOR_PAIR=\"http://$_IP:$PORT\"\n"
+            + "  fi\n"
+            + "  if [ -n \"$LAN_FOR_PAIR\" ]; then\n"
+            + "    opencode pair --url \"$LAN_FOR_PAIR\" >/dev/null 2>&1 || true\n"
+            + "  fi\n"
             + "fi\n"
             + "if opencode serve --help >/dev/null 2>&1; then\n"
-            + "  echo \"td-ai: 'web' missing — starting API-only serve (no UI)\" >&2\n"
             + "  exec opencode serve --port \"$PORT\" --hostname \"$HOST\" --print-logs\n"
+            + "fi\n"
+            + "if opencode web --help >/dev/null 2>&1; then\n"
+            + "  echo \"td-ai: 'serve' missing — falling back to V1 web UI\" >&2\n"
+            + "  exec opencode web --port \"$PORT\" --hostname \"$HOST\" --print-logs\n"
             + "fi\n"
             + "echo \"td-ai: opencode has no web/serve command — try: opencode --help\" >&2\n"
             + "exec opencode --help\n";

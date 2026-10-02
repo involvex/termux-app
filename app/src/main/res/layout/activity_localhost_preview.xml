@@ -17,8 +17,8 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:hint="@string/hint_localhost_port"
-            android:inputType="number"
-            android:maxLength="5"
+            android:inputType="textUri"
+            android:maxLength="128"
             android:importantForAutofill="no" />
 
         <Button

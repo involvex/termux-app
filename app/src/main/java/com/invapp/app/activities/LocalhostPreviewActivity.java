@@ -8,7 +8,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.MenuItem;
 import android.view.View;
@@ -393,33 +392,45 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         });
     }
 
-    /** @return port or {@code -1} after toasting on error */
-    private int readPortInputOrToast() {
+    /** @return parsed target or {@code null} after toasting on error */
+    @Nullable
+    private WorkflowHelper.ParsedPreviewUrl readPreviewInputOrToast() {
         String raw = mPortInput.getText() != null
             ? mPortInput.getText().toString().trim() : "";
-        if (TextUtils.isEmpty(raw)) {
+        WorkflowHelper.ParsedPreviewUrl parsed = WorkflowHelper.parsePreviewInput(raw);
+        if (parsed == null) {
             Toast.makeText(this, R.string.msg_preview_invalid_port, Toast.LENGTH_SHORT).show();
-            return -1;
+            return null;
         }
-        try {
-            int port = Integer.parseInt(raw);
-            if (port < 1 || port > 65535) {
-                Toast.makeText(this, R.string.msg_preview_invalid_port, Toast.LENGTH_SHORT).show();
-                return -1;
-            }
-            return port;
-        } catch (NumberFormatException e) {
-            Toast.makeText(this, R.string.msg_preview_invalid_port, Toast.LENGTH_SHORT).show();
-            return -1;
+        if (!parsed.isLoopback()) {
+            // WebView is loopback-only; LAN URLs go to other devices via Copy LAN.
+            Toast.makeText(this,
+                getString(R.string.msg_preview_only_localhost)
+                    + " — :" + parsed.port + " loaded locally",
+                Toast.LENGTH_LONG).show();
         }
+        return parsed;
+    }
+
+    /** @return port or {@code -1} after toasting on error */
+    private int readPortInputOrToast() {
+        WorkflowHelper.ParsedPreviewUrl parsed = readPreviewInputOrToast();
+        return parsed == null ? -1 : parsed.port;
     }
 
     private void loadFromPortInput() {
-        int port = readPortInputOrToast();
-        if (port < 0) {
+        WorkflowHelper.ParsedPreviewUrl parsed = readPreviewInputOrToast();
+        if (parsed == null) {
             return;
         }
-        loadPort(port);
+        if (parsed.pathAndQuery != null && !parsed.pathAndQuery.isEmpty()) {
+            String p = parsed.pathAndQuery;
+            if (!p.startsWith("/")) {
+                p = "/" + p;
+            }
+            mCurrentPathAndQuery = p;
+        }
+        loadPort(parsed.port);
         refreshLanHint();
     }
 

@@ -11,21 +11,29 @@ opencode-setup          # once — downloads official linux tarball + glibc wrap
 td-ai                   # binds 0.0.0.0:4096; Preview → http://127.0.0.1:4096/
 ```
 
-Drawer → **AI** probes missing / installed / ready (`GET /global/health`);
+Drawer → **AI** probes missing / installed / ready (`GET /api/info` with
+`service.json` Basic auth, falling back to V1 `GET /global/health`);
 starts only when needed; opens Preview **after** health succeeds.
 Long-press **AI** or drawer **Stop AI** stops listeners on `:4096`.
+When the binary supports it, `td-ai` also runs `opencode pair --url <lan-url>`
+so overlay clients auto-connect (V2 pairing; skipped on V1 binaries).
 
-Optional pin: `OPENCODE_VERSION=v1.18.31 opencode-setup`
+Optional pin: `OPENCODE_VERSION=v1.18.34 opencode-setup`
+(V2 `2.x` is npm-only `@opencode/cli` — no `linux-arm64.tar.gz` published,
+so the native wrapper stays on `1.18.x` until a V2 tarball exists).
 
-## Endpoints (do not use `:5000` or `/api`)
+## Endpoints (`:4096` loopback; Preview also accepts a pasted URL)
 
 | URL | Purpose |
 |-----|---------|
 | `http://127.0.0.1:4096/` | Web UI (Preview) |
-| `http://127.0.0.1:4096/global/health` | `{ healthy: true, version }` |
+| `http://127.0.0.1:4096/api/info` | V2 `{ data: ... version }` (Basic `opencode:<service.json password>`) |
+| `http://127.0.0.1:4096/global/health` | V1 `{ healthy: true, version }` fallback |
 | `http://127.0.0.1:4096/doc` | OpenAPI 3.1 |
 
-There is **no** `/api` mount — sessions live under `/session`, etc.
+Preview accepts a bare port (`4096`), `host:port`, or a full loopback URL
+(`http://127.0.0.1:4096/path`). Non-loopback hosts pasted there load the same
+port locally and surface **Copy LAN** for the other device.
 
 ## Rules of thumb
 

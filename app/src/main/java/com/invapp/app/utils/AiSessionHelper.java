@@ -63,8 +63,9 @@ public final class AiSessionHelper {
 
     @NonNull
     public static Status probe(int port) {
-        // Prefer OpenAPI health (docs: GET /global/health) over bare TCP —
+        // Prefer V2 OpenAPI info (GET /api/info, {"data":...}) over bare TCP —
         // Preview must talk to a live OpenCode server, not an unrelated :4096.
+        // V1 /global/health is kept as a fallback for 1.18.x binaries.
         if (isOpenCodeHealthy(port)) {
             return Status.READY;
         }
@@ -75,46 +76,126 @@ public final class AiSessionHelper {
     }
 
     /**
-     * {@code GET http://127.0.0.1:port/global/health} — true when body contains
-     * {@code healthy} (OpenCode server API).
+     * V2 {@code GET http://127.0.0.1:port/api/info} (enveloped {@code {"data":...}}),
+     * falling back to V1 {@code GET .../global/health} containing {@code healthy}.
+     * Sends Basic auth from {@code ~/.config/opencode/service.json} when present
+     * (V2 servers require it; V1 ignores unknown headers).
      */
     public static boolean isOpenCodeHealthy(int port) {
         if (port < 1 || port > 65535) {
             return false;
         }
+        if (isApiInfoHealthy(port) || isLegacyHealthHealthy(port)) {
+            return true;
+        }
+        return false;
+    }
+
+    /** V2 info probe: any 2xx with a {@code data} envelope or version field. */
+    public static boolean isApiInfoHealthy(int port) {
+        String body = getHttpBody(WorkflowHelper.aiInfoUrl(port));
+        if (body == null) {
+            return false;
+        }
+        String lower = body.toLowerCase(Locale.US);
+        return lower.contains("\"data\"") || lower.contains("version");
+    }
+
+    /** V1 health probe: body contains {@code healthy}. */
+    public static boolean isLegacyHealthHealthy(int port) {
+        String body = getHttpBody(WorkflowHelper.aiHealthUrl(port));
+        if (body == null) {
+            return false;
+        }
+        return body.toLowerCase(Locale.US).contains("healthy");
+    }
+
+    @Nullable
+    private static String getHttpBody(@NonNull String urlString) {
         HttpURLConnection conn = null;
         try {
-            URL url = new URL(WorkflowHelper.aiHealthUrl(port));
+            URL url = new URL(urlString);
             conn = (HttpURLConnection) url.openConnection();
             conn.setConnectTimeout(HEALTH_CONNECT_TIMEOUT_MS);
             conn.setReadTimeout(HEALTH_READ_TIMEOUT_MS);
             conn.setRequestMethod("GET");
             conn.setInstanceFollowRedirects(false);
+            String password = readServicePassword();
+            if (password != null && !password.isEmpty()) {
+                String creds = "opencode:" + password;
+                String basic = android.util.Base64.encodeToString(
+                    creds.getBytes(StandardCharsets.UTF_8),
+                    android.util.Base64.NO_WRAP);
+                conn.setRequestProperty("Authorization", "Basic " + basic);
+            }
             int code = conn.getResponseCode();
             if (code < 200 || code >= 300) {
-                return false;
+                return null;
             }
             InputStream in = conn.getInputStream();
             if (in == null) {
-                return false;
+                return null;
             }
-            StringBuilder sb = new StringBuilder(128);
+            StringBuilder sb = new StringBuilder(256);
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(in, StandardCharsets.UTF_8))) {
-                char[] buf = new char[256];
+                char[] buf = new char[512];
                 int n;
-                while ((n = reader.read(buf)) >= 0 && sb.length() < 512) {
+                while ((n = reader.read(buf)) >= 0 && sb.length() < 2048) {
                     sb.append(buf, 0, n);
                 }
             }
-            String body = sb.toString().toLowerCase(Locale.US);
-            return body.contains("healthy");
+            return sb.toString();
         } catch (Exception e) {
-            return false;
+            return null;
         } finally {
             if (conn != null) {
                 conn.disconnect();
             }
+        }
+    }
+
+    /**
+     * V2 service password from {@code ~/.config/opencode/service.json}
+     * ({@code {"password":"..."}}). Null when absent/unreadable.
+     */
+    @Nullable
+    public static String readServicePassword() {
+        try {
+            File f = new File(TermuxConstants.TERMUX_HOME_DIR_PATH,
+                ".config/opencode/service.json");
+            if (!f.isFile()) {
+                return null;
+            }
+            byte[] buf = new byte[(int) Math.min(f.length(), 8 * 1024)];
+            int n;
+            try (InputStream in = new java.io.FileInputStream(f)) {
+                n = in.read(buf);
+            }
+            if (n <= 0) {
+                return null;
+            }
+            String json = new String(buf, 0, n, StandardCharsets.UTF_8);
+            int key = json.indexOf("\"password\"");
+            if (key < 0) {
+                return null;
+            }
+            int colon = json.indexOf(':', key);
+            if (colon < 0) {
+                return null;
+            }
+            int q1 = json.indexOf('"', colon + 1);
+            if (q1 < 0) {
+                return null;
+            }
+            int q2 = json.indexOf('"', q1 + 1);
+            if (q2 < 0) {
+                return null;
+            }
+            String pw = json.substring(q1 + 1, q2);
+            return pw.isEmpty() ? null : pw;
+        } catch (Exception e) {
+            return null;
         }
     }
 

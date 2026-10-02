@@ -28,7 +28,9 @@ public final class WorkflowHelper {
     public static final String CMD_TD_AI = "td-ai\n";
     /** OpenCode web/serve default ({@code http://127.0.0.1:4096/}). */
     public static final int AI_PREVIEW_PORT = 4096;
-    /** OpenCode server health probe — see https://opencode.ai/docs/server/#apis */
+    /** OpenCode V2 API probe — see https://opencode.ai/v2/docs/api */
+    public static final String AI_INFO_PATH = "/api/info";
+    /** OpenCode V1 health probe (kept as fallback) — see https://opencode.ai/docs/server/#apis */
     public static final String AI_HEALTH_PATH = "/global/health";
     public static final String AI_DOC_PATH = "/doc";
     public static final int VITE_DEFAULT_PORT = 5173;
@@ -43,6 +45,134 @@ public final class WorkflowHelper {
     @NonNull
     public static String aiHealthUrl(int port) {
         return aiBaseUrl(port) + AI_HEALTH_PATH;
+    }
+
+    @NonNull
+    public static String aiInfoUrl(int port) {
+        return aiBaseUrl(port) + AI_INFO_PATH;
+    }
+
+    /**
+     * Parse Preview input that may be a bare port ({@code 4096}),
+     * {@code host:port}, or a full loopback URL
+     * ({@code http://127.0.0.1:4096/path?q=1}).
+     *
+     * @return {@code int[]{port}} plus path via {@code outPath[0]}, or null when invalid
+     */
+    @Nullable
+    public static ParsedPreviewUrl parsePreviewInput(@Nullable String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String s = raw.trim();
+        if (s.isEmpty()) {
+            return null;
+        }
+        // Bare port.
+        try {
+            int port = Integer.parseInt(s);
+            if (port >= 1 && port <= 65535) {
+                return new ParsedPreviewUrl(port, "/");
+            }
+            return null;
+        } catch (NumberFormatException ignored) {
+            // fall through to URL forms
+        }
+        String lower = s.toLowerCase(java.util.Locale.US);
+        String work = s;
+        // Strip scheme.
+        int scheme = lower.indexOf("://");
+        if (scheme >= 0) {
+            work = s.substring(scheme + 3);
+        }
+        // Split host:port + path.
+        String hostPort = work;
+        String path = "/";
+        int slash = work.indexOf('/');
+        if (slash >= 0) {
+            hostPort = work.substring(0, slash);
+            path = work.substring(slash);
+            if (path.isEmpty()) {
+                path = "/";
+            }
+        } else {
+            int q = work.indexOf('?');
+            if (q >= 0) {
+                hostPort = work.substring(0, q);
+                path = "/" + work.substring(q);
+            }
+        }
+        // Drop userinfo if pasted from an authed URL.
+        int at = hostPort.lastIndexOf('@');
+        if (at >= 0) {
+            hostPort = hostPort.substring(at + 1);
+        }
+        String host = hostPort;
+        String portStr = null;
+        int colon = hostPort.lastIndexOf(':');
+        // IPv6 bracket form [::1]:port.
+        if (hostPort.startsWith("[")) {
+            int close = hostPort.indexOf(']');
+            if (close < 0) {
+                return null;
+            }
+            host = hostPort.substring(0, close + 1);
+            if (close + 1 < hostPort.length() && hostPort.charAt(close + 1) == ':') {
+                portStr = hostPort.substring(close + 2);
+            }
+        } else if (colon >= 0) {
+            host = hostPort.substring(0, colon);
+            portStr = hostPort.substring(colon + 1);
+        }
+        if (portStr == null || portStr.isEmpty()) {
+            return null;
+        }
+        int port;
+        try {
+            port = Integer.parseInt(portStr.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+        if (port < 1 || port > 65535) {
+            return null;
+        }
+        String hostLower = host.trim().toLowerCase(java.util.Locale.US);
+        if (!hostLower.isEmpty()
+            && !"127.0.0.1".equals(hostLower)
+            && !"localhost".equals(hostLower)
+            && !"[::1]".equals(hostLower)
+            && !"::1".equals(hostLower)) {
+            // Non-loopback hosts are LAN targets — caller surfaces Copy LAN instead.
+            return new ParsedPreviewUrl(port, path, host.trim());
+        }
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
+        return new ParsedPreviewUrl(port, path);
+    }
+
+    /** Parsed Preview target: loopback port + path, plus optional non-loopback host. */
+    public static final class ParsedPreviewUrl {
+        public final int port;
+        @NonNull
+        public final String pathAndQuery;
+        @Nullable
+        public final String nonLoopbackHost;
+
+        public ParsedPreviewUrl(int port, @NonNull String pathAndQuery) {
+            this(port, pathAndQuery, null);
+        }
+
+        public ParsedPreviewUrl(int port, @NonNull String pathAndQuery,
+                                 @Nullable String nonLoopbackHost) {
+            this.port = port;
+            this.pathAndQuery = pathAndQuery;
+            this.nonLoopbackHost = nonLoopbackHost;
+        }
+
+        public boolean isLoopback() {
+            return nonLoopbackHost == null;
+        }
     }
 
     /** create-vite (+ pwa overlays) templates we expose in the New… sheet. */

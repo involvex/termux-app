@@ -64,8 +64,35 @@ public class WorkflowHelperTest {
         assertEquals(4096, WorkflowHelper.AI_PREVIEW_PORT);
         assertEquals(5173, WorkflowHelper.VITE_DEFAULT_PORT);
         assertEquals("/global/health", WorkflowHelper.AI_HEALTH_PATH);
+        assertEquals("/api/info", WorkflowHelper.AI_INFO_PATH);
         assertEquals("http://127.0.0.1:4096/global/health",
             WorkflowHelper.aiHealthUrl(4096));
+        assertEquals("http://127.0.0.1:4096/api/info",
+            WorkflowHelper.aiInfoUrl(4096));
         assertEquals("http://127.0.0.1:4096", WorkflowHelper.aiBaseUrl(0));
+    }
+
+    @Test
+    public void parsePreviewInput_acceptsPortHostPortAndFullUrl() {
+        WorkflowHelper.ParsedPreviewUrl bare =
+            WorkflowHelper.parsePreviewInput("4096");
+        assertTrue(bare != null && bare.port == 4096 && bare.isLoopback());
+
+        WorkflowHelper.ParsedPreviewUrl hostPort =
+            WorkflowHelper.parsePreviewInput("127.0.0.1:5173");
+        assertTrue(hostPort != null && hostPort.port == 5173 && hostPort.isLoopback());
+
+        WorkflowHelper.ParsedPreviewUrl full =
+            WorkflowHelper.parsePreviewInput("http://127.0.0.1:4096/chat?x=1");
+        assertTrue(full != null && full.port == 4096 && full.isLoopback());
+        assertEquals("/chat?x=1", full.pathAndQuery);
+
+        WorkflowHelper.ParsedPreviewUrl lan =
+            WorkflowHelper.parsePreviewInput("http://192.168.1.10:4096/");
+        assertTrue(lan != null && lan.port == 4096 && !lan.isLoopback());
+
+        assertTrue(WorkflowHelper.parsePreviewInput("") == null);
+        assertTrue(WorkflowHelper.parsePreviewInput("0") == null);
+        assertTrue(WorkflowHelper.parsePreviewInput("not a url") == null);
     }
 }
