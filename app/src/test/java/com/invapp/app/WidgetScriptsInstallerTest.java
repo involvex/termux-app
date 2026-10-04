@@ -13,7 +13,7 @@ import static org.junit.Assert.assertTrue;
 
 public class WidgetScriptsInstallerTest {
 
-    private static final int CATALOG_SIZE = 19;
+    private static final int CATALOG_SIZE = 20;
 
     @Test
     public void catalog_coversDefaultsAndOptionals() {
@@ -22,16 +22,17 @@ public class WidgetScriptsInstallerTest {
         assertEquals(WidgetScriptsInstaller.ID_CLIPBOARD_SPEAK, ids[0]);
         assertEquals(WidgetScriptsInstaller.ID_SCREEN_OCR, ids[3]);
         assertEquals(WidgetScriptsInstaller.ID_CAMERA_PHOTO, ids[4]);
-        assertEquals(WidgetScriptsInstaller.ID_OPEN_SETTINGS, ids[9]);
-        assertEquals(WidgetScriptsInstaller.ID_VIBRATE, ids[10]);
-        assertEquals(WidgetScriptsInstaller.ID_STOP_AI, ids[14]);
-        assertEquals(WidgetScriptsInstaller.ID_TD_UPGRADE, ids[15]);
-        assertEquals(WidgetScriptsInstaller.ID_STOP_AGENT_WORKER, ids[16]);
-        assertEquals(WidgetScriptsInstaller.ID_TD_AI, ids[17]);
-        assertEquals(WidgetScriptsInstaller.ID_AGENT_WORKER, ids[18]);
+        assertEquals(WidgetScriptsInstaller.ID_WIFI_SCAN, ids[6]);
+        assertEquals(WidgetScriptsInstaller.ID_OPEN_SETTINGS, ids[10]);
+        assertEquals(WidgetScriptsInstaller.ID_VIBRATE, ids[11]);
+        assertEquals(WidgetScriptsInstaller.ID_STOP_AI, ids[15]);
+        assertEquals(WidgetScriptsInstaller.ID_TD_UPGRADE, ids[16]);
+        assertEquals(WidgetScriptsInstaller.ID_STOP_AGENT_WORKER, ids[17]);
+        assertEquals(WidgetScriptsInstaller.ID_TD_AI, ids[18]);
+        assertEquals(WidgetScriptsInstaller.ID_AGENT_WORKER, ids[19]);
         assertEquals(ids.length, WidgetScriptsInstaller.CATALOG_LABELS.length);
         assertEquals(4, WidgetScriptsInstaller.DEFAULT_FOREGROUND_IDS.length);
-        assertEquals(13, WidgetScriptsInstaller.OPTIONAL_FOREGROUND_IDS.length);
+        assertEquals(14, WidgetScriptsInstaller.OPTIONAL_FOREGROUND_IDS.length);
         assertEquals(1, WidgetScriptsInstaller.DEFAULT_TASK_IDS.length);
     }
 
@@ -87,6 +88,16 @@ public class WidgetScriptsInstallerTest {
         assertNotNull(wifi);
         assertTrue(wifi.contains("termux-wifi-connectioninfo"));
         assertTrue(wifi.contains("termux-clipboard-set"));
+
+        String scan = WidgetScriptsInstaller.scriptBody(
+            WidgetScriptsInstaller.ID_WIFI_SCAN);
+        assertNotNull(scan);
+        assertTrue(scan.contains("termux-wifi-scaninfo"));
+        assertTrue(scan.contains("termux-wifi-connectioninfo"));
+        assertTrue(scan.contains("Passive"));
+        assertTrue(scan.contains("history.jsonl"));
+        assertTrue(scan.contains("scan-"));
+        assertTrue(scan.contains("Location"));
 
         String batt = WidgetScriptsInstaller.scriptBody(
             WidgetScriptsInstaller.ID_BATTERY_STATUS);
@@ -170,7 +181,7 @@ public class WidgetScriptsInstallerTest {
 
         boolean[] speakAndAi = new boolean[CATALOG_SIZE];
         speakAndAi[0] = true;
-        speakAndAi[17] = true;
+        speakAndAi[18] = true;
         List<String> ids = WidgetScriptsInstaller.filterCatalogOrder(speakAndAi);
         assertEquals(Arrays.asList(
             WidgetScriptsInstaller.ID_CLIPBOARD_SPEAK,
@@ -204,6 +215,8 @@ public class WidgetScriptsInstallerTest {
 
         assertNotNull(WidgetScriptsInstaller.runOnceCommand(
             WidgetScriptsInstaller.ID_WIFI_INFO));
+        assertNotNull(WidgetScriptsInstaller.runOnceCommand(
+            WidgetScriptsInstaller.ID_WIFI_SCAN));
         assertNotNull(WidgetScriptsInstaller.runOnceCommand(
             WidgetScriptsInstaller.ID_STOP_AI));
 
