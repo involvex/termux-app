@@ -333,4 +333,9 @@
     <!-- Donate Preference -->
     <string name="donate_preference_title">Donate</string>
 
+    <!-- Screen OCR quick settings tile -->
+    <string name="tile_screen_ocr_label">Screen OCR</string>
+    <string name="tile_screen_ocr_start">Capture in %1$d s — switch screens…</string>
+    <string name="tile_screen_ocr_missing">Need: pkg install tesseract termux-api</string>
+
 </resources>
