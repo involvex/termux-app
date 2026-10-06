@@ -76,6 +76,8 @@ public class WidgetScriptsInstallerTest {
         assertTrue(ocr.contains("td-screen-ocr"));
         assertTrue(ocr.contains("Screen OCR"));
         assertTrue(ocr.contains("command -v td-screen-ocr"));
+        assertTrue(ocr.contains("SCREEN_OCR_DELAY"));
+        assertTrue(ocr.contains("sleep \"$delay\""));
 
         String cam = WidgetScriptsInstaller.scriptBody(
             WidgetScriptsInstaller.ID_CAMERA_PHOTO);

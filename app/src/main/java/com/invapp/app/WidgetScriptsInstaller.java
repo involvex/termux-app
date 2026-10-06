@@ -443,7 +443,10 @@ public final class WidgetScriptsInstaller {
             + "  toast \"$msg\"; echo \"$msg\" >&2\n"
             + "  exit 1\n"
             + "fi\n"
-            + "td-screen-ocr\n");
+            + "delay=\"${SCREEN_OCR_DELAY:-10}\"\n"
+            + "toast \"Capture in ${delay}s — switch screens…\"\n"
+            + "sleep \"$delay\"\n"
+            + "SCREENSHOT_DELAY_MS=\"${SCREENSHOT_DELAY_MS:-3000}\" td-screen-ocr\n");
         String needApi = ""
             + "toast() { command -v termux-toast >/dev/null 2>&1 && termux-toast \"$1\" || true; }\n"
             + "need_api() {\n"
