@@ -1,26 +1,34 @@
-# AI helper (OpenCode)
+# AI helper (OpenCode V2)
 
-InVxTermux can attach [OpenCode](https://github.com/anomalyco/opencode) as a web
-UI and open it in Preview. Server API docs:
-[opencode.ai/docs/server](https://opencode.ai/docs/server/).
+InVxTermux attaches [OpenCode V2](https://opencode.ai/v2/docs/) as a web
+UI and opens it in Preview. Server exposure rules — see skill
+`opencode-v2-serve`: one foreground server only (`opencode serve`,
+never background service + serve), bind `0.0.0.0`, fixed port, stable
+password from `~/.config/opencode/service.json`, verify with
+`curl -u opencode:<pw> http://127.0.0.1:4096/api/info` (must return
+JSON `{data:...}`, not HTML — HTML means V1 routes). No mDNS in V2,
+plain HTTP for LAN/MyFritz.
 
 ## Setup + start
 
 ```bash
-opencode-setup          # once — downloads official linux tarball + glibc wrapper
-td-ai                   # binds 0.0.0.0:4096; Preview → http://127.0.0.1:4096/
+opencode-setup          # once — official V2 linux tarball + glibc wrapper
+td-ai                   # serve 0.0.0.0:4096; Preview → http://127.0.0.1:4096/
 ```
 
 Drawer → **AI** probes missing / installed / ready (`GET /api/info` with
 `service.json` Basic auth, falling back to V1 `GET /global/health`);
 starts only when needed; opens Preview **after** health succeeds.
 Long-press **AI** or drawer **Stop AI** stops listeners on `:4096`.
-When the binary supports it, `td-ai` also runs `opencode pair --url <lan-url>`
+`td-ai` also runs `opencode pair --url <lan-url>` when supported
 so overlay clients auto-connect (V2 pairing; skipped on V1 binaries).
 
-Optional pin: `OPENCODE_VERSION=v1.18.34 opencode-setup`
-(V2 `2.x` is npm-only `@opencode/cli` — no `linux-arm64.tar.gz` published,
-so the native wrapper stays on `1.18.x` until a V2 tarball exists).
+Optional pin: `OPENCODE_VERSION=2.0.6 opencode-setup`
+(empty = live lookup via `https://opencode.ai/update/api/latest/cli/npm`,
+fallback `2.0.6`; `1.x` still resolves to the old GitHub
+`anomalyco/opencode` tarball for rollback).
+Flags mirror upstream: `opencode-setup --version 2.0.6`,
+`opencode-setup --binary /path/to/opencode`.
 
 ## Endpoints (`:4096` loopback; Preview also accepts a pasted URL)
 
@@ -37,8 +45,12 @@ port locally and surface **Copy LAN** for the other device.
 
 ## Rules of thumb
 
-- Setup downloads the GitHub `opencode-linux-*.tar.gz` — **not**
-  `bun install -g opencode-ai` and **not** `curl … opencode.ai/install`
+- Setup downloads the official V2 `opencode-linux-*.tar.gz` from
+  `https://opencode.ai/files/bin/<version>/` — **not**
+  `bun install -g opencode-ai` and **not** piping
+  `curl … opencode.ai/v2/install | bash` directly (that script targets
+  `~/.opencode/bin` without the glibc/`ld-linux --preload` wrapper;
+  `opencode-setup` replicates its tarball step + wrapper)
 - Wrapper clears `LD_PRELOAD=` (empty) so termux-exec does **not** reinject
   Bionic `libinvapp-redirector.so` (that causes `version \`LIBC' not found`
   under glibc). The DNS shim is loaded with `ld-linux --preload` instead.
@@ -116,7 +128,7 @@ plain `0.0.0.0` bind (what `td-ai` does). Never pass `--mdns`. For loopback-only
 ```bash
 OPENCODE_HOST=127.0.0.1 td-ai
 # or:
-opencode web --port 4096 --hostname 127.0.0.1 --print-logs
+opencode serve --port 4096 --hostname 127.0.0.1 --print-logs
 ```
 
 LAN clients: same Wi‑Fi → `http://<phone-ip>:4096/` (or Preview **Copy LAN**).

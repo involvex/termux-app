@@ -340,11 +340,14 @@ public final class TermuxBunInstaller {
             + "bunx --bun cowsay ok 2>&1 | head -15 || true\n";
         writeExec(new File(binDir, "bun-doctor"), bunDoctor);
 
-        // OpenCode bootstrap (optional AI CLI → Preview).
-        // No opencode-android-* (anomalyco/opencode#12515). Do NOT bun-install
-        // opencode-ai: bare libexec/bun hits SIGSYS (seccomp), and bun's
-        // global bin is a JS stub that demands postinstall. Fetch the official
-        // linux-glibc tarball from GitHub releases, then wrap with ld-linux.
+        // OpenCode V2 bootstrap (optional AI CLI → Preview).
+        // Do NOT bun-install opencode-ai: bare libexec/bun hits SIGSYS (seccomp),
+        // and bun's global bin is a JS stub that demands postinstall. Fetch the
+        // official V2 linux-glibc tarball from opencode.ai/files/bin, then wrap
+        // with ld-linux. Version resolves live via
+        // https://opencode.ai/update/api/latest/cli/npm (fallback 2.0.6);
+        // OPENCODE_VERSION / --version pins, 1.x pins still use the old GitHub
+        // anomalyco/opencode releases for rollback. See https://opencode.ai/v2/docs/.
         // glibc lives in glibc-repo (not tur-repo); trusted=yes for apt-key flakes.
         String opencodeSetup = ""
             + "#!" + bash + "\n"
@@ -366,14 +369,46 @@ public final class TermuxBunInstaller {
             + "esac\n"
             + "OC_DIR=\"$PREFIX/libexec/opencode\"\n"
             + "OC_BIN=\"$OC_DIR/opencode\"\n"
-            + "OC_VER=\"${OPENCODE_VERSION:-}\"\n"
-            + "if [ -n \"$OC_VER\" ]; then\n"
-            + "  case \"$OC_VER\" in v*) ;; *) OC_VER=\"v$OC_VER\" ;; esac\n"
-            + "  OC_URL=\"https://github.com/anomalyco/opencode/releases/download/$OC_VER/$OC_ASSET\"\n"
-            + "else\n"
-            + "  OC_URL=\"https://github.com/anomalyco/opencode/releases/latest/download/$OC_ASSET\"\n"
+            + "# V2 flags mirror https://opencode.ai/v2/install (--version/-v, --binary/-b).\n"
+            + "OC_ARG_VER=\"\"\n"
+            + "OC_BIN_SRC=\"\"\n"
+            + "while [ \"$#\" -gt 0 ]; do\n"
+            + "  case \"$1\" in\n"
+            + "    -h|--help) echo \"usage: opencode-setup [--version X] [--binary PATH]\"; echo \"  env: OPENCODE_VERSION=X (or VERSION=X); default: live V2 lookup\"; exit 0 ;;\n"
+            + "    -v|--version) OC_ARG_VER=\"${2:-}\"; shift 2 ;;\n"
+            + "    -b|--binary) OC_BIN_SRC=\"${2:-}\"; shift 2 ;;\n"
+            + "    *) break ;;\n"
+            + "  esac\n"
+            + "done\n"
+            + "OC_VER=\"${OC_ARG_VER:-${OPENCODE_VERSION:-${VERSION:-}}}\"\n"
+            + "OC_VER=\"${OC_VER#v}\"\n"
+            + "if [ -z \"$OC_VER\" ]; then\n"
+            + "  echo \"opencode-setup: resolving latest V2 version…\"\n"
+            + "  OC_META=$(curl -fsSL --max-time 20 https://opencode.ai/update/api/latest/cli/npm 2>/dev/null || true)\n"
+            + "  OC_VER=$(printf '%s' \"$OC_META\" | sed -n 's/.*\"version\":\"\\([^\"]*\\)\".*/\\1/p' | head -1)\n"
+            + "  OC_VER=\"${OC_VER#v}\"\n"
+            + "  if [ -z \"$OC_VER\" ]; then\n"
+            + "    OC_VER=\"2.0.6\"\n"
+            + "    echo \"opencode-setup: version lookup failed — using fallback v$OC_VER\" >&2\n"
+            + "  else\n"
+            + "    echo \"opencode-setup: latest V2 is v$OC_VER\"\n"
+            + "  fi\n"
             + "fi\n"
-            + "echo \"Downloading $OC_ASSET (official linux binary; no bun install)…\"\n"
+            + "case \"$OC_VER\" in 1.*|0.*) OC_URL=\"https://github.com/anomalyco/opencode/releases/download/v$OC_VER/$OC_ASSET\" ;;\n"
+            + "  *) OC_URL=\"https://opencode.ai/files/bin/$OC_VER/$OC_ASSET\" ;;\n"
+            + "esac\n"
+            + "if [ -n \"$OC_BIN_SRC\" ]; then\n"
+            + "  echo \"opencode-setup: installing from local binary $OC_BIN_SRC…\"\n"
+            + "  rm -rf \"$OC_DIR.new\"\n"
+            + "  mkdir -p \"$OC_DIR.new\"\n"
+            + "  cp -f \"$OC_BIN_SRC\" \"$OC_DIR.new/opencode\"\n"
+            + "  chmod +x \"$OC_DIR.new/opencode\"\n"
+            + "  rm -rf \"$OC_DIR\"\n"
+            + "  mv \"$OC_DIR.new\" \"$OC_DIR\"\n"
+            + "  OC_BIN=$(find \"$OC_DIR\" -type f -name opencode 2>/dev/null | head -1)\n"
+            + "fi\n"
+            + "if [ -z \"$OC_BIN_SRC\" ]; then\n"
+            + "echo \"Downloading $OC_ASSET (official V2 linux binary; no bun install)…\"\n"
             + "echo \"  $OC_URL\"\n"
             + "mkdir -p \"$OC_DIR\" \"$TMPDIR\"\n"
             + "OC_TAR=\"$TMPDIR/$OC_ASSET\"\n"
@@ -399,6 +434,7 @@ public final class TermuxBunInstaller {
             + "rm -rf \"$OC_DIR\"\n"
             + "mv \"$OC_DIR.new\" \"$OC_DIR\"\n"
             + "OC_BIN=$(find \"$OC_DIR\" -type f -name opencode 2>/dev/null | head -1)\n"
+            + "fi\n"
             + "if [ -z \"$OC_BIN\" ] || [ ! -x \"$OC_BIN\" ]; then\n"
             + "  echo \"opencode-setup: install failed (binary missing)\" >&2\n"
             + "  exit 1\n"
@@ -764,19 +800,45 @@ public final class TermuxBunInstaller {
             + "fi\n"
             + "echo \"opencode-setup: probing opencode --version…\"\n"
             + "if opencode --version 2>&1; then\n"
-            // Clear broken provider cache (@opencode-ai/plugin@local → token mismatch)
-            // that surfaces as AI_APICallError \"typo in the url or port\".
             + "  rm -rf \"$HOME/.cache/opencode\" 2>/dev/null || true\n"
-            + "  for pkg in \"$HOME/.config/opencode/package.json\" \"$HOME/repos\"/*/.opencode/package.json; do\n"
-            + "    [ -f \"$pkg\" ] || continue\n"
-            + "    if grep -q '@opencode-ai/plugin@local\\|\"@opencode-ai/plugin\": \"local\"' \"$pkg\" 2>/dev/null; then\n"
-            + "      echo \"opencode-setup: fixing plugin@local in $pkg\"\n"
-            + "      sed -i 's/@opencode-ai\\/plugin@local/@opencode-ai\\/plugin@latest/g; s/\"@opencode-ai\\/plugin\": \"local\"/\"@opencode-ai\\/plugin\": \"latest\"/g' \"$pkg\" 2>/dev/null || true\n"
-            + "    fi\n"
-            + "  done\n"
-            + "  echo \"OK. Run: td-ai   # binds 0.0.0.0:4096; Preview → http://127.0.0.1:4096/\"\n"
+            + "  case \"$OC_VER\" in 1.*|0.*)\n"
+            + "    for pkg in \"$HOME/.config/opencode/package.json\" \"$HOME/repos\"/*/.opencode/package.json; do\n"
+            + "      [ -f \"$pkg\" ] || continue\n"
+            + "      if grep -q '@opencode-ai/plugin@local\\|\"@opencode-ai/plugin\": \"local\"' \"$pkg\" 2>/dev/null; then\n"
+            + "        echo \"opencode-setup: fixing plugin@local in $pkg (V1 only)\"\n"
+            + "        sed -i 's/@opencode-ai\\/plugin@local/@opencode-ai\\/plugin@latest/g; s/\"@opencode-ai\\/plugin\": \"local\"/\"@opencode-ai\\/plugin\": \"latest\"/g' \"$pkg\" 2>/dev/null || true\n"
+            + "      fi\n"
+            + "    done\n"
+            + "    ;;\n"
+            + "  esac\n"
+            + "  echo \"OK (v$OC_VER). Run: td-ai   # serve 0.0.0.0:4096; Preview → http://127.0.0.1:4096/\"\n"
+            + "  OC_PW=$(sed -n 's/.*\"password\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p' \"$HOME/.config/opencode/service.json\" 2>/dev/null | head -1)\n"
+            + "  if [ -n \"$OC_PW\" ]; then echo \"Verify: curl -u opencode:$OC_PW http://127.0.0.1:4096/api/info (JSON, not HTML)\"; fi\n"
             + "  echo \"If chat fails with 'typo in the url or port': rm -rf ~/.cache/opencode && opencode-fix-net && td-ai\"\n"
             + "else\n"
+            + "  case \"$(uname -m)\" in x86_64|amd64)\n"
+            + "    echo \"opencode-setup: standard x64 binary failed — trying baseline (no AVX2)…\" >&2\n"
+            + "    OC_ASSET_BASE=\"${OC_ASSET%.tar.gz}-baseline.tar.gz\"\n"
+            + "    OC_URL_BASE=\"https://opencode.ai/files/bin/$OC_VER/$OC_ASSET_BASE\"\n"
+            + "    OC_TAR=\"$TMPDIR/$OC_ASSET_BASE\"\n"
+            + "    if curl -fL --retry 2 --retry-delay 2 -o \"$OC_TAR\" \"$OC_URL_BASE\" 2>/dev/null; then\n"
+            + "      rm -rf \"$OC_DIR.new\"; mkdir -p \"$OC_DIR.new\"\n"
+            + "      if tar -xzf \"$OC_TAR\" -C \"$OC_DIR.new\" 2>/dev/null; then\n"
+            + "        FOUND=$(find \"$OC_DIR.new\" -type f -name opencode 2>/dev/null | head -1)\n"
+            + "        if [ -n \"$FOUND\" ] && [ -f \"$FOUND\" ]; then\n"
+            + "          chmod +x \"$FOUND\"; rm -rf \"$OC_DIR\"; mv \"$OC_DIR.new\" \"$OC_DIR\"\n"
+            + "          OC_BIN=$(find \"$OC_DIR\" -type f -name opencode 2>/dev/null | head -1)\n"
+            + "          sed -i \"s|^OC_BIN=.*|OC_BIN=\\\"$OC_BIN\\\"|\" \"$WRAPPER\" 2>/dev/null || true\n"
+            + "          if opencode --version 2>&1; then\n"
+            + "            echo \"OK (v$OC_VER baseline). Run: td-ai\" \n"
+            + "            rm -rf \"$HOME/.cache/opencode\" 2>/dev/null || true\n"
+            + "            exit 0\n"
+            + "          fi\n"
+            + "        fi\n"
+            + "      fi\n"
+            + "    fi\n"
+            + "    ;;\n"
+            + "  esac\n"
             + "  echo \"opencode-setup: wrapper installed but binary failed under glibc\" >&2\n"
             + "  echo \"Binary: $OC_BIN\" >&2\n"
             + "  exit 1\n"
@@ -993,7 +1055,9 @@ public final class TermuxBunInstaller {
             + "PREFIX=\"" + prefix + "\"\n"
             + "HOME=\"" + home + "\"\n"
             + "export PATH=\"$PREFIX/bin:$HOME/.bun/bin:$PATH\"\n"
-            // OpenCode: bind 0.0.0.0 for LAN; Preview still uses 127.0.0.1
+            // OpenCode V2: single foreground server (never background service + serve).
+            // Bind 0.0.0.0 for LAN; Preview still uses 127.0.0.1. See
+            // https://opencode.ai/v2/docs/ + opencode-v2-serve skill.
             // V2 health: GET /api/info ({"data":...}, Basic opencode:service.json password).
             // V1 fallback: GET /global/health. Never use --mdns on Android.
             + "PORT=\"${1:-4096}\"\n"
@@ -1071,10 +1135,10 @@ public final class TermuxBunInstaller {
             + "  [ -n \"$LAN_IP\" ] && LAN_HINT=\"http://$LAN_IP:$PORT\"\n"
             + "fi\n"
             + "echo \"\"\n"
-            + "echo \"OpenCode → bind $HOST:$PORT\"\n"
+            + "echo \"OpenCode V2 → serve $HOST:$PORT (single server; no background service)\"\n"
             + "echo \"  Preview  $LOCAL/\"\n"
-            + "echo \"  api      GET $LOCAL/api/info (V2; Basic opencode:service.json)\"\n"
-            + "echo \"  health   GET $LOCAL/global/health (V1 fallback)\"\n"
+            + "echo \"  api      GET $LOCAL/api/info (V2 {data,version}; Basic opencode:<service.json password>)\"\n"
+            + "echo \"  verify   curl -u opencode:\\$OC_PW $LOCAL/api/info (must return JSON, not HTML)\"\n"
             + "echo \"  openapi  GET $LOCAL/doc\"\n"
             + "if [ -n \"$LAN_HINT\" ]; then\n"
             + "  echo \"  LAN      $LAN_HINT  (same Wi‑Fi; firewall/VPN may block)\"\n"
@@ -1083,9 +1147,9 @@ public final class TermuxBunInstaller {
             + "fi\n"
             + "echo \"  No --mdns. Override bind: OPENCODE_HOST=127.0.0.1 td-ai\"\n"
             + "echo \"\"\n"
-            // V2: single headless server. `serve` works on both V1 + V2;
-            // `web` is V1-only (removed in V2) so it is only a fallback.
-            // When `pair` exists (V2), auto-pair this host for overlay clients.
+            // V2: single headless server via `serve`. `web` was removed in V2,
+            // keep only as a legacy V1 fallback. When `pair` exists (V2),
+            // auto-pair this host for overlay clients. No mDNS flags in V2.
             + "if opencode pair --help >/dev/null 2>&1; then\n"
             + "  LAN_FOR_PAIR=\"$LAN_HINT\"\n"
             + "  if [ -z \"$LAN_FOR_PAIR\" ] && command -v ip >/dev/null 2>&1; then\n"

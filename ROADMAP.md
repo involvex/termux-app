@@ -96,8 +96,9 @@ https://github.com/involvex/termux-app
 
 ### 11. OpenCode postinstall + customizable quick bar (done)
 
-- `opencode-setup` downloads GitHub `opencode-linux-*.tar.gz` (avoids bun
-  SIGSYS + postinstall stub; no `opencode-android-*`), then `glibc` +
+- `opencode-setup` downloads official V2 `opencode-linux-*.tar.gz` from
+  `opencode.ai/files/bin` (live version lookup, fallback `2.0.6`; avoids bun
+  SIGSYS + postinstall stub), then `glibc` +
   ld-linux wrapper (`LD_PRELOAD=` so the path redirector does not reinject)
 - Drawer quick bar: fewer/taller defaults; **⋯** overflow; **Customize bar…**
   picks which actions appear; long-press **AI** stops OpenCode

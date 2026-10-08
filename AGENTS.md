@@ -52,7 +52,7 @@ See `ROADMAP.md`.
 | node shim | `$PREFIX/bin/node` → bun if `nodejs` package not installed |
 | Default cwd | `~/repos` (exec-capable). `~/storage/shared` is browse/sync only (**noexec**) |
 | Preview | Drawer **Preview** → Scan + chips; **Copy LAN** / long-press chip → `http://<wifi-ip>:<port>` when bound on `0.0.0.0` |
-| AI helper | `opencode-setup` / `td-ai [port]` → OpenCode web on `:4096` (binds **`0.0.0.0`** by default for LAN; Preview still uses `127.0.0.1`). Setup downloads official `opencode-linux-*.tar.gz` from GitHub (no `bun install` / no postinstall), then `glibc` + ld-linux wrapper with **`LD_PRELOAD=` empty** and DNS shim via **`ld-linux --preload $PREFIX/lib/libinvapp-opencode-shim.so`** (arm64 shipped in APK assets). Optional `OPENCODE_VERSION=v1.18.31`; bind override `OPENCODE_HOST=127.0.0.1`. Drawer **AI** probes missing/installed/ready; long-press / **Stop AI** kills `:4096`. On-demand into `$PREFIX`, not baked into APK |
+| AI helper | `opencode-setup` / `td-ai [port]` → OpenCode V2 `serve` on `:4096` (binds **`0.0.0.0`** by default for LAN; Preview still uses `127.0.0.1`). Setup downloads official V2 `opencode-linux-*.tar.gz` from `opencode.ai/files/bin` (live lookup via update API, fallback `2.0.6`; no `bun install` / no postinstall), then `glibc` + ld-linux wrapper with **`LD_PRELOAD=` empty** and DNS shim via **`ld-linux --preload $PREFIX/lib/libinvapp-opencode-shim.so`** (arm64 shipped in APK assets). Optional `OPENCODE_VERSION=2.0.6` (`1.x` still uses old GitHub tarball); bind override `OPENCODE_HOST=127.0.0.1`. Drawer **AI** probes missing/installed/ready (`GET /api/info` + Basic auth); long-press / **Stop AI** kills `:4096`. On-demand into `$PREFIX`, not baked into APK |
 | Cursor Agent | `cursor-agent-setup` → official `agent-cli-package.tar.gz` (glibc Node 24; **never** Bun / `curl\|bash`). `$PREFIX/bin/agent` runs bundled `node` via `ld-linux` + same DNS shim. Cloud My Machines: `agent login` then `td-agent-worker start` → https://cursor.com/agents. Pin `CURSOR_AGENT_VERSION=…`; after `agent update` run `cursor-agent-setup --wrap-only`. Stack refresh: `td-upgrade` (pkg + opencode + agent rewrap + Bun stamp; no `bun upgrade`) |
 | Dev server | `td-dev [script]` → `bun run` with Preview/LAN hints |
 | Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`); `pwa` / `pwa-react` add `vite-plugin-pwa` |
@@ -80,9 +80,11 @@ See `ROADMAP.md`.
 - OpenSSL/node looking at `com.termux` — shell env + redirector cover it;
   don't hardcode new paths.
 - `opencode-setup` / glibc `Permission denied` / `version LIBC not found` /
-  postinstall / SIGSYS on setup — OpenCode is a linux-glibc binary. Setup
-  **downloads the GitHub tarball** (never `bun install -g opencode-ai` or
-  `curl … opencode.ai/install`). It installs `glibc` and runs under
+  postinstall / SIGSYS on setup — OpenCode V2 is a linux-glibc binary. Setup
+  **downloads the official V2 tarball from `opencode.ai/files/bin`**
+  (live version lookup, fallback `2.0.6`; never `bun install -g opencode-ai`,
+  never pipe `curl … opencode.ai/v2/install | bash` directly — it lacks the
+  glibc wrapper). It installs `glibc` and runs under
   `ld-linux` with **`LD_PRELOAD=`** (empty). Do not `unset LD_PRELOAD` (the
   path redirector reinjects when the key is absent). Do **not** put the DNS
   shim in `LD_PRELOAD` either — termux-exec will append
