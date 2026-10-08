@@ -182,10 +182,16 @@ public final class WidgetScriptsInstaller {
 
     /**
      * Ask Termux:Widget to reload {@code ~/.shortcuts} list (no-op if plugin
-     * missing). Safe to call from the main app across packages.
+     * missing or the Widget integration flag is off). Safe to call from the
+     * main app across packages.
      */
     public static void requestWidgetRefresh(@NonNull Context context) {
         if (!isWidgetAppInstalled(context)) {
+            return;
+        }
+        if (!com.invapp.app.utils.IntegratedTools.isEnabled(context,
+                com.invapp.app.utils.IntegratedTools.Tool.WIDGET)) {
+            Logger.logDebug(LOG_TAG, "Widget refresh skipped (integration flag off)");
             return;
         }
         try {

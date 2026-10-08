@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <SwitchPreferenceCompat
+        app:key="tool_termux_api"
+        app:title="@string/title_tool_api"
+        app:summary="@string/summary_tool_api"
+        app:persistent="false"/>
+
+    <SwitchPreferenceCompat
+        app:key="tool_termux_widget"
+        app:title="@string/title_tool_widget"
+        app:summary="@string/summary_tool_widget"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="integrated_tools_hint"
+        app:title="@string/title_integrated_tools_hint"
+        app:summary="@string/summary_integrated_tools_hint"
+        app:selectable="false"
+        app:persistent="false"/>
+
+</PreferenceScreen>

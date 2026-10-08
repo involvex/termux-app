@@ -18,6 +18,7 @@ import androidx.preference.SwitchPreferenceCompat;
 
 import com.invapp.R;
 import com.invapp.app.WidgetScriptsUi;
+import com.invapp.app.utils.IntegratedTools;
 import com.invapp.app.utils.LaunchPrefs;
 import com.invapp.app.utils.PreviewPortPrefs;
 import com.invapp.app.utils.SettingsSearchHelper;
@@ -54,6 +55,22 @@ public class TermuxPreferencesFragment extends PreferenceFragmentCompat {
         }
 
         configureLaunchPrefs(context);
+
+        Preference integratedTools = findPreference("integrated_tools");
+        if (integratedTools != null) {
+            integratedTools.setSummary(IntegratedTools.statusSummary(context));
+        }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        Context context = getContext();
+        if (context == null) return;
+        Preference integratedTools = findPreference("integrated_tools");
+        if (integratedTools != null) {
+            integratedTools.setSummary(IntegratedTools.statusSummary(context));
+        }
     }
 
     @Override

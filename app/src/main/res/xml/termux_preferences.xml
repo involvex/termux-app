@@ -28,6 +28,13 @@
         app:summary="@string/summary_preferred_ports"
         app:persistent="false"/>
 
+    <Preference
+        app:key="integrated_tools"
+        app:title="@string/title_integrated_tools"
+        app:summary="@string/summary_integrated_tools"
+        app:persistent="false"
+        app:fragment="com.invapp.app.fragments.settings.IntegratedToolsPreferencesFragment"/>
+
     <ListPreference
         app:key="launch_page"
         app:title="@string/title_launch_page"
