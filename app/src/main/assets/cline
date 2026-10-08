@@ -1,0 +1,41 @@
+#!/data/data/com.involvex.termux_app/files/usr/bin/bash
+# invapp-resource: cline
+# Runtime wrapper for Cline CLI - glibc ld-linux + DNS shim
+# Note: ELF interpreter was patched to glibc loader during td-cline-setup,
+# so the daemon subprocess re-exec works directly.
+PREFIX="${PREFIX:-/data/data/com.involvex.termux_app/files/usr}"
+CLINE_BIN="$PREFIX/libexec/cline/cline"
+
+case "$(uname -m)" in
+  aarch64|arm64) OC_LD="ld-linux-aarch64.so.1" ;;
+  x86_64|amd64)  OC_LD="ld-linux-x86-64.so.2"   ;;
+  *)             OC_LD="ld-linux-aarch64.so.1" ;;
+esac
+
+LD_LOADER="$PREFIX/glibc/lib/$OC_LD"
+LIB="$PREFIX/glibc/lib"
+export TMPDIR="${TMPDIR:-$PREFIX/tmp}"
+mkdir -p "$TMPDIR" 2>/dev/null || true
+
+if [ ! -x "$CLINE_BIN" ]; then
+  echo "cline: binary missing - run td-cline-setup" >&2
+  exit 127
+fi
+if [ ! -x "$LD_LOADER" ]; then
+  echo "cline: glibc missing - run td-cline-setup" >&2
+  exit 127
+fi
+
+# Kill stale daemons (started before wrapper existed)
+pkill -f "cline" 2>/dev/null || true
+
+export LD_PRELOAD=
+OC_SHIM="$PREFIX/lib/libinvapp-opencode-shim.so"
+OC_PRELOAD_ARGS=""
+if [ -f "$OC_SHIM" ]; then
+  OC_PRELOAD_ARGS="--preload $OC_SHIM"
+elif [ -f "$PREFIX/lib/libinvapp-getifaddrs.so" ]; then
+  OC_PRELOAD_ARGS="--preload $PREFIX/lib/libinvapp-getifaddrs.so"
+fi
+
+exec "$LD_LOADER" $OC_PRELOAD_ARGS --library-path "$LIB" "$CLINE_BIN" "$@"

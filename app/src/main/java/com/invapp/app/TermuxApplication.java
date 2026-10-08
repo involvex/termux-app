@@ -74,6 +74,9 @@ public class TermuxApplication extends Application {
             // Seed $PREFIX/bin/td-resource-* one-click helpers (Ultra-inspired, no tmux).
             ResourceScriptsInstaller.installIfNeeded(context);
 
+            // Seed $PREFIX/lib/invapp/commons.sh + bootstrap + profile.d hook.
+            ShellLibraryInstaller.installIfNeeded(context);
+
             // Setup termux-am-socket server
             TermuxAmSocketServer.setupTermuxAmSocketServer(context);
         } else {
