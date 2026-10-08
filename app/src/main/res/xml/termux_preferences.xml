@@ -28,4 +28,16 @@
         app:summary="@string/summary_preferred_ports"
         app:persistent="false"/>
 
+    <ListPreference
+        app:key="launch_page"
+        app:title="@string/title_launch_page"
+        app:summary="@string/summary_launch_page"
+        app:persistent="false"/>
+
+    <SwitchPreferenceCompat
+        app:key="auto_start_console"
+        app:title="@string/title_auto_start_console"
+        app:summary="@string/summary_auto_start_console"
+        app:persistent="false"/>
+
 </PreferenceScreen>

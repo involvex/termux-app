@@ -5,11 +5,13 @@ import android.os.Bundle;
 import android.os.Environment;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 
 import com.invapp.R;
+import com.invapp.app.utils.SettingsSearchHelper;
 import com.invapp.shared.activities.ReportActivity;
 import com.invapp.shared.file.FileUtils;
 import com.invapp.shared.models.ReportInfo;
@@ -71,6 +73,13 @@ public class SettingsActivity extends AppCompatActivity {
                     configureDonatePreference(context);
                 }
             }.start();
+        }
+
+        @Override
+        public void onViewCreated(@NonNull android.view.View view,
+                                  @Nullable Bundle savedInstanceState) {
+            super.onViewCreated(view, savedInstanceState);
+            SettingsSearchHelper.attachSearchHeader(this);
         }
 
         private void configureTermuxAPIPreference(@NonNull Context context) {

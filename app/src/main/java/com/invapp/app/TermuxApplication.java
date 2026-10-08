@@ -71,6 +71,9 @@ public class TermuxApplication extends Application {
             // Seed ~/bin/termux-file-editor for share → Edit (FileReceiver).
             TermuxFileEditorInstaller.installDefaultsIfMissing(context);
 
+            // Seed $PREFIX/bin/td-resource-* one-click helpers (Ultra-inspired, no tmux).
+            ResourceScriptsInstaller.installIfNeeded(context);
+
             // Setup termux-am-socket server
             TermuxAmSocketServer.setupTermuxAmSocketServer(context);
         } else {

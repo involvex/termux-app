@@ -2289,6 +2289,8 @@ public final class TermuxBunInstaller {
             "bun", "bunx", "node", "td-ai", "td-dev", "td-scaffold", "td-clone",
             "td-screen-ocr", "termux-screenshot", "termux-api-start", "termux-api-stop",
             "opencode-setup", "opencode-fix-net", "opencode", "bun-doctor",
+            "td-resource", "td-resource-linux", "td-resource-python",
+            "td-resource-qemu", "td-resource-bun", "td-resource-ai",
             "cursor-agent-setup", "agent", "cursor-agent", "td-agent-worker", "td-upgrade"
         };
         for (String name : names) {

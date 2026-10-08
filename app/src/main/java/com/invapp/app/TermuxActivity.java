@@ -58,6 +58,7 @@ import com.invapp.app.activities.SettingsActivity;
 import com.invapp.app.utils.AiSessionHelper;
 import com.invapp.app.utils.ExtraKeysBarHelper;
 import com.invapp.app.utils.LanShareHelper;
+import com.invapp.app.utils.LaunchPrefs;
 import com.invapp.app.utils.LocalhostPortScanner;
 import com.invapp.app.utils.PreferredPortWatcher;
 import com.invapp.app.utils.WorkflowBarHelper;
@@ -466,12 +467,29 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             // If termux was started from launcher "New session" shortcut and activity is recreated,
             // then the original intent will be re-delivered, resulting in a new session being re-added
             // each time.
-            if (!mIsActivityRecreated && intent != null && Intent.ACTION_RUN.equals(intent.getAction())) {
+            boolean isRunShortcut = !mIsActivityRecreated && intent != null
+                && Intent.ACTION_RUN.equals(intent.getAction());
+            boolean autoStart = LaunchPrefs.isAutoStartConsole(this);
+            if (LaunchPrefs.shouldForceNewSession(mIsActivityRecreated, autoStart,
+                    true, isRunShortcut)) {
+                mTermuxTerminalSessionActivityClient.addNewSession(false, null);
+            } else if (!mIsActivityRecreated && intent != null && Intent.ACTION_RUN.equals(intent.getAction())) {
                 // Android 7.1 app shortcut from res/xml/shortcuts.xml.
                 boolean isFailSafe = intent.getBooleanExtra(TERMUX_ACTIVITY.EXTRA_FAILSAFE_SESSION, false);
                 mTermuxTerminalSessionActivityClient.addNewSession(isFailSafe, null);
             } else {
                 mTermuxTerminalSessionActivityClient.setCurrentSession(mTermuxTerminalSessionActivityClient.getCurrentStoredSessionOrLast());
+            }
+        }
+
+        // Launch page: OVERVIEW opens the left drawer on cold start (Ultra port,
+        // adapted — no Compose tabs here). Auto-start locks the effective page
+        // to OVERVIEW, matching Ultra's effectiveLaunchPage().
+        if (!mIsActivityRecreated
+                && LaunchPrefs.effectiveLaunchPage(this) == LaunchPrefs.LaunchPage.OVERVIEW) {
+            DrawerLayout drawer = getDrawer();
+            if (drawer != null) {
+                drawer.openDrawer(GravityCompat.START);
             }
         }
 

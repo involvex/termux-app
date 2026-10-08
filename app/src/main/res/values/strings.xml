@@ -131,6 +131,15 @@
     <string name="action_customize_extra_keys">Customize keys…</string>
     <string name="title_widget_scripts">Widget scripts</string>
     <string name="summary_widget_scripts">Install ~/.shortcuts templates for Termux:Widget; show API/Widget status</string>
+    <string name="hint_search_settings">Search settings</string>
+    <string name="msg_settings_no_match">No matching settings</string>
+    <string name="title_launch_page">Start page</string>
+    <string name="summary_launch_page">Page shown on cold start (Overview opens the drawer)</string>
+    <string name="summary_launch_page_locked">Fixed to Overview while “Auto-open new console” is on</string>
+    <string name="entry_launch_overview">Overview (drawer)</string>
+    <string name="entry_launch_terminal">Terminal</string>
+    <string name="title_auto_start_console">Auto-open new console</string>
+    <string name="summary_auto_start_console">On launch, create a new terminal session instead of restoring the last one</string>
     <string name="msg_widget_scripts_help">Stock F-Droid Termux:Widget will not work with InVxTermux. Use a matching Widget APK (same signature / sharedUserId). Clipboard/TTS scripts need the Termux:API APK plus: pkg install termux-api</string>
     <string name="msg_widget_scripts_run_hint">Run once executes the first checked script in this session. Reset templates from Settings → InVxTermux → Widget scripts.</string>
     <string name="action_widget_scripts_install">Install</string>
