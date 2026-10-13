@@ -12,14 +12,18 @@ import android.util.TypedValue;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
+import android.webkit.CookieManager;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
+import android.webkit.WebStorage;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -28,18 +32,23 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.google.android.material.snackbar.Snackbar;
 import com.invapp.R;
+import com.invapp.app.utils.AiSessionHelper;
 import com.invapp.app.utils.LanShareHelper;
 import com.invapp.app.utils.LocalhostPortScanner;
 import com.invapp.app.utils.PreviewPortPrefs;
 import com.invapp.app.utils.WorkflowHelper;
 import com.invapp.shared.interact.ShareUtils;
 
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -61,10 +70,15 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
     private static final long AUTO_SCAN_INTERVAL_MS = 3000L;
 
     private WebView mWebView;
+    private SwipeRefreshLayout mSwipeRefresh;
+    private ProgressBar mProgress;
+    private TextView mStatus;
     private EditText mPortInput;
     private LinearLayout mPortChips;
     private TextView mPortsEmpty;
     private TextView mLanHint;
+    private Button mBackButton;
+    private Button mForwardButton;
     private final ExecutorService mScanExecutor = Executors.newSingleThreadExecutor();
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
     private final AtomicBoolean mAutoScanActive = new AtomicBoolean(false);
@@ -110,16 +124,31 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         Button reloadButton = findViewById(R.id.preview_reload_button);
         Button scanButton = findViewById(R.id.preview_scan_button);
         Button copyLanButton = findViewById(R.id.preview_copy_lan_button);
+        Button clearButton = findViewById(R.id.preview_clear_button);
+        Button browserButton = findViewById(R.id.preview_browser_button);
+        mBackButton = findViewById(R.id.preview_back_button);
+        mForwardButton = findViewById(R.id.preview_forward_button);
         mPortChips = findViewById(R.id.preview_port_chips);
         mPortsEmpty = findViewById(R.id.preview_ports_empty);
         mLanHint = findViewById(R.id.preview_lan_hint);
+        mStatus = findViewById(R.id.preview_status);
+        mProgress = findViewById(R.id.preview_progress);
         mWebView = findViewById(R.id.preview_webview);
+        mSwipeRefresh = findViewById(R.id.preview_swipe_refresh);
 
         WebSettings settings = mWebView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         mWebView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                if (request == null || request.getUrl() == null) {
+                    return true;
+                }
+                return shouldOverrideUrlLoading(view, request.getUrl().toString());
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 if (url == null) {
@@ -137,6 +166,23 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 mShowingErrorPage = false;
                 updatePathFromUrl(url);
+                syncUrlBar(url);
+                if (mProgress != null) {
+                    mProgress.setVisibility(View.VISIBLE);
+                    mProgress.setProgress(10);
+                }
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                stopRefreshIndicator();
+                if (mProgress != null) {
+                    mProgress.setVisibility(View.GONE);
+                }
+                updatePathFromUrl(url);
+                syncUrlBar(url);
+                updateNavButtons();
+                refreshStatusIndicator();
             }
 
             @Override
@@ -164,6 +210,24 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
                 }
             }
         });
+        mWebView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onProgressChanged(WebView view, int newProgress) {
+                if (mProgress != null) {
+                    if (newProgress >= 100) {
+                        mProgress.setVisibility(View.GONE);
+                    } else if (mWebView != null && mWebView.getUrl() != null
+                        && !mShowingErrorPage) {
+                        mProgress.setVisibility(View.VISIBLE);
+                        mProgress.setProgress(newProgress);
+                    }
+                }
+            }
+        });
+
+        if (mSwipeRefresh != null) {
+            mSwipeRefresh.setOnRefreshListener(this::reloadCurrent);
+        }
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -186,6 +250,26 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         reloadButton.setOnClickListener(v -> reloadCurrent());
         scanButton.setOnClickListener(v -> scanPortsAsync(false));
         copyLanButton.setOnClickListener(v -> copyLanUrlForCurrentPort());
+        if (clearButton != null) {
+            clearButton.setOnClickListener(v -> clearPreviewData());
+        }
+        if (browserButton != null) {
+            browserButton.setOnClickListener(v -> openCurrentInBrowser());
+        }
+        if (mBackButton != null) {
+            mBackButton.setOnClickListener(v -> {
+                if (mWebView != null && mWebView.canGoBack()) {
+                    mWebView.goBack();
+                }
+            });
+        }
+        if (mForwardButton != null) {
+            mForwardButton.setOnClickListener(v -> {
+                if (mWebView != null && mWebView.canGoForward()) {
+                    mWebView.goForward();
+                }
+            });
+        }
         mPortInput.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_GO
                     || actionId == EditorInfo.IME_ACTION_DONE) {
@@ -198,6 +282,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         loadPort(port);
         scanPortsAsync(false);
         refreshLanHint();
+        updateNavButtons();
     }
 
     @Override
@@ -205,6 +290,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         super.onResume();
         scanPortsAsync(false);
         refreshLanHint();
+        refreshStatusIndicator();
         if (mAutoScanActive.compareAndSet(false, true)) {
             mMainHandler.postDelayed(mAutoScanTick, AUTO_SCAN_INTERVAL_MS);
         }
@@ -251,6 +337,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
                 mListeningSeeded = true;
                 renderPortChips(chips, listening);
                 refreshLanHint();
+                refreshStatusIndicator();
             });
         });
     }
@@ -435,14 +522,26 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
     }
 
     private void reloadCurrent() {
+        if (mSwipeRefresh != null && !mSwipeRefresh.isRefreshing()) {
+            // Show spinner only for user-initiated reload; page callbacks hide it.
+        }
         if (mShowingErrorPage) {
             loadPort(mCurrentPort);
         } else if (mWebView != null) {
-            mWebView.reload();
+            Map<String, String> headers = authHeaders();
+            if (headers.isEmpty()) {
+                mWebView.reload();
+            } else {
+                // reload() drops custom headers, so re-load current URL with auth.
+                mWebView.loadUrl(currentUrl(), headers);
+            }
+        } else {
+            stopRefreshIndicator();
         }
     }
 
     private void loadPort(int port) {
+        boolean portChanged = port != mCurrentPort;
         mCurrentPort = port;
         PreviewPortPrefs.addRecent(this, port);
         String path = mCurrentPathAndQuery;
@@ -454,7 +553,152 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         }
         String url = "http://127.0.0.1:" + port + path;
         mShowingErrorPage = false;
-        mWebView.loadUrl(url);
+        if (mWebView == null) {
+            return;
+        }
+        if (portChanged) {
+            // Drop stale history so Back never resurrects another port's SPA shell
+            // (the "ghost OpenCode UI" when :4096 is actually down).
+            mWebView.clearHistory();
+        }
+        syncUrlBar(url);
+        updateNavButtons();
+        refreshStatusIndicator();
+        Map<String, String> headers = authHeaders();
+        if (headers.isEmpty()) {
+            mWebView.loadUrl(url);
+        } else {
+            mWebView.loadUrl(url, headers);
+        }
+    }
+
+    @NonNull
+    private String currentUrl() {
+        String path = mCurrentPathAndQuery;
+        if (path == null || path.isEmpty()) {
+            path = "/";
+        }
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
+        return "http://127.0.0.1:" + mCurrentPort + path;
+    }
+
+    @NonNull
+    private Map<String, String> authHeaders() {
+        Map<String, String> out = new HashMap<>();
+        try {
+            String password = AiSessionHelper.readServicePassword();
+            if (password != null && !password.isEmpty()) {
+                String creds = "opencode:" + password;
+                String basic = android.util.Base64.encodeToString(
+                    creds.getBytes(StandardCharsets.UTF_8),
+                    android.util.Base64.NO_WRAP);
+                out.put("Authorization", "Basic " + basic);
+            }
+        } catch (Exception ignored) {
+            // No auth — plain loopback load.
+        }
+        return out;
+    }
+
+    private void syncUrlBar(@Nullable String url) {
+        if (mPortInput == null || url == null) {
+            return;
+        }
+        if (mPortInput.hasFocus()) {
+            return;
+        }
+        if (url.startsWith("data:") || url.startsWith("about:")) {
+            return;
+        }
+        try {
+            Uri uri = Uri.parse(url);
+            String host = uri.getHost();
+            if (host == null) {
+                return;
+            }
+            String lower = host.toLowerCase(Locale.US);
+            if (!"127.0.0.1".equals(lower) && !"localhost".equals(lower)) {
+                return;
+            }
+            if (!url.equals(mPortInput.getText().toString())) {
+                mPortInput.setText(url);
+            }
+        } catch (Exception ignored) {
+            // keep user input
+        }
+    }
+
+    private void updateNavButtons() {
+        if (mWebView == null) {
+            return;
+        }
+        if (mBackButton != null) {
+            mBackButton.setEnabled(mWebView.canGoBack());
+        }
+        if (mForwardButton != null) {
+            mForwardButton.setEnabled(mWebView.canGoForward());
+        }
+    }
+
+    private void stopRefreshIndicator() {
+        if (mSwipeRefresh != null && mSwipeRefresh.isRefreshing()) {
+            mSwipeRefresh.setRefreshing(false);
+        }
+    }
+
+    private void refreshStatusIndicator() {
+        if (mStatus == null) {
+            return;
+        }
+        final int port = mCurrentPort;
+        mStatus.setText(getString(R.string.msg_preview_status_checking, port));
+        mStatus.setVisibility(View.VISIBLE);
+        mScanExecutor.execute(() -> {
+            final boolean listening = AiSessionHelper.isPortListening(port);
+            mMainHandler.post(() -> {
+                if (port != mCurrentPort || mStatus == null) {
+                    return;
+                }
+                if (listening) {
+                    mStatus.setText(getString(R.string.msg_preview_status_up, port));
+                } else {
+                    mStatus.setText(getString(R.string.msg_preview_status_down, port));
+                }
+                mStatus.setVisibility(View.VISIBLE);
+            });
+        });
+    }
+
+    private void clearPreviewData() {
+        if (mWebView == null) {
+            return;
+        }
+        mWebView.clearCache(true);
+        try {
+            WebStorage.getInstance().deleteAllData();
+        } catch (Exception ignored) {
+            // ignore
+        }
+        try {
+            CookieManager cm = CookieManager.getInstance();
+            cm.removeAllCookies(null);
+            cm.flush();
+        } catch (Exception ignored) {
+            // ignore
+        }
+        Toast.makeText(this, R.string.msg_preview_cleared, Toast.LENGTH_SHORT).show();
+        loadPort(mCurrentPort);
+    }
+
+    private void openCurrentInBrowser() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl()));
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, R.string.msg_preview_invalid_port, Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void updatePathFromUrl(@Nullable String url) {
@@ -492,6 +736,11 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             return;
         }
         mShowingErrorPage = true;
+        stopRefreshIndicator();
+        if (mProgress != null) {
+            mProgress.setVisibility(View.GONE);
+        }
+        refreshStatusIndicator();
         String html = ""
             + "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
             + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
@@ -509,11 +758,16 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             + "<li>Bind on <code>0.0.0.0</code> (not only loopback) for Copy LAN.</li>"
             + "<li>Use <b>Scan</b> to find listening ports, then <b>Reload</b>.</li>"
             + "<li>OpenCode: <code>td-ai</code> → health on <code>:4096</code>.</li>"
+            + "<li>Pull down to retry. Use <b>Clear</b> if you see a stale app shell.</li>"
             + "</ul>"
-            + "<p>Toolbar: Scan · Reload · Copy LAN</p>"
+            + "<p>Toolbar: Back · Fwd · Reload · Scan · Copy LAN · Clear · Browser</p>"
             + "</body></html>";
-        mWebView.loadDataWithBaseURL("http://127.0.0.1:" + port + "/",
+        // Null base URL on purpose: using http://127.0.0.1:port as base lets a
+        // cached SPA shell resolve relative assets and masquerade as a live app
+        // ("ghost OpenCode UI" with no projects). about:blank keeps it inert.
+        mWebView.loadDataWithBaseURL(null,
             html, "text/html", "utf-8", null);
+        updateNavButtons();
     }
 
     @NonNull
