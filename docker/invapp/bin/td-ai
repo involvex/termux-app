@@ -20,25 +20,63 @@ if [ "$(pwd -P 2>/dev/null)" = "$HOME" ] || [ "$(pwd -P 2>/dev/null)" = "$HOME/"
     cd "$HOME/repos" || true
 fi
 
-# V2 /api/info is Basic-auth protected with the session password.
-AUTH_ARGS=""
-if [ -f "$HOME/.config/opencode/service.json" ]; then
-    OC_PW=$(sed -n 's/.*"password"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-        "$HOME/.config/opencode/service.json" | head -1)
-    [ -n "$OC_PW" ] && AUTH_ARGS="-u opencode:$OC_PW"
+# --- server password ------------------------------------------------------
+# `opencode serve` prints a session password and serves /api/info behind it, but
+# it does not persist it anywhere, so a second `td-ai` cannot authenticate and
+# would report the healthy server as a foreign listener. Pin one instead:
+# OPENCODE_SERVER_PASSWORD (documented by opencode.ai/docs/server) wins, then a
+# password we generated earlier, then the device's service.json for parity.
+PW_FILE="$PREFIX/var/lib/invapp/opencode-password"
+resolve_password() {
+    if [ -n "${OPENCODE_SERVER_PASSWORD:-}" ]; then
+        printf '%s' "$OPENCODE_SERVER_PASSWORD"
+        return 0
+    fi
+    if [ -s "$PW_FILE" ]; then
+        tr -d '[:space:]' < "$PW_FILE"
+        return 0
+    fi
+    if [ -f "$HOME/.config/opencode/service.json" ]; then
+        sed -n 's/.*"password"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+            "$HOME/.config/opencode/service.json" | head -1
+    fi
+}
+OC_PW=$(resolve_password)
+if [ -z "$OC_PW" ]; then
+    OC_PW=$(head -c 48 /dev/urandom | base64 2>/dev/null | tr -dc 'A-Za-z0-9' | cut -c1-32)
+    if [ -z "$OC_PW" ]; then
+        OC_PW="invapp-$(date +%s)"
+    fi
+    mkdir -p "$PREFIX/var/lib/invapp"
+    (umask 077; printf '%s\n' "$OC_PW" > "$PW_FILE")
+    echo "td-ai: generated a server password -> $PW_FILE"
 fi
+# The wrapper execs opencode, so exporting is what actually applies it.
+export OPENCODE_SERVER_PASSWORD="$OC_PW"
+AUTH_ARGS="-u opencode:$OC_PW"
 
-if curl -fsS $AUTH_ARGS --connect-timeout 1 --max-time 2 "$LOCAL/api/info" 2>/dev/null \
+# --- is a server already up? ---------------------------------------------
+code=$(curl -s -o /dev/null -w '%{http_code}' $AUTH_ARGS \
+    --connect-timeout 1 --max-time 2 "$LOCAL/api/info" 2>/dev/null || echo 000)
+if [ "$code" = "200" ] \
+    || curl -fsS $AUTH_ARGS --connect-timeout 1 --max-time 2 "$LOCAL/api/info" 2>/dev/null \
         | grep -qi '"data"\|version'; then
     echo "td-ai: OpenCode already healthy -> $LOCAL/"
+    echo "  auth: opencode:$OC_PW"
     exit 0
+fi
+if [ "$code" = "401" ]; then
+    echo "td-ai: :$PORT is up and password-protected, but our password was refused" >&2
+    echo "  It was started with a different OPENCODE_SERVER_PASSWORD." >&2
+    echo "  Either export OPENCODE_SERVER_PASSWORD to match, or stop it: td-ai-stop" >&2
+    exit 1
 fi
 if curl -fsS --connect-timeout 1 --max-time 2 "$LOCAL/global/health" 2>/dev/null | grep -qi healthy; then
     echo "td-ai: OpenCode already healthy -> $LOCAL/ (V1)"
     exit 0
 fi
 if (echo >/dev/tcp/127.0.0.1/"$PORT") >/dev/null 2>&1; then
-    echo "td-ai: :$PORT is up but /api/info + /global/health failed -- stop the other listener" >&2
+    echo "td-ai: :$PORT is up but is not an OpenCode server -- free the port or use another one" >&2
     exit 1
 fi
 
@@ -65,7 +103,9 @@ echo ""
 echo "OpenCode V2 -> serve $HOST:$PORT (single server)"
 echo "  local    $LOCAL/"
 echo "  api      GET $LOCAL/api/info (V2 {data,version}; Basic opencode:\$OC_PW)"
+echo "  auth     curl -u opencode:$OC_PW $LOCAL/api/info"
 echo "  openapi  GET $LOCAL/doc"
+echo "  password pinned to $PW_FILE (override: OPENCODE_SERVER_PASSWORD)"
 echo ""
 echo "  Publish it to the host (container has no Preview WebView):"
 echo "    docker run -it --rm -p $PORT:$PORT involvex/termux-docker td-ai $PORT"

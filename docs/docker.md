@@ -76,6 +76,14 @@ cd termux-app/docker && docker compose up -it
 
     `bun-doctor` prints the same hint.
 
+!!! info "`td-ai` server password"
+    OpenCode V2 protects `/api/info` with a session password it only prints to
+    the log. The container pins one instead: `OPENCODE_SERVER_PASSWORD`, else a
+    generated `$PREFIX/var/lib/invapp/opencode-password` (mode 0600), else the
+    device's `~/.config/opencode/service.json`. `td-ai` prints the matching
+    `curl -u opencode:<password> …` command and detects an already-running
+    server, so `td-ai-stop` / re-running `td-ai` behave predictably.
+
 ## Build it yourself
 
 The tooling source lives in this repo (`docker/invapp/`); the rootfs generation

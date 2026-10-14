@@ -5,8 +5,9 @@
 # background server.
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 
-pkill -f 'opencode serve' 2>/dev/null || true
-pkill -f 'opencode web' 2>/dev/null || true
+killed=0
+pkill -f 'opencode serve' 2>/dev/null && killed=1
+pkill -f 'opencode web' 2>/dev/null && killed=1
 
 sleep 1
 if pgrep -f 'opencode (serve|web)' >/dev/null 2>&1; then
@@ -15,6 +16,10 @@ if pgrep -f 'opencode (serve|web)' >/dev/null 2>&1; then
     echo "force with: pkill -9 -f 'opencode serve'" >&2
     exit 1
 fi
-echo "td-ai-stop: no OpenCode server running"
+if [ "$killed" = 1 ]; then
+    echo "td-ai-stop: stopped the OpenCode server"
+else
+    echo "td-ai-stop: no OpenCode server was running"
+fi
 echo "Note: with 'docker run' there is no host-side service to publish;"
 echo "      stop the container itself (docker stop <name>) if needed."

@@ -121,6 +121,20 @@ docker run -it --rm --security-opt seccomp=unconfined ghcr.io/involvex/termux-do
 
 This relaxes the host policy only. `bun-doctor` prints the same hint.
 
+### `td-ai` server password
+
+OpenCode V2 serves `/api/info` behind Basic auth and prints a **session**
+password on start; it persists it nowhere. So the container pins one:
+
+1. `OPENCODE_SERVER_PASSWORD` if you set it
+2. else `$PREFIX/var/lib/invapp/opencode-password` (generated once, mode 0600)
+3. else the device's `~/.config/opencode/service.json`, for parity
+
+`td-ai` exports it before exec'ing `opencode serve`, prints the matching
+`curl -u opencode:<password> …` line, and detects an already-running server on
+later invocations. Without this, a second `td-ai` could not authenticate and
+would report your own healthy server as a foreign listener on `:4096`.
+
 ## Keeping this in sync with the app
 
 `docker/invapp/bin/*` are ports of the strings written by
