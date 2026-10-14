@@ -86,7 +86,7 @@ cd termux-app/docker && docker compose up -it
 
 ## Build it yourself
 
-The tooling source lives in this repo (`docker/invapp/`); the rootfs generation
+The tooling source lives in this repo (`app/src/main/assets/invapp/`); the rootfs generation
 lives in the [involvex/termux-docker](https://github.com/involvex/termux-docker)
 fork, which keeps upstream `termux/termux-docker` mergeable.
 
@@ -95,7 +95,7 @@ git clone https://github.com/involvex/termux-docker
 git clone https://github.com/involvex/termux-app
 
 cd termux-docker
-INVAPP_SRC=../termux-app/docker/invapp ./generate.sh --invapp
+INVAPP_SRC=../termux-app/app/src/main/assets/invapp ./generate.sh --invapp
 ```
 
 Without `--invapp` the fork still produces a stock Termux image.

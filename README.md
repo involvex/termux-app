@@ -29,7 +29,7 @@ Package id: `com.involvex.termux_app` · Latest: **v0.203.0** · Docs:
 - **Widget scripts** — `~/.shortcuts` templates (clipboard / OCR / git / API helpers / `td-ai` / agent-worker); Settings + drawer picker
 - **Hacker theme** — matrix green on black (launcher + terminal)
 - **Docker / Podman container** — the same tooling as an image:
-  `docker/invapp/` seeds bun, `td-*` helpers and configs on top of
+  `app/src/main/assets/invapp/` seeds bun, `td-*` helpers and configs on top of
   [termux-docker](https://github.com/involvex/termux-docker). See [docker/README.md](docker/README.md)
 
 Do **not** run `curl -fsSL https://bun.sh/install | bash` inside this app — that
@@ -104,7 +104,7 @@ mergeable; this repo owns the tooling that gets seeded into the image.
 ```bash
 git clone https://github.com/involvex/termux-docker
 cd termux-docker
-INVAPP_SRC=../termux-app/docker/invapp ./generate.sh --invapp
+INVAPP_SRC=../termux-app/app/src/main/assets/invapp ./generate.sh --invapp
 
 docker run -it ghcr.io/involvex/termux-docker:aarch64
 ```

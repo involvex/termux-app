@@ -162,7 +162,7 @@ https://github.com/involvex/termux-app
 
 - [`involvex/termux-docker`](https://github.com/involvex/termux-docker) — fork
   of upstream `termux/termux-docker`; `generate.sh --invapp` layers this repo's
-  `docker/invapp/` seed tree onto the generated rootfs
+  `app/src/main/assets/invapp/` seed tree onto the generated rootfs
 - Same helpers as the APK: `bun`, `bunx`, `td-dev`, `td-scaffold`, `td-clone`,
   `td-ai`, `td-upgrade`, `opencode-setup`, `cursor-agent-setup`, `td-info`,
   hacker `colors.properties`, `~/.shortcuts` templates

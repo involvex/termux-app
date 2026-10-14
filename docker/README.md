@@ -1,13 +1,24 @@
 # Docker / Podman container
 
-`docker/invapp/` is the container twin of the app's runtime environment: the
-same tools, the same `$PREFIX/bin` helpers, the same configs, so a project moves
-between phone and container without relearning anything.
+The seed tree lives in [`app/src/main/assets/invapp/`](../../app/src/main/assets/invapp)
+— the same assets the APK bundles — so there is one on-disk copy of the helpers,
+config and shortcuts, not two. It is the container twin of the app's runtime
+environment: the same tools, the same `$PREFIX/bin` helpers, the same configs, so
+a project moves between phone and container without relearning anything.
 
-The app itself seeds its helpers from Java string literals
-(`TermuxBunInstaller.java`, `ResourceScriptsInstaller.java`,
-`WidgetScriptsInstaller.java`). The container seeds real shell files from this
-tree instead — easier to read, lint and test.
+The container installs these assets via `seed.sh`, which rewrites the
+`#!@BASH@` shebangs at install time — easier to lint and test in CI than Java
+string literals. On device, the same asset files are installed with
+`writeExecutableAsset` (`ShellLibraryInstaller`, `ResourceScriptsInstaller`,
+`TermuxHackerThemeInstaller`).
+
+Note: the device `bin/bun`, `bin/bunx`, `bin/bun-doctor`, `bin/node` and
+`opencode-setup` wrappers are still emitted from Java string literals in
+`TermuxBunInstaller.java` (they bake in device-only preloading of
+`libinvapp-bun-seccomp.so` / the path redirector). Migrating those to assets, so
+there is one copy of *every* helper, is the remaining step and is gated on an
+on-device validation pass — the glibc/`ld-linux` glue in `opencode-setup` cannot
+be runtime-checked here.
 
 ## What is in here
 
@@ -37,7 +48,7 @@ git clone https://github.com/involvex/termux-docker
 git clone https://github.com/involvex/termux-app
 
 cd termux-docker
-INVAPP_SRC=../termux-app/docker/invapp ./generate.sh --invapp
+INVAPP_SRC=../termux-app/app/src/main/assets/invapp ./generate.sh --invapp
 ```
 
 `./generate.sh` without `--invapp` still produces a stock termux-docker image, so
@@ -53,7 +64,7 @@ Build knobs (all optional):
 | `TERMUX_DOCKER__INVAPP_BUN_VERSION` | `1.4.2` | bun release (matches the APK bundle) |
 | `TERMUX_DOCKER__INVAPP_BUN_BASELINE` | `0` | `1` for CPUs without AVX2 |
 | `TERMUX_DOCKER__INVAPP_WITH_AI` | `0` | `1` bakes OpenCode + Cursor Agent into the image |
-| `INVAPP_SRC` | `../termux-app/docker/invapp` | seed tree location |
+| `INVAPP_SRC` | `../termux-app/app/src/main/assets/invapp` | seed tree location |
 
 ## Run
 
@@ -137,12 +148,16 @@ would report your own healthy server as a foreign listener on `:4096`.
 
 ## Keeping this in sync with the app
 
-`docker/invapp/bin/*` are ports of the strings written by
-`TermuxBunInstaller.java`. When you change a helper on the device side, port the
-change here too — the two cannot share files today (one is a Java literal, one
-is a shell script). The intended follow-up is to move the helpers into
-`app/src/main/assets/invapp/` and have both the app and `seed.sh` install the
-same files.
+The seed tree now lives in `app/src/main/assets/invapp/` and is the single
+on-disk copy consumed by both `seed.sh` (container) and the app's asset
+installers (`ShellLibraryInstaller`, `ResourceScriptsInstaller`,
+`TermuxHackerThemeInstaller`). When you edit a helper/config/shortcut, edit it
+there and both the image and the APK pick it up on the next build.
+
+The remaining divergence — device `bin/bun`/`bunx`/`bun-doctor`/`node` and
+`opencode-setup`, which are still Java string literals in
+`TermuxBunInstaller.java` — is the only place two copies of a helper still
+exist (see "Note" above).
 
 Parity checks worth running after a change:
 

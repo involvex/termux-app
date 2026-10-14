@@ -8,5 +8,6 @@
 # "bad interpreter" / "not found" inside the image, so force LF on checkout
 # even on Windows (core.autocrlf=true would otherwise rewrite these files).
 docker/**        text eol=lf
-docker/invapp/bin/**      text eol=lf
-docker/invapp/shortcuts/** text eol=lf
+# Container seed tree is now shipped as app assets (shell scripts with #!@BASH@
+# shebangs resolved at install time). CRLF would break them inside the image.
+app/src/main/assets/invapp/**      text eol=lf
