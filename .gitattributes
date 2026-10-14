@@ -3,3 +3,10 @@
 *.gradle    text eol=lf
 *.mk        text eol=lf
 *.sh        text eol=lf
+# Container seed tree: executed inside Linux containers, and the helpers use
+# '#!@BASH@' shebangs that seed.sh rewrites. CRLF would turn into
+# "bad interpreter" / "not found" inside the image, so force LF on checkout
+# even on Windows (core.autocrlf=true would otherwise rewrite these files).
+docker/**        text eol=lf
+docker/invapp/bin/**      text eol=lf
+docker/invapp/shortcuts/** text eol=lf

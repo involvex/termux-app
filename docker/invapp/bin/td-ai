@@ -1,0 +1,94 @@
+#!@BASH@
+# InVxTermux container -- td-ai [port]
+#
+# Single foreground OpenCode server. Mirrors the APK's td-ai (health probe,
+# auto-setup, LAN hint) with container-specific hints: there is no drawer and
+# no Preview WebView here, so port publishing happens on `docker run -p`.
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+PORT="${1:-4096}"
+case "$PORT" in
+    ''|*[!0-9]*) echo "usage: td-ai [port]" >&2; exit 2 ;;
+esac
+
+HOST="${OPENCODE_HOST:-0.0.0.0}"
+LOCAL="http://127.0.0.1:$PORT"
+
+# V2 refuses $HOME as a workspace root; fall back to ~/repos like the app does.
+if [ "$(pwd -P 2>/dev/null)" = "$HOME" ] || [ "$(pwd -P 2>/dev/null)" = "$HOME/" ]; then
+    mkdir -p "$HOME/repos"
+    cd "$HOME/repos" || true
+fi
+
+# V2 /api/info is Basic-auth protected with the session password.
+AUTH_ARGS=""
+if [ -f "$HOME/.config/opencode/service.json" ]; then
+    OC_PW=$(sed -n 's/.*"password"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+        "$HOME/.config/opencode/service.json" | head -1)
+    [ -n "$OC_PW" ] && AUTH_ARGS="-u opencode:$OC_PW"
+fi
+
+if curl -fsS $AUTH_ARGS --connect-timeout 1 --max-time 2 "$LOCAL/api/info" 2>/dev/null \
+        | grep -qi '"data"\|version'; then
+    echo "td-ai: OpenCode already healthy -> $LOCAL/"
+    exit 0
+fi
+if curl -fsS --connect-timeout 1 --max-time 2 "$LOCAL/global/health" 2>/dev/null | grep -qi healthy; then
+    echo "td-ai: OpenCode already healthy -> $LOCAL/ (V1)"
+    exit 0
+fi
+if (echo >/dev/tcp/127.0.0.1/"$PORT") >/dev/null 2>&1; then
+    echo "td-ai: :$PORT is up but /api/info + /global/health failed -- stop the other listener" >&2
+    exit 1
+fi
+
+if ! command -v opencode >/dev/null 2>&1; then
+    if [ -x "$PREFIX/bin/opencode-setup" ]; then
+        echo "opencode not found -- running opencode-setup…"
+        opencode-setup || exit $?
+        hash -r 2>/dev/null || true
+    fi
+fi
+if ! command -v opencode >/dev/null 2>&1; then
+    echo "td-ai: opencode still missing (x64 + aarch64 only)" >&2
+    exit 127
+fi
+
+# Optional IPv4 hint for the host browser (only meaningful without NAT).
+LAN_HINT=""
+if command -v ip >/dev/null 2>&1; then
+    IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')
+    [ -n "$IP" ] && LAN_HINT="http://$IP:$PORT"
+fi
+
+echo ""
+echo "OpenCode V2 -> serve $HOST:$PORT (single server)"
+echo "  local    $LOCAL/"
+echo "  api      GET $LOCAL/api/info (V2 {data,version}; Basic opencode:\$OC_PW)"
+echo "  openapi  GET $LOCAL/doc"
+echo ""
+echo "  Publish it to the host (container has no Preview WebView):"
+echo "    docker run -it --rm -p $PORT:$PORT involvex/termux-docker td-ai $PORT"
+echo "  or, without publishing, use a forwarded port from your ssh/tmux session."
+if [ -n "$LAN_HINT" ]; then
+    echo "  detected host IP (may be the container bridge): $LAN_HINT"
+fi
+echo "  Override bind: OPENCODE_HOST=127.0.0.1 td-ai"
+echo "  No --mdns (breaks on Android-style stacks)."
+echo ""
+
+if opencode pair --help >/dev/null 2>&1; then
+    if [ -n "$LAN_HINT" ]; then
+        opencode pair --url "$LAN_HINT" >/dev/null 2>&1 || true
+    fi
+fi
+
+if opencode serve --help >/dev/null 2>&1; then
+    exec opencode serve --port "$PORT" --hostname "$HOST" --print-logs
+fi
+if opencode web --help >/dev/null 2>&1; then
+    echo "td-ai: 'serve' missing -- falling back to V1 web UI" >&2
+    exec opencode web --port "$PORT" --hostname "$HOST" --print-logs
+fi
+echo "td-ai: opencode has no serve/web command -- try: opencode --help" >&2
+exec opencode --help

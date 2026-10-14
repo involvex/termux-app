@@ -1,0 +1,15 @@
+#!/system/bin/sh
+# invapp-container: td-upgrade
+# Parity with the app's widget script. Run it by hand in the container:
+#   sh ~/.shortcuts/td-upgrade
+#
+# In a container the right long-term move is `docker pull` a newer image; this
+# refreshes packages and the AI CLIs in place inside the running container.
+set -u
+
+if ! command -v td-upgrade >/dev/null 2>&1; then
+    echo "td-upgrade missing -- recreate the image" >&2
+    exit 1
+fi
+
+td-upgrade

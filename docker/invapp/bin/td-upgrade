@@ -1,0 +1,58 @@
+#!@BASH@
+# InVxTermux container -- td-upgrade
+# Refresh the stack: packages, OpenCode, Cursor Agent, bun stamp.
+# Unlike the APK there is no bundled-binary constraint: bun is a normal file in
+# $PREFIX/libexec, so an image refresh is `docker pull` + re-tag, not an APK
+# upgrade. This script updates everything in place inside the running container.
+set -e
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+echo "=== td-upgrade: packages ==="
+if command -v pkg >/dev/null 2>&1; then
+    pkg update -y || true
+    pkg upgrade -y || true
+else
+    echo "td-upgrade: pkg missing -- skip"
+fi
+
+echo ""
+echo "=== td-upgrade: OpenCode ==="
+if command -v opencode-setup >/dev/null 2>&1; then
+    opencode-setup || echo "td-upgrade: opencode-setup failed (non-fatal)" >&2
+else
+    echo "td-upgrade: opencode-setup missing -- recreate the image"
+fi
+
+echo ""
+echo "=== td-upgrade: Cursor Agent ==="
+if command -v cursor-agent-setup >/dev/null 2>&1; then
+    if command -v agent >/dev/null 2>&1; then
+        echo "td-upgrade: agent update…"
+        agent update 2>&1 || echo "td-upgrade: agent update skipped/failed" >&2
+        cursor-agent-setup --wrap-only || cursor-agent-setup || true
+    else
+        echo "td-upgrade: agent missing -- full cursor-agent-setup…"
+        cursor-agent-setup || echo "td-upgrade: cursor-agent-setup failed" >&2
+    fi
+else
+    echo "td-upgrade: cursor-agent-setup missing -- recreate the image"
+fi
+
+echo ""
+echo "=== td-upgrade: bun ==="
+STAMP="$PREFIX/var/lib/invapp/bun.version"
+RUNNING=""
+command -v bun >/dev/null 2>&1 && RUNNING=$(bun --version 2>/dev/null | head -1 || true)
+STAMPED=""
+[ -f "$STAMP" ] && STAMPED=$(tr -d '[:space:]' < "$STAMP")
+echo "  image stamp: ${STAMPED:-unknown}"
+echo "  running:     ${RUNNING:-missing}"
+if [ -n "$RUNNING" ] && [ "$RUNNING" != "$STAMPED" ]; then
+    echo "  note: version drift -- rebuild/pull the image for a matching bun"
+fi
+echo "  'bun upgrade' is deliberately NOT run: it replaces the verified"
+echo "  $PREFIX/libexec/bun with a build whose natives may not match the prefix."
+echo "  Bump it with INVAPP_BUN_VERSION at image build time instead."
+
+echo ""
+echo "td-upgrade: done"

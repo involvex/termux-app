@@ -158,6 +158,22 @@ https://github.com/involvex/termux-app
   adapted as `com.involvex.termux_app.widget` / `com.invapp.widget` with
   `sharedUserId` + same test key (one-tap `~/.shortcuts` scripts)
 
+### 15. Docker / Podman container (done - Phase 1)
+
+- [`involvex/termux-docker`](https://github.com/involvex/termux-docker) — fork
+  of upstream `termux/termux-docker`; `generate.sh --invapp` layers this repo's
+  `docker/invapp/` seed tree onto the generated rootfs
+- Same helpers as the APK: `bun`, `bunx`, `td-dev`, `td-scaffold`, `td-clone`,
+  `td-ai`, `td-upgrade`, `opencode-setup`, `cursor-agent-setup`, `td-info`,
+  hacker `colors.properties`, `~/.shortcuts` templates
+- Deliberately dropped (Android-only): path redirector, bun seccomp shim,
+  OpenCode DNS shim. Deliberately kept: `--os=android` (the prefix is bionic
+  even in a container) and the Termux `glibc` + `ld-linux` wrappers
+- `arm` / `i686` images are base-only — bun publishes no 32-bit build, same as
+  the APK. Docs: [`docs/docker.md`](docs/docker.md) · `docker/README.md`
+- Follow-up: move the helpers into `app/src/main/assets/invapp/` so the app and
+  `seed.sh` install the same files instead of two copies
+
 ## Non-goals (for now)
 
 - Full in-app IDE / multi-tab browser

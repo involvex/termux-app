@@ -1,0 +1,46 @@
+name: Shell lint (container seed)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docker/**'
+      - '.github/workflows/shell_lint.yml'
+  pull_request:
+    paths:
+      - 'docker/**'
+      - '.github/workflows/shell_lint.yml'
+  workflow_dispatch:
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Collect scripts by shebang
+        run: |
+          set -eu
+          find docker/invapp -type f | while read -r f; do
+            if head -c 2 "$f" | grep -q '#!'; then echo "$f"; fi
+          done | tee scripts.txt
+
+      - name: Syntax check
+        run: |
+          set -eu
+          while read -r f; do bash -n "$f"; done < scripts.txt
+          echo "syntax OK ($(wc -l < scripts.txt) scripts)"
+
+      # The helpers ship with '#!@BASH@' (resolved at install time by seed.sh),
+      # so tell shellcheck the dialect instead of letting it guess.
+      - name: ShellCheck
+        run: |
+          set -eu
+          rc=0
+          while read -r f; do
+            shellcheck -s bash -S error "$f" || rc=1
+          done < scripts.txt
+          exit $rc

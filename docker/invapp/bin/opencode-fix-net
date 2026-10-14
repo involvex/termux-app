@@ -1,0 +1,19 @@
+#!@BASH@
+# InVxTermux container -- opencode-fix-net.
+# Rebuilds the wrapper/glibc bits, keeps an existing binary when present.
+set -e
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+if [ ! -x "$PREFIX/bin/opencode-setup" ]; then
+    echo "opencode-fix-net: opencode-setup missing" >&2
+    exit 1
+fi
+echo "opencode-fix-net: rebuilding glibc wrapper (keeps binary if present)…"
+if [ -x "$PREFIX/libexec/opencode/opencode" ]; then
+    opencode-setup --wrap-only
+else
+    echo "opencode missing — run opencode-setup first" >&2
+    exit 1
+fi
+echo "opencode-fix-net: verifying…"
+opencode --version

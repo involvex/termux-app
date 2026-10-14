@@ -1,0 +1,138 @@
+#!@BASH@
+# InVxTermux container -- td-scaffold [name] [template] [--here] [--no-install]
+# Vite golden path under ~/repos. Same templates and PWA overlay as the APK,
+# with the Preview hints replaced by container port-publishing hints.
+set -e
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+HERE=0
+NO_INSTALL=0
+NAME=""
+TEMPLATE="react-ts"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --here) HERE=1; shift ;;
+        --no-install) NO_INSTALL=1; shift ;;
+        -h|--help)
+            echo "usage: td-scaffold [name] [template] [--here] [--no-install]" >&2
+            echo "templates: vanilla vanilla-ts react react-ts vue vue-ts pwa pwa-react" >&2
+            echo "default template: react-ts" >&2
+            exit 0
+            ;;
+        --*) echo "td-scaffold: unknown flag $1" >&2; exit 2 ;;
+        *)
+            if [ -z "$NAME" ]; then NAME="$1"
+            else TEMPLATE="$1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+if [ "$HERE" = 1 ]; then
+    [ -z "$NAME" ] && NAME="."
+elif [ -z "$NAME" ]; then
+    echo "usage: td-scaffold <name> [template] [--here] [--no-install]" >&2
+    echo "templates: vanilla vanilla-ts react react-ts vue vue-ts pwa pwa-react" >&2
+    exit 2
+fi
+
+case "$NAME" in
+    .) ;;
+    *[!a-zA-Z0-9._-]*) echo "td-scaffold: invalid name '$NAME'" >&2; exit 2 ;;
+    *[/\\]*) echo "td-scaffold: invalid name '$NAME'" >&2; exit 2 ;;
+esac
+
+PWA=0
+BASE_TEMPLATE="$TEMPLATE"
+case "$TEMPLATE" in
+    pwa) PWA=1; BASE_TEMPLATE=vanilla ;;
+    pwa-react) PWA=1; BASE_TEMPLATE=react ;;
+    vanilla|vanilla-ts|react|react-ts|vue|vue-ts|svelte|svelte-ts|solid|solid-ts|qwik|qwik-ts|preact|preact-ts) ;;
+    *) echo "td-scaffold: unknown template '$TEMPLATE'" >&2; exit 2 ;;
+esac
+
+td_require_bun
+
+if [ "$HERE" = 1 ]; then
+    TARGET_DIR="$(pwd)"
+    CREATE_NAME="."
+    if [ -e package.json ]; then
+        echo "td-scaffold: package.json already exists in $TARGET_DIR" >&2
+        exit 1
+    fi
+else
+    mkdir -p "$HOME/repos"
+    TARGET_DIR="$HOME/repos/$NAME"
+    CREATE_NAME="$NAME"
+    if [ -e "$TARGET_DIR" ]; then
+        echo "td-scaffold: $TARGET_DIR already exists" >&2
+        exit 1
+    fi
+    cd "$HOME/repos"
+fi
+
+echo "td-scaffold: create-vite $CREATE_NAME --template $BASE_TEMPLATE"
+bunx --bun create-vite@latest "$CREATE_NAME" --template "$BASE_TEMPLATE"
+[ "$HERE" != 1 ] && cd "$NAME"
+
+# Bind 0.0.0.0 so the port is reachable through `docker run -p`.
+if [ -f package.json ]; then
+    bun -e "
+const fs=require('fs');
+const p=JSON.parse(fs.readFileSync('package.json','utf8'));
+p.scripts=p.scripts||{};
+p.scripts.dev='vite --host 0.0.0.0 --port 5173';
+p.scripts.preview=p.scripts.preview||'vite preview --host 0.0.0.0 --port 4173';
+fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');
+"
+fi
+
+if [ ! -f .gitignore ]; then
+    printf '%s\n' 'node_modules/' 'dist/' '.DS_Store' '*.local' > .gitignore
+fi
+if [ ! -f README.md ]; then
+    cat > README.md <<'EOF'
+# Project
+
+Scaffolded with `td-scaffold` for the InVxTermux container.
+
+## Dev
+
+```bash
+td-dev          # or: bun run dev
+```
+
+Vite binds `0.0.0.0:5173`; publish it from the host:
+
+```bash
+docker run -it --rm -p 5173:5173 involvex/termux-docker bash -lc "cd ~/repos/<name> && td-dev"
+```
+EOF
+fi
+
+if [ "$NO_INSTALL" != 1 ]; then
+    echo "td-scaffold: bun install"
+    bun install
+else
+    echo "td-scaffold: skipping bun install (--no-install)"
+fi
+
+if [ "$PWA" = 1 ]; then
+    if [ "$NO_INSTALL" = 1 ]; then
+        echo "td-scaffold: PWA needs install -- run: bun install && bun add -d vite-plugin-pwa" >&2
+    else
+        echo "td-scaffold: add vite-plugin-pwa"
+        bun add -d vite-plugin-pwa
+        bun "$PREFIX/libexec/invapp-vite-pwa.mjs" "$BASE_TEMPLATE"
+        echo "td-scaffold: PWA enabled (vite-plugin-pwa)"
+    fi
+fi
+
+echo ""
+echo "OK: $(pwd)"
+echo "Next: td-dev    # or bun run dev"
+echo "Then: publish :5173 from the host (docker run -p 5173:5173 …)"
+[ "$PWA" = 1 ] && echo "PWA build: bun run build   # then preview :4173"
+echo ""
+pwd

@@ -1,0 +1,20 @@
+#!@BASH@
+# InVxTermux container -- td-ai-stop
+# Stops the OpenCode server started by td-ai. In a container this usually
+# means stopping the container itself; inside an attached session it stops the
+# background server.
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+pkill -f 'opencode serve' 2>/dev/null || true
+pkill -f 'opencode web' 2>/dev/null || true
+
+sleep 1
+if pgrep -f 'opencode (serve|web)' >/dev/null 2>&1; then
+    echo "td-ai-stop: still running:"
+    pgrep -af 'opencode (serve|web)' || true
+    echo "force with: pkill -9 -f 'opencode serve'" >&2
+    exit 1
+fi
+echo "td-ai-stop: no OpenCode server running"
+echo "Note: with 'docker run' there is no host-side service to publish;"
+echo "      stop the container itself (docker stop <name>) if needed."

@@ -1,0 +1,20 @@
+#!@BASH@
+# InVxTermux container -- td-install-extras [package...]
+# Installs the optional/heavy package set (see $PREFIX/.../packages-extra.list
+# baked into the image as td-extras.list).
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+LIST="$PREFIX/etc/invapp/packages-extra.list"
+[ -f "$LIST" ] || { echo "td-install-extras: $LIST missing" >&2; exit 1; }
+
+if [ "$#" -gt 0 ]; then
+    pkgs="$*"
+else
+    pkgs=$(sed -e 's/#.*$//' "$LIST" | grep -v '^[[:space:]]*$' | tr '\n' ' ')
+fi
+[ -n "$pkgs" ] || { echo "td-install-extras: nothing to install" >&2; exit 1; }
+
+echo "td-install-extras: pkg install $pkgs"
+# shellcheck disable=SC2086
+pkg install -y $pkgs
+echo "td-install-extras: done -- verify with: td-info"

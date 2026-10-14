@@ -1,0 +1,68 @@
+#!@BASH@
+# InVxTermux container -- td-clone <git-url> [name] [--bun-i]
+# PC <-> phone <-> container golden path: clone into ~/repos.
+set -e
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+URL="${1-}"
+if [ -z "$URL" ]; then
+    echo "usage: td-clone <git-url> [name] [--bun-i]" >&2
+    exit 2
+fi
+shift || true
+
+NAME=""
+DO_BUN=0
+for arg in "$@"; do
+    case "$arg" in
+        --bun-i|--bun-install) DO_BUN=1 ;;
+        -*) echo "td-clone: unknown flag '$arg'" >&2; exit 2 ;;
+        *)
+            if [ -n "$NAME" ]; then
+                echo "usage: td-clone <git-url> [name] [--bun-i]" >&2
+                exit 2
+            fi
+            NAME="$arg"
+            ;;
+    esac
+done
+
+if [ -z "$NAME" ]; then
+    NAME=$(basename "$URL")
+    NAME=${NAME%.git}
+    NAME=${NAME%%\?*}
+    NAME=${NAME%%\#*}
+fi
+case "$NAME" in
+    ''|'.'|'..'|*[!a-zA-Z0-9._-]*)
+        echo "td-clone: invalid name '$NAME'" >&2
+        exit 2
+        ;;
+esac
+
+td_require_git
+mkdir -p "$HOME/repos"
+DEST="$HOME/repos/$NAME"
+if [ -e "$DEST" ]; then
+    echo "td-clone: $DEST already exists" >&2
+    exit 1
+fi
+
+echo "td-clone: git clone $URL -> $DEST"
+git clone -- "$URL" "$DEST"
+cd "$DEST"
+
+if [ "$DO_BUN" = 1 ] && [ -f package.json ]; then
+    td_require_bun
+    echo "td-clone: bun install"
+    bun install
+elif [ "$DO_BUN" = 1 ]; then
+    echo "td-clone: no package.json -- skip bun install"
+fi
+
+echo ""
+echo "OK: $DEST"
+echo "Next: td-dev    # or bun run dev"
+echo "Then: publish the port from the host (docker run -p <port>:<port>)"
+echo ""
+pwd

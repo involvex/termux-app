@@ -1,0 +1,52 @@
+# InVxTermux container — base package set.
+#
+# One package per line; '#' comments and blank lines ignored. seed.sh tries the
+# whole list in one `pkg install`, then falls back to a per-package loop so a
+# single package missing on one ABI does not fail the whole image build.
+
+# shell + core
+bash
+bash-completion
+coreutils
+sed
+grep
+gawk
+findutils
+file
+which
+
+# transfer / vcs
+curl
+wget
+git
+openssh
+rsync
+ca-certificates
+
+# terminal UX (parity with the app's extras-keys workflow)
+less
+nano
+vim
+tmux
+htop
+procps
+jq
+tree
+ncdu
+
+# archive / build basics
+tar
+unzip
+zip
+xz-utils
+
+# python: many tools and the AI CLIs' helper scripts expect it
+python
+
+# Termux:API command line tools. The CLIs install and list normally but any
+# call broadcasts an Android intent, so they fail inside a container exactly
+# like they do on a device without the plugin APK installed.
+termux-api
+
+# node fallback for 32-bit ABIs (bun has no armv7/386 build)
+nodejs-lts

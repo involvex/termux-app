@@ -1,0 +1,28 @@
+#!/system/bin/sh
+# invapp-container: git-pull-repos
+# Parity with the app's Widget script. Inside a container there is no
+# Termux:Widget launcher, so run it by hand: sh ~/.shortcuts/git-pull-repos
+#
+# Pulls every git repo under ~/repos and reports a one-line summary.
+set -u
+
+REPOS_DIR="${REPOS_DIR:-$HOME/repos}"
+[ -d "$REPOS_DIR" ] || { echo "no repos in $REPOS_DIR"; exit 1; }
+
+pulled=0
+failed=0
+for dir in "$REPOS_DIR"/*/; do
+    [ -d "$dir/.git" ] || continue
+    name=$(basename "$dir")
+    printf '%-24s ' "$name"
+    if (cd "$dir" && git pull --ff-only 2>&1 | tail -1); then
+        pulled=$((pulled + 1))
+    else
+        echo "  (pull failed -- resolve locally, or re-run with --rebase)"
+        failed=$((failed + 1))
+    fi
+done
+
+echo
+echo "pulled: $pulled   failed: $failed"
+[ "$failed" -eq 0 ]

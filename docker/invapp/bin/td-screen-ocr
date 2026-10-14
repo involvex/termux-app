@@ -1,0 +1,6 @@
+#!@BASH@
+# InVxTermux container -- stub. OCR of an Android screenshot needs
+# Termux:API + MediaProjection; use tesseract directly on an image instead.
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+INVAPP_NO_DEVICE_REASON="screen OCR requires Termux:API capture plus tesseract on a device"
+exec "$PREFIX/bin/td-android-only" "$@"

@@ -1,0 +1,55 @@
+#!@BASH@
+# InVxTermux container -- bun wrapper.
+#
+# Same contract as the APK's wrapper (TermuxBunInstaller.java):
+#   * real binary stays in $PREFIX/libexec/bun
+#   * bun is forced to resolve *bionic* natives (--os=android --cpu=...)
+#   * LD_PRELOAD stays empty
+#
+# The APK additionally preloads libinvapp-bun-seccomp.so (Android seccomp traps
+# openat2/fchmodat2) and libinvapp-redirector.so (com.termux -> com.involvex).
+# Neither exists in a container. If bun reports "Bad system call" or an unknown
+# syscall here, that is Docker's own seccomp profile -- see docker/README.md.
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+REAL="$PREFIX/libexec/bun"
+if [ ! -x "$REAL" ]; then
+    echo "bun: missing binary at $REAL" >&2
+    echo "  image arch: $(uname -m) -- bun publishes x64 + aarch64 only" >&2
+    echo "  node fallback: pkg install nodejs" >&2
+    exit 127
+fi
+
+export OPENSSL_CONF="${OPENSSL_CONF:-$PREFIX/etc/tls/openssl.cnf}"
+export npm_config_platform=android
+export npm_config_os=android
+npm_config_arch=$(td_bun_cpu)
+npm_config_cpu=$(td_bun_cpu)
+export npm_config_arch npm_config_cpu
+
+mkdir -p "$BUN_INSTALL_CACHE_DIR" "$HOME/.bun/bin" "$HOME/repos" "$TMPDIR" 2>/dev/null || true
+
+set -- "$@"
+cmd="${1-}"
+# Force the Android optionalDependency filter. Without it bun happily resolves
+# linux-* natives (or a Windows lockfile's pinned versions), which cannot load
+# against bionic.
+case "$cmd" in
+    install|i|add|update|remove|rm|create)
+        shift
+        has_os=0; has_cpu=0
+        for a in "$@"; do
+            case "$a" in
+                --os|--os=*) has_os=1 ;;
+                --cpu|--cpu=*) has_cpu=1 ;;
+            esac
+        done
+        extra=""
+        [ "$has_os" = 0 ] && extra="$extra --os=android"
+        [ "$has_cpu" = 0 ] && extra="$extra --cpu=$(td_bun_cpu)"
+        # shellcheck disable=SC2086
+        exec "$REAL" "$cmd"$extra "$@"
+        ;;
+esac
+
+exec "$REAL" "$@"
