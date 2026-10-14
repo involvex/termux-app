@@ -88,7 +88,8 @@ resolve_version() {
         echo "${OPENCODE_VERSION#v}"
         return
     fi
-    echo "opencode-setup: resolving latest V2 version…"
+    # Progress goes to stderr: the caller captures stdout into the version.
+    echo "opencode-setup: resolving latest V2 version…" >&2
     meta=$(curl -fsSL --max-time 20 https://opencode.ai/update/api/latest/cli/npm 2>/dev/null || true)
     v=$(printf '%s' "$meta" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' | head -1)
     v="${v#v}"
@@ -193,6 +194,9 @@ if [ "$WRAP_ONLY" != 1 ]; then
         OC_VER="${OC_VER#v}"
         OPENCODE_INSTALLED_VERSION="$OC_VER"
         echo "opencode-setup: installing $OC_VER ($OC_ASSET)"
+        case "$OC_VER" in
+            ''|*[!0-9.]*) die "could not resolve a version (got '$OC_VER')" ;;
+        esac
         mkdir -p "$OC_DIR" "$TMPDIR"
         tarball="$TMPDIR/$OC_ASSET"
         fetch "$(url_for "$OC_VER" "$OC_ASSET")" "$tarball"
