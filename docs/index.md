@@ -37,6 +37,15 @@ td-dev
 - **Localhost Preview** with port chips and Copy LAN
 - Helpers: `td-scaffold`, `td-dev`, `td-clone`, `td-ai`
 - Hacker theme (matrix green on black)
+- Same stack as a [Docker/Podman container](docker.md) — same helpers, same theme
+
+## Prefer a container?
+
+```bash
+docker run -it ghcr.io/involvex/termux-docker:aarch64
+```
+
+`td-info` prints what the image can and cannot do.
 
 ## Sponsors
 

@@ -1,0 +1,54 @@
+#!@BASH@
+# InVxTermux container -- td-info
+# One-screen capability report: what this image can and cannot do.
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+hr() { printf '%s\n' "------------------------------------------------------------"; }
+
+echo "InVxTermux container"
+hr
+printf '  uname        %s\n' "$(uname -a)"
+printf '  arch/ABI     %s / %s\n' "$(uname -m)" "$(td_arch)"
+printf '  PREFIX       %s\n' "$PREFIX"
+printf '  HOME         %s\n' "$HOME"
+printf '  user         %s (uid %s)\n' "$(id -un)" "$(id -u)"
+printf '  seeded       %s\n' "$(date -u '+%Y-%m-%d %H:%M UTC' 2>/dev/null || echo unknown)"
+
+hr
+echo "tooling"
+printf '  bun          %s\n' "$(command -v bun >/dev/null 2>&1 && bun --version 2>/dev/null | head -1 || echo 'not installed (x64/aarch64 only)')"
+printf '  node         %s\n' "$(command -v node >/dev/null 2>&1 && node --version || echo missing)"
+printf '  opencode     %s\n' "$(command -v opencode >/dev/null 2>&1 && opencode --version 2>/dev/null | head -1 || echo 'not installed (opencode-setup)')"
+printf '  agent        %s\n' "$(command -v agent >/dev/null 2>&1 && echo installed || echo 'not installed (cursor-agent-setup)')"
+printf '  java         %s\n' "$(command -v java >/dev/null 2>&1 && java -version 2>&1 | head -1 || echo 'not installed (td-install-extras openjdk-17)')"
+printf '  python       %s\n' "$(command -v python >/dev/null 2>&1 && python --version 2>&1 || echo missing)"
+printf '  git          %s\n' "$(command -v git >/dev/null 2>&1 && git --version || echo missing)"
+
+hr
+echo "helpers"
+for h in td-dev td-scaffold td-clone td-ai td-ai-stop td-upgrade td-install-extras bun-doctor opencode-setup cursor-agent-setup; do
+    if [ -x "$PREFIX/bin/$h" ]; then printf '  %-22s ok\n' "$h"; else printf '  %-22s MISSING\n' "$h"; fi
+done
+
+hr
+echo "android-only features (unavailable in a container, by design)"
+for h in termux-screenshot td-screen-ocr; do
+    printf '  %-22s %s\n' "$h" "$([ -x "$PREFIX/bin/$h" ] && echo 'stub (needs a device)' || echo 'not seeded')"
+done
+cat <<'EOF'
+  termux-api CLIs are installed but every call broadcasts an Android intent,
+  so they fail here exactly like they do on a device without the plugin APK.
+  Widget shortcuts in ~/.shortcuts need the Termux:Widget APK to be launched.
+EOF
+
+hr
+echo "quick start"
+cat <<'EOF'
+  td-clone <git-url> [name] [--bun-i]   clone into ~/repos
+  td-scaffold <name> [template]         vite project (pwa / pwa-react)
+  td-dev                                bun run dev (binds 0.0.0.0)
+  td-ai [port]                          OpenCode server (default :4096)
+  td-upgrade                            refresh packages + AI CLIs
+EOF
+echo
+echo "Publish a port from the host: docker run -p 5173:5173 …"

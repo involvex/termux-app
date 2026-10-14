@@ -41,6 +41,7 @@ nav:
   - AI helper: ai.md
   - Cursor Agent: cursor-agent.md
   - OpenJDK 17: openjdk.md
+  - Docker container: docker.md
   - Troubleshooting: troubleshooting.md
   - About / License: about.md
 

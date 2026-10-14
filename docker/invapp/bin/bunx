@@ -1,0 +1,13 @@
+#!@BASH@
+# InVxTermux container -- bunx.
+#
+# `bun x` execs the package bin through its shebang; without node on PATH that
+# exits 127 silently. Force bun to run it.
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+for a in "$@"; do
+    case "$a" in
+        --bun) exec "$PREFIX/bin/bun" x "$@" ;;
+    esac
+done
+exec "$PREFIX/bin/bun" x --bun "$@"

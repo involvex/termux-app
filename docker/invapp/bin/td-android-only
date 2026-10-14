@@ -1,0 +1,28 @@
+#!@BASH@
+# InVxTermux container -- shared message for device-only features.
+# Sourced/executed by the stubs (termux-screenshot, td-screen-ocr) so every
+# Android-dependent helper fails the same, explicit way instead of pretending.
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+REASON="${INVAPP_NO_DEVICE_REASON:-this feature needs an Android device}"
+
+{
+    echo "$(basename "$0"): $REASON"
+    echo
+    cat <<'EOF'
+In the container there is no Android runtime, so:
+  * Termux:API calls cannot broadcast intents (same failure as a device
+    without the Termux:API APK installed)
+  * there is no MediaProjection/Surface permission to capture the screen
+  * ~/.shortcuts need the Termux:Widget APK to be launched
+
+Use these on the phone instead:
+  termux-screenshot / td-screen-ocr / widget scripts  ->  InVxTermux on Android
+
+Or, inside the container, capture with ordinary tools:
+  import -window root shot.png     (X11 / Xvfb)
+  scrot / maim                      (X11)
+  tesseract shot.png stdout        (needs: td-install-extras tesseract)
+EOF
+} >&2
+exit 1

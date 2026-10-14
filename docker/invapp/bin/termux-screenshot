@@ -1,0 +1,6 @@
+#!@BASH@
+# InVxTermux container -- stub. The real helper needs Termux:API + screen
+# capture, i.e. an Android device.
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+INVAPP_NO_DEVICE_REASON="screen capture requires the Termux:API app and MediaProjection consent"
+exec "$PREFIX/bin/td-android-only" "$@"

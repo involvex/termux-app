@@ -1,0 +1,198 @@
+#!@BASH@
+# InVxTermux container -- cursor-agent-setup.
+#
+# Port of the APK's cursor-agent-setup. The Cursor CLI ships its own glibc
+# Node build, so inside a Termux container it runs through Termux glibc's
+# ld-linux exactly like on device. The Android-only DNS shim is dropped (the
+# container has a real /etc/resolv.conf and /sys).
+#
+# Install:   cursor-agent-setup            agent login
+# Repair:    cursor-agent-setup --wrap-only    (after `agent update`)
+set -e
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+CA_ROOT="$HOME/.local/share/cursor-agent"
+CA_VERSIONS="$CA_ROOT/versions"
+
+case "$(uname -m)" in
+    aarch64|arm64) CA_ARCH=arm64; CA_LD=ld-linux-aarch64.so.1 ;;
+    x86_64|amd64)  CA_ARCH=x64;   CA_LD=ld-linux-x86-64.so.2 ;;
+    *)
+        echo "cursor-agent-setup: $(uname -m) unsupported (x64 + aarch64 only)" >&2
+        exit 2
+        ;;
+esac
+
+WRAP_ONLY=0
+case "${1-}" in
+    -h|--help)
+        echo "usage: cursor-agent-setup [--wrap-only]"
+        echo "  env: CURSOR_AGENT_VERSION=YYYY.MM.DD-hash (default: live lookup)"
+        exit 0
+        ;;
+    --wrap-only) WRAP_ONLY=1 ;;
+esac
+
+install_complete() {
+    d="$1"
+    [ -x "$d/node" ] && [ -f "$d/index.js" ] || return 1
+    [ -f "$d/node_modules/tree-sitter/package.json" ] || return 1
+    [ -f "$d/node_modules/tree-sitter/build/Release/tree_sitter_runtime_binding.node" ] || return 1
+    [ -f "$d/node_modules/tree-sitter-bash/package.json" ] || return 1
+    [ -f "$d/node_modules/tree-sitter-bash/build/Release/tree_sitter_bash_binding.node" ] || return 1
+    [ -f "$d/node_modules/node-gyp-build/package.json" ] || return 1
+    return 0
+}
+
+find_version_dir() {
+    if [ -L "$CA_ROOT/current" ] || [ -d "$CA_ROOT/current" ]; then
+        c=$(readlink -f "$CA_ROOT/current" 2>/dev/null || echo "$CA_ROOT/current")
+        if [ -x "$c/node" ] && [ -f "$c/index.js" ]; then echo "$c"; return; fi
+    fi
+    if [ -f "$CA_ROOT/version" ]; then
+        pinned=$(tr -d '[:space:]' < "$CA_ROOT/version")
+        if [ -x "$CA_VERSIONS/$pinned/node" ]; then echo "$CA_VERSIONS/$pinned"; return; fi
+    fi
+    for d in "$CA_VERSIONS"/*/; do
+        [ -d "$d" ] || continue
+        d=${d%/}
+        if [ -x "$d/node" ] && [ -f "$d/index.js" ]; then echo "$d"; return; fi
+    done
+    return 1
+}
+
+write_wrappers() {
+    WRAPPER="$PREFIX/bin/agent"
+    cat > "$WRAPPER" <<EOF
+#!$PREFIX/bin/bash
+# invapp-cursor-agent-wrapper (container) -- bundled Node via glibc ld-linux
+PREFIX="$PREFIX"
+CA_LD="$CA_LD"
+CA_ROOT="\$HOME/.local/share/cursor-agent"
+CA_VERSIONS="\$CA_ROOT/versions"
+find_dir() {
+  if [ -L "\$CA_ROOT/current" ] || [ -d "\$CA_ROOT/current" ]; then
+    local c; c=\$(readlink -f "\$CA_ROOT/current" 2>/dev/null || echo "\$CA_ROOT/current")
+    if [ -x "\$c/node" ] && [ -f "\$c/index.js" ]; then echo "\$c"; return; fi
+  fi
+  if [ -f "\$CA_ROOT/version" ]; then
+    local p; p=\$(tr -d '[:space:]' < "\$CA_ROOT/version")
+    if [ -x "\$CA_VERSIONS/\$p/node" ]; then echo "\$CA_VERSIONS/\$p"; return; fi
+  fi
+  local d
+  for d in "\$CA_VERSIONS"/*/; do
+    [ -d "\$d" ] || continue
+    d=\${d%/}
+    if [ -x "\$d/node" ] && [ -f "\$d/index.js" ]; then echo "\$d"; return; fi
+  done
+}
+VERSION_DIR=\$(find_dir)
+if [ -z "\$VERSION_DIR" ]; then
+  echo "agent: not installed -- run cursor-agent-setup" >&2
+  exit 127
+fi
+LD="\$PREFIX/glibc/lib/\$CA_LD"
+if [ ! -x "\$LD" ]; then
+  echo "agent: glibc missing -- run cursor-agent-setup" >&2
+  exit 127
+fi
+export LD_PRELOAD=
+export LD_LIBRARY_PATH=
+export TMPDIR="\${TMPDIR:-\$PREFIX/tmp}"
+mkdir -p "\$TMPDIR" 2>/dev/null || true
+mkdir -p "\$PREFIX/glibc/etc/ssl/certs" 2>/dev/null || true
+if [ ! -s "\$PREFIX/etc/resolv.conf" ] && [ -s /etc/resolv.conf ]; then
+  cp -f /etc/resolv.conf "\$PREFIX/etc/resolv.conf"
+fi
+if [ -s "\$PREFIX/etc/resolv.conf" ]; then
+  cp -f "\$PREFIX/etc/resolv.conf" "\$PREFIX/glibc/etc/resolv.conf" 2>/dev/null || true
+fi
+if [ -f "\$PREFIX/etc/tls/cert.pem" ]; then
+  export SSL_CERT_FILE="\$PREFIX/etc/tls/cert.pem"
+  export CURL_CA_BUNDLE="\$PREFIX/etc/tls/cert.pem"
+  export NODE_EXTRA_CA_CERTS="\$PREFIX/etc/tls/cert.pem"
+  mkdir -p "\$PREFIX/etc/tls/certs" "\$PREFIX/glibc/etc/ssl/certs" 2>/dev/null || true
+  ln -sfn "\$PREFIX/etc/tls/cert.pem" "\$PREFIX/etc/tls/certs/ca-certificates.crt" 2>/dev/null || true
+  ln -sfn "\$PREFIX/etc/tls/cert.pem" "\$PREFIX/glibc/etc/ssl/certs/ca-certificates.crt" 2>/dev/null || true
+  export SSL_CERT_DIR="\$PREFIX/etc/tls/certs"
+fi
+export PATH="\$PREFIX/bin:\$PATH"
+exec -a "\$0" "\$LD" --library-path "\$PREFIX/glibc/lib" \
+  "\$VERSION_DIR/node" --use-system-ca "\$VERSION_DIR/index.js" "\$@"
+EOF
+    chmod 700 "$WRAPPER"
+    cp -f "$WRAPPER" "$PREFIX/bin/cursor-agent" 2>/dev/null || true
+    chmod 700 "$PREFIX/bin/cursor-agent" 2>/dev/null || true
+    mkdir -p "$HOME/.local/bin"
+    ln -sfn "$WRAPPER" "$HOME/.local/bin/agent" 2>/dev/null || true
+    ln -sfn "$WRAPPER" "$HOME/.local/bin/cursor-agent" 2>/dev/null || true
+}
+
+resolve_version() {
+    if [ -n "${CURSOR_AGENT_VERSION:-}" ]; then
+        echo "$CURSOR_AGENT_VERSION"
+        return
+    fi
+    v=$(curl -fsSL --max-time 30 https://cursor.com/install 2>/dev/null \
+        | grep -oE '[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[a-f0-9]+' | head -1)
+    if [ -n "$v" ]; then echo "$v"; return; fi
+    echo "2026.09.26-dd393fe"
+}
+
+if [ "$WRAP_ONLY" = 1 ]; then
+    if CA_FOUND=$(find_version_dir); then
+        if install_complete "$CA_FOUND"; then
+            write_wrappers
+            echo "OK: rewrote $PREFIX/bin/agent -> $CA_FOUND"
+            exit 0
+        fi
+        echo "cursor-agent-setup --wrap-only: incomplete (missing tree-sitter) -- re-extracting" >&2
+        rm -rf "$CA_FOUND"
+    else
+        echo "cursor-agent-setup --wrap-only: no install under $CA_VERSIONS -- full setup" >&2
+    fi
+fi
+
+# Termux glibc is required even in a container.
+if [ ! -x "$PREFIX/glibc/lib/$CA_LD" ]; then
+    echo "cursor-agent-setup: installing Termux glibc…"
+    mkdir -p "$PREFIX/etc/apt/sources.list.d"
+    printf '%s\n' 'deb [trusted=yes] https://packages-cf.termux.dev/apt/termux-glibc/ glibc stable' \
+        > "$PREFIX/etc/apt/sources.list.d/glibc.list"
+    export DEBIAN_FRONTEND=noninteractive
+    pkg install -y glibc-repo 2>/dev/null || true
+    apt-get update -y >/dev/null 2>&1 || pkg update -y >/dev/null 2>&1 || true
+    pkg install -y glibc glibc-runner openssl-glibc ca-certificates 2>/dev/null || true
+fi
+[ -x "$PREFIX/glibc/lib/$CA_LD" ] || {
+    echo "cursor-agent-setup: glibc missing -- pkg install glibc-repo glibc" >&2
+    exit 1
+}
+
+CA_VER=$(resolve_version)
+CA_DIR="$CA_VERSIONS/$CA_VER"
+CA_URL="https://downloads.cursor.com/lab/$CA_VER/linux/$CA_ARCH/agent-cli-package.tar.gz"
+echo "cursor-agent-setup: $CA_VER ($CA_ARCH)"
+mkdir -p "$TMPDIR"
+TARBALL="$TMPDIR/agent-cli-package.tar.gz"
+if command -v curl >/dev/null 2>&1; then
+    curl -fL --retry 3 --retry-delay 2 -o "$TARBALL" "$CA_URL"
+else
+    wget -O "$TARBALL" "$CA_URL"
+fi
+rm -rf "$CA_DIR"
+mkdir -p "$CA_DIR"
+tar -xzf "$TARBALL" -C "$CA_DIR"
+rm -f "$TARBALL"
+
+if ! install_complete "$CA_DIR"; then
+    echo "cursor-agent-setup: incomplete extract (node/index.js/tree-sitter) -- removing $CA_DIR" >&2
+    rm -rf "$CA_DIR"
+    exit 1
+fi
+
+printf '%s\n' "$CA_VER" > "$CA_ROOT/version"
+ln -sfn "$CA_DIR" "$CA_ROOT/current" 2>/dev/null || true
+write_wrappers
+echo "OK: agent -> $CA_DIR"
+echo "Next: agent login"

@@ -1,0 +1,35 @@
+# InVxTermux container — optional/heavy packages.
+#
+# NOT installed by default (keeps the image small). Install on demand:
+#
+#   td-install-extras            # everything listed here
+#   td-install-extras openjdk-17 # just one package
+#
+# Lines starting with '#' are comments. Keep this short: every entry is a
+# multi-MiB download on every container start that pulls the image.
+
+# java (app parity: td-jdk-setup). Inside a container plain `java` works --
+# no Android seccomp SIGSYS trap, no libandroid-shmem workaround.
+openjdk-17
+
+# OCR stack for screen-ocr parity. tesseract ships eng traineddata; other
+# languages need <lang>.traineddata under $PREFIX/share/tessdata.
+tesseract
+
+# native toolchains.
+# make/pkg-config live here rather than in packages.list: on Termux pkg-config
+# pulls llvm/clang/lld, which is far too heavy for every image.
+make
+pkg-config
+clang
+cmake
+
+# convenience CLI tooling
+gh
+git-lfs
+shellcheck
+
+# The app offers td-resource-linux (proot Ubuntu/Debian). Redundant inside a
+# container -- the container already is a Linux rootfs, so run another image
+# instead. Uncomment if you want nested proot anyway.
+# proot

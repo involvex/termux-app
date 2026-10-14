@@ -1,0 +1,22 @@
+#!/system/bin/sh
+# invapp-container: td-ai (background)
+# Parity with the app's widget script. Run it by hand in the container:
+#   sh ~/.shortcuts/td-ai &
+#
+# Starts the OpenCode server on :4096 in the background so you can keep using the
+# shell. There is no widget tap-to-stop here; use `td-ai-stop` or stop the
+# container.
+set -u
+
+PORT="${1:-4096}"
+if ! command -v td-ai >/dev/null 2>&1; then
+    echo "td-ai missing -- recreate the image" >&2
+    exit 1
+fi
+
+LOG="${TMPDIR:-$PREFIX/tmp}/td-ai-$PORT.log"
+td-ai "$PORT" > "$LOG" 2>&1 &
+echo "td-ai starting on :$PORT (log: $LOG)"
+echo "publish it: docker run -p $PORT:$PORT …"
+sleep 2
+tail -5 "$LOG" 2>/dev/null || true

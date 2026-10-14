@@ -61,6 +61,7 @@ See `ROADMAP.md`.
 | Widget scripts | `~/.shortcuts` templates (defaults: `clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, `screen-ocr`, `tasks/td-ai`; optional catalog: camera/wifi/battery/torch/share/settings/vibrate/volume/location/telephony/`stop-ai`/`td-upgrade`/`stop-agent-worker`/`tasks/agent-worker`); Settings / right drawer; matching Widget APK + API/`pkg install termux-api`. `screen-ocr` → `td-screen-ocr`. **2-finger swipe down** (or Ctrl+Alt+T) opens Tools end drawer. Widget tap always shows **Running: name** toast |
 | Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize bar / Customize keys (writes quoted `extra-keys` in `~/.termux/termux.properties`). Extra-keys: 2-row nav page + swipe L/R for workflow page; end drawer = Tools (Preview/AI/Clone/New/Widget scripts). Long-press / Ctrl+Alt+M → actions bottom sheet. AI tap when ready opens Preview and may offer **Copy LAN** if `:4096` is wildcard-bound |
 | Completions | App installs `$PREFIX/etc/profile.d/invapp-completions.sh` + `bash_completion.d` for bun/pkg/npm/gh/git. Prefer `pkg install bash-completion` for richer git. **New session** after update. Never edit `~/.bashrc` |
+| Container | `docker/invapp/` = container twin of the seeded env (bun, `td-*`, configs, `~/.shortcuts`, opencode/cursor installers). Built by the `involvex/termux-docker` fork: `INVAPP_SRC=../termux-app/docker/invapp ./generate.sh --invapp` → `ghcr.io/involvex/termux-docker:<arch>`. Dropped vs APK: path redirector, bun seccomp shim, OpenCode DNS shim. Kept: `--os=android` (prefix is bionic!) + Termux glibc wrappers. Details: `docker/README.md` |
 
 **Do NOT "fix" these with more wrappers:**
 
@@ -222,6 +223,22 @@ td-ai                # OpenCode on 0.0.0.0:4096 → Preview 127.0.0.1 / LAN Copy
 PC: same remote, normal git + bun. Pull on phone to continue. No Termux
 package sync needed.
 
+### Container (Docker/Podman)
+
+```bash
+# in a checkout of involvex/termux-docker (sibling of this repo)
+INVAPP_SRC=../termux-app/docker/invapp ./generate.sh --invapp
+TERMUX_ARCH=x86_64 ./generate.sh --invapp            # pick the ABI
+TERMUX_DOCKER__INVAPP_WITH_AI=1 ./generate.sh --invapp   # bake in opencode + cursor agent
+
+docker run -it ghcr.io/involvex/termux-docker:aarch64
+docker run -it --rm -p 5173:5173 -p 4096:4096 ghcr.io/involvex/termux-docker:x86_64
+docker run --rm ghcr.io/involvex/termux-docker:x86_64 td-info
+```
+
+`docker/invapp/` here owns the tooling; the fork owns rootfs generation. Keep
+the two in sync when a `td-*` helper changes — see `docker/README.md`.
+
 ## 3. Technologies
 
 Pin versions from `gradle.properties` + module `build.gradle` — do not bump
@@ -296,6 +313,7 @@ termux-app/
 ├── termux-api/         # API plugin
 ├── termux-widget/      # Classic ~/.shortcuts Termux:Widget
 ├── termux-terminal-widget/ # Command-output home widget (not classic Termux:Widget)
+├── docker/          # container seed tree (invapp/) + compose file; image built by involvex/termux-docker
 ├── .github/workflows/  # CI above + ISSUE_TEMPLATE/
 ├── fastlane/ docs/en/ site/  # store metadata, docs, sponsors page
 └── build.gradle settings.gradle gradle.properties README.md ROADMAP.md AGENTS.md

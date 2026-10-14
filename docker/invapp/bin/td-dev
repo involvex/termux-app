@@ -1,0 +1,19 @@
+#!@BASH@
+# InVxTermux container -- td-dev [script] [args...]
+# Dev-server helper: `bun run <script>` with actionable errors.
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+SCRIPT="${1:-dev}"
+if [ "$#" -gt 0 ]; then shift; fi
+
+td_require_bun
+if [ ! -f package.json ]; then
+    echo "td-dev: no package.json in $(pwd)" >&2
+    echo "hint: td-clone <git-url> [name] | td-scaffold <name> | cd ~/repos/<project>" >&2
+    exit 1
+fi
+
+echo "td-dev: bun run $SCRIPT $*"
+echo "When the port appears, publish it from the host: docker run -p <port>:<port> …"
+echo ""
+exec bun run "$SCRIPT" "$@"

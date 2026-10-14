@@ -1,0 +1,23 @@
+#!@BASH@
+# InVxTermux container -- bun/AI capability report.
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+echo "arch:        $(uname -m)  (tooling ABI: $(td_arch))"
+echo "wrapper:     $PREFIX/bin/bun"
+echo "real:        $PREFIX/libexec/bun"
+echo "stamped:     $(cat "$PREFIX/var/lib/invapp/bun.version" 2>/dev/null || echo unknown)"
+ls -la "$PREFIX/bin/bun" "$PREFIX/libexec/bun" "$PREFIX/bin/bunx" 2>&1 | sed 's/^/  /'
+echo "--- versions ---"
+"$PREFIX/bin/bun" --version 2>&1 | head -1
+echo "node:        $(command -v node >/dev/null 2>&1 && node --version || echo 'missing (pkg install nodejs)')"
+echo "opencode:    $(command -v opencode >/dev/null 2>&1 && opencode --version 2>/dev/null | head -1 || echo 'missing (opencode-setup)')"
+echo "agent:       $(command -v agent >/dev/null 2>&1 && echo present || echo 'missing (cursor-agent-setup)')"
+echo "--- env ---"
+echo "LD_PRELOAD:        ${LD_PRELOAD:-<unset>}   (must stay unset/empty here)"
+echo "LD_LIBRARY_PATH:   ${LD_LIBRARY_PATH:-<unset>}"
+echo "SSL_CERT_FILE:     ${SSL_CERT_FILE:-<unset>}"
+echo "TMPDIR:            ${TMPDIR:-<unset>}"
+echo "--- bunx smoke ---"
+bunx --bun cowsay ok 2>&1 | head -5 || true
+echo "--- seccomp hint ---"
+echo "Bad system call / unknown syscall 437? -> docker run --security-opt seccomp=unconfined ..."

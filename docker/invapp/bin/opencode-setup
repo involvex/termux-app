@@ -1,0 +1,242 @@
+#!@BASH@
+# InVxTermux container -- opencode-setup.
+#
+# Port of the APK's opencode-setup (TermuxBunInstaller.java) with the
+# Android-only pieces removed:
+#   * no libinvapp-opencode-shim.so  (Docker ships /etc/resolv.conf + /sys, so
+#     glibc getaddrinfo/getifaddrs work without a shim)
+#   * no com.termux -> com.involvex path rewrite (the container prefix *is*
+#     /data/data/com.termux, the path glibc packages hardcode)
+#   * still installs Termux glibc: a Termux container is bionic, so a
+#     linux-glibc OpenCode binary needs ld-linux --library-path.
+set -e
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+case "$(uname -m)" in
+    aarch64|arm64) OC_ASSET=opencode-linux-arm64.tar.gz; OC_LD=ld-linux-aarch64.so.1 ;;
+    x86_64|amd64)  OC_ASSET=opencode-linux-x64.tar.gz;  OC_LD=ld-linux-x86-64.so.2 ;;
+    *)
+        echo "opencode-setup: $(uname -m) unsupported (x64 + aarch64 only)" >&2
+        exit 2
+        ;;
+esac
+
+WRAP_ONLY=0
+OC_ARG_VER=""
+OC_BIN_SRC=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            echo "usage: opencode-setup [--version X] [--binary PATH] [--wrap-only]"
+            echo "  env: OPENCODE_VERSION=X (or VERSION=X); default: live V2 lookup"
+            exit 0
+            ;;
+        -v|--version) OC_ARG_VER="${2:-}"; shift 2 ;;
+        -b|--binary)  OC_BIN_SRC="${2:-}"; shift 2 ;;
+        --wrap-only)  WRAP_ONLY=1; shift ;;
+        *) break ;;
+    esac
+done
+
+OC_DIR="$PREFIX/libexec/opencode"
+OC_BIN="$OC_DIR/opencode"
+
+fixup_glibc_paths() {
+    # glibc packages hardcode /data/data/com.termux (correct here) and ship
+    # only versioned .so names.
+    [ -f "$PREFIX/glibc/lib/libc.so.6" ] && ln -sfn libc.so.6 "$PREFIX/glibc/lib/libc.so" 2>/dev/null || true
+    ln -sfn libdl.so.2 "$PREFIX/glibc/lib/libdl.so" 2>/dev/null || true
+    ln -sfn libpthread.so.0 "$PREFIX/glibc/lib/libpthread.so" 2>/dev/null || true
+    mkdir -p "$PREFIX/etc" "$PREFIX/glibc/etc/ssl/certs"
+    # Docker already provides /etc/resolv.conf, but glibc reads its own copy.
+    if [ ! -s "$PREFIX/etc/resolv.conf" ] && [ -s /etc/resolv.conf ]; then
+        cp -f /etc/resolv.conf "$PREFIX/etc/resolv.conf"
+    fi
+    if [ ! -s "$PREFIX/etc/resolv.conf" ]; then
+        printf '%s\n' 'nameserver 8.8.8.8' 'nameserver 1.1.1.1' > "$PREFIX/etc/resolv.conf"
+    fi
+    cp -f "$PREFIX/etc/resolv.conf" "$PREFIX/glibc/etc/resolv.conf" 2>/dev/null || true
+    printf '%s\n' '127.0.0.1 localhost' '::1 localhost' > "$PREFIX/etc/hosts" 2>/dev/null || true
+    if [ -f "$PREFIX/etc/tls/cert.pem" ]; then
+        ln -sfn "$PREFIX/etc/tls/cert.pem" \
+            "$PREFIX/glibc/etc/ssl/certs/ca-certificates.crt" 2>/dev/null || true
+    fi
+}
+
+ensure_glibc() {
+    if [ -x "$PREFIX/glibc/lib/$OC_LD" ]; then
+        fixup_glibc_paths
+        return 0
+    fi
+    echo "opencode-setup: installing Termux glibc (linux binaries need it, even in a container)…"
+    mkdir -p "$PREFIX/etc/apt/sources.list.d"
+    printf '%s\n' 'deb [trusted=yes] https://packages-cf.termux.dev/apt/termux-glibc/ glibc stable' \
+        > "$PREFIX/etc/apt/sources.list.d/glibc.list"
+    export DEBIAN_FRONTEND=noninteractive
+    pkg install -y glibc-repo 2>/dev/null || true
+    apt-get update -y >/dev/null 2>&1 || pkg update -y >/dev/null 2>&1 || true
+    pkg install -y glibc glibc-runner openssl-glibc ca-certificates 2>/dev/null \
+        || apt-get install -y glibc glibc-runner openssl-glibc ca-certificates 2>/dev/null \
+        || true
+    [ -x "$PREFIX/glibc/lib/$OC_LD" ] || return 1
+    fixup_glibc_paths
+    return 0
+}
+
+resolve_version() {
+    if [ -n "${OPENCODE_VERSION:-${VERSION:-}}" ]; then
+        echo "${OPENCODE_VERSION#v}"
+        return
+    fi
+    # Progress goes to stderr: the caller captures stdout into the version.
+    echo "opencode-setup: resolving latest V2 version…" >&2
+    meta=$(curl -fsSL --max-time 20 https://opencode.ai/update/api/latest/cli/npm 2>/dev/null || true)
+    v=$(printf '%s' "$meta" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' | head -1)
+    v="${v#v}"
+    if [ -z "$v" ]; then
+        echo "2.0.6"
+        echo "opencode-setup: version lookup failed — using fallback" >&2
+    else
+        echo "$v"
+    fi
+}
+
+url_for() {
+    case "$1" in
+        1.*|0.*) echo "https://github.com/anomalyco/opencode/releases/download/v$1/$2" ;;
+        *)       echo "https://opencode.ai/files/bin/$1/$2" ;;
+    esac
+}
+
+fetch() {
+    # fetch <url> <dest>
+    if command -v curl >/dev/null 2>&1; then
+        curl -fL --retry 3 --retry-delay 2 -o "$2" "$1"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -O "$2" "$1"
+    else
+        echo "opencode-setup: need curl or wget" >&2
+        exit 127
+    fi
+}
+
+unpack() {
+    # unpack <tarball>
+    rm -rf "$OC_DIR.new"
+    mkdir -p "$OC_DIR.new"
+    tar -xzf "$1" -C "$OC_DIR.new"
+    found=$(find "$OC_DIR.new" -type f -name opencode 2>/dev/null | head -1)
+    [ -n "$found" ] && [ -f "$found" ] || return 1
+    chmod +x "$found"
+    rm -rf "$OC_DIR"
+    mv "$OC_DIR.new" "$OC_DIR"
+    OC_BIN=$(find "$OC_DIR" -type f -name opencode 2>/dev/null | head -1)
+    return 0
+}
+
+write_wrapper() {
+    WRAPPER="$PREFIX/bin/opencode"
+    mkdir -p "$PREFIX/bin" "$HOME/.bun/bin" "$PREFIX/lib"
+    cat > "$WRAPPER" <<EOF
+#!$PREFIX/bin/bash
+# invapp-opencode-wrapper (container) -- OpenCode linux binary via Termux glibc
+OC_BIN="$OC_BIN"
+PREFIX="$PREFIX"
+OC_LD="$OC_LD"
+LD="\$PREFIX/glibc/lib/\$OC_LD"
+LIB="\$PREFIX/glibc/lib"
+export TMPDIR="\${TMPDIR:-\$PREFIX/tmp}"
+mkdir -p "\$TMPDIR" 2>/dev/null || true
+if [ ! -x "\$OC_BIN" ]; then
+  echo "opencode: binary missing -- run opencode-setup" >&2
+  exit 127
+fi
+if [ ! -x "\$LD" ]; then
+  echo "opencode: glibc missing -- run opencode-setup" >&2
+  exit 127
+fi
+# Empty LD_PRELOAD on purpose: preloading anything here makes the loader pick
+# up the wrong libc ("version \`LIBC' not found").
+export LD_PRELOAD=
+export LD_LIBRARY_PATH=
+if [ -f "\$PREFIX/etc/tls/cert.pem" ]; then
+  export SSL_CERT_FILE="\$PREFIX/etc/tls/cert.pem"
+  export CURL_CA_BUNDLE="\$PREFIX/etc/tls/cert.pem"
+  export NODE_EXTRA_CA_CERTS="\$PREFIX/etc/tls/cert.pem"
+  mkdir -p "\$PREFIX/etc/tls/certs" "\$PREFIX/glibc/etc/ssl/certs" 2>/dev/null || true
+  ln -sfn "\$PREFIX/etc/tls/cert.pem" "\$PREFIX/etc/tls/certs/ca-certificates.crt" 2>/dev/null || true
+  ln -sfn "\$PREFIX/etc/tls/cert.pem" "\$PREFIX/glibc/etc/ssl/certs/ca-certificates.crt" 2>/dev/null || true
+  export SSL_CERT_DIR="\$PREFIX/etc/tls/certs"
+fi
+export PATH="\$PREFIX/bin:\$PATH"
+exec "\$LD" --library-path "\$LIB" "\$OC_BIN" "\$@"
+EOF
+    chmod 700 "$WRAPPER"
+    # td-ai repairs a half-finished install in either location.
+    cp -f "$WRAPPER" "$HOME/.bun/bin/opencode" 2>/dev/null || true
+    chmod 700 "$HOME/.bun/bin/opencode" 2>/dev/null || true
+    printf '%s\n' "${OPENCODE_INSTALLED_VERSION:-unknown}" > "$PREFIX/var/lib/invapp/opencode.version"
+}
+
+if [ "$WRAP_ONLY" != 1 ]; then
+    if [ -n "$OC_BIN_SRC" ]; then
+        echo "opencode-setup: installing from local binary $OC_BIN_SRC…"
+        rm -rf "$OC_DIR.new"
+        mkdir -p "$OC_DIR.new"
+        cp -f "$OC_BIN_SRC" "$OC_DIR.new/opencode"
+        chmod +x "$OC_DIR.new/opencode"
+        rm -rf "$OC_DIR"
+        mv "$OC_DIR.new" "$OC_DIR"
+        OC_BIN=$(find "$OC_DIR" -type f -name opencode 2>/dev/null | head -1)
+    else
+        OC_VER="$OC_ARG_VER"
+        [ -n "$OC_VER" ] || OC_VER=$(resolve_version)
+        OC_VER="${OC_VER#v}"
+        OPENCODE_INSTALLED_VERSION="$OC_VER"
+        echo "opencode-setup: installing $OC_VER ($OC_ASSET)"
+        case "$OC_VER" in
+            ''|*[!0-9.]*) die "could not resolve a version (got '$OC_VER')" ;;
+        esac
+        mkdir -p "$OC_DIR" "$TMPDIR"
+        tarball="$TMPDIR/$OC_ASSET"
+        fetch "$(url_for "$OC_VER" "$OC_ASSET")" "$tarball"
+        if ! unpack "$tarball"; then
+            echo "opencode-setup: tarball had no opencode binary" >&2
+            rm -f "$tarball"
+            exit 1
+        fi
+        rm -f "$tarball"
+
+        # Probe: x64 builds may need the no-AVX2 variant on old CPUs.
+        if ! ensure_glibc; then
+            echo "opencode-setup: glibc missing -- pkg install glibc-repo && pkg install glibc glibc-runner" >&2
+            exit 1
+        fi
+        write_wrapper
+        if ! "$PREFIX/bin/opencode" --version >/dev/null 2>&1; then
+            base_asset=$(printf '%s' "$OC_ASSET" | sed -e 's/\.tar\.gz$/-baseline.tar.gz/')
+            if [ "$base_asset" != "$OC_ASSET" ]; then
+                echo "opencode-setup: standard build failed — trying $base_asset (no AVX2)…" >&2
+                if fetch "$(url_for "$OC_VER" "$base_asset")" "$tarball" && unpack "$tarball"; then
+                    rm -f "$tarball"
+                    write_wrapper
+                else
+                    rm -f "$tarball" 2>/dev/null || true
+                    echo "opencode-setup: baseline download failed" >&2
+                fi
+            fi
+        fi
+    fi
+fi
+
+[ -n "${OC_BIN:-}" ] && [ -x "${OC_BIN:-}" ] || { echo "opencode-setup: install failed (binary missing)" >&2; exit 1; }
+ensure_glibc || { echo "opencode-setup: glibc missing" >&2; exit 1; }
+write_wrapper
+
+echo "opencode-setup: probing opencode --version…"
+if "$PREFIX/bin/opencode" --version; then
+    echo "OK (v${OPENCODE_INSTALLED_VERSION:-unknown}). Run: td-ai   # serve 0.0.0.0:4096"
+else
+    echo "opencode-setup: wrapper installed but the binary failed under glibc" >&2
+    exit 1
+fi
