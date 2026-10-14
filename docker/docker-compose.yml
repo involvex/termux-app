@@ -8,7 +8,7 @@
 #
 #   cd ../termux-docker
 #   TERMUX_DOCKER__IMAGE_NAME=invtermux \
-#     INVAPP_SRC=../termux-app/docker/invapp ./generate.sh --invapp
+#     INVAPP_SRC=../termux-app/app/src/main/assets/invapp ./generate.sh --invapp
 #
 services:
   invtermux:
