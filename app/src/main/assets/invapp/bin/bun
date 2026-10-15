@@ -12,6 +12,21 @@
 # syscall here, that is Docker's own seccomp profile -- see docker/README.md.
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 
+# Android seccomp + path-redirector shims. On device these neutralize the
+# SIGSYS-31 (openat2/fchmodat2) trap on bun's install/add and let the redirector
+# map com.termux shebangs of child bins to this package. Both .so are absent in a
+# container image, so the block is a no-op there: LD_PRELOAD stays unset.
+SECCOMP_SO="$PREFIX/lib/libinvapp-bun-seccomp.so"
+REDIRECTOR_SO="$PREFIX/lib/libinvapp-redirector.so"
+preload=""
+if [ -f "$SECCOMP_SO" ]; then preload="$SECCOMP_SO"; fi
+if [ -f "$REDIRECTOR_SO" ]; then preload="${preload:+$preload:}$REDIRECTOR_SO"; fi
+if [ -n "$preload" ]; then
+    export LD_PRELOAD="$preload"
+else
+    unset LD_PRELOAD 2>/dev/null || true
+fi
+
 REAL="$PREFIX/libexec/bun"
 if [ ! -x "$REAL" ]; then
     echo "bun: missing binary at $REAL" >&2

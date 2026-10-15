@@ -52,7 +52,7 @@ public final class ShellLibraryInstaller {
 
 
     /** Library version — bump to force refresh on upgrade. */
-    public static final String LIBRARY_VERSION = "1.0.0";
+    public static final String LIBRARY_VERSION = "1.1.0";
 
     private ShellLibraryInstaller() {}
 
@@ -105,6 +105,18 @@ public final class ShellLibraryInstaller {
         File libFile = new File(libDir, LIB_FILE_NAME);
         if (writeAssetToFile(context, LIB_ASSET, libFile)) {
             Logger.logInfo(LOG_TAG, "Installed invapp-commons.sh");
+        } else {
+            ok = false;
+        }
+
+        // Seed env.sh — the shared env + td_* helper library now sourced by the
+        // bun/bunx/bun-doctor wrappers that migrated onto the invapp/bin assets
+        // (see TermuxBunInstaller). It uses ${VAR:-default}, so already-set device
+        // values win; a com.termux PREFIX fallback only triggers if unset and is
+        // still covered by the redirector. Sourced, not executed -> 0644.
+        File envFile = new File(libDir, "env.sh");
+        if (writeAssetToFile(context, "invapp/env.sh", envFile)) {
+            Logger.logInfo(LOG_TAG, "Installed invapp-env.sh");
         } else {
             ok = false;
         }

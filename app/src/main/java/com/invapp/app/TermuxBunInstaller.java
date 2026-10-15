@@ -9,9 +9,11 @@ import com.invapp.shared.logger.Logger;
 import com.invapp.shared.termux.TermuxConstants;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -60,7 +62,7 @@ public final class TermuxBunInstaller {
         if (realOk && stamp.isFile()) {
             try {
                 if (BUNDLED_BUN_VERSION.equals(readStamp(stamp))) {
-                    installShellHelpers();
+                    installShellHelpers(context);
                     installOpencodeShimFromAssets(context);
                     ensureWorkspaceDirs();
                     return;
@@ -163,7 +165,7 @@ public final class TermuxBunInstaller {
             Logger.logStackTraceWithMessage(LOG_TAG, "Bun install failed", e);
         }
 
-        installShellHelpers();
+        installShellHelpers(context);
         installOpencodeShimFromAssets(context);
     }
 
@@ -221,7 +223,7 @@ public final class TermuxBunInstaller {
      * Writes {@code $PREFIX/bin/bun} and {@code bunx} wrappers. No per-package
      * helpers — all CLIs go through the single shim.
      */
-    private static void installShellHelpers() {
+    private static void installShellHelpers(@NonNull Context context) {
         File binDir = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH);
         if (!binDir.isDirectory()) {
             return;
@@ -237,108 +239,27 @@ public final class TermuxBunInstaller {
             oldCreateExpo.delete();
         }
 
-        String bunWrapper = ""
-            + "#!" + bash + "\n"
-            + "PREFIX=\"" + prefix + "\"\n"
-            + "HOME=\"" + home + "\"\n"
-            + "REAL=\"$PREFIX/libexec/bun\"\n"
-            + "export PATH=\"$PREFIX/bin:$HOME/.bun/bin:$PATH\"\n"
-            + "export LD_LIBRARY_PATH=\"$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"\n"
-            + "export OPENSSL_CONF=\"$PREFIX/etc/tls/openssl.cnf\"\n"
-            + "export SSL_CERT_FILE=\"$PREFIX/etc/tls/cert.pem\"\n"
-            + "export NODE_EXTRA_CA_CERTS=\"$PREFIX/etc/tls/cert.pem\"\n"
-            + "export BUN_INSTALL=\"$PREFIX\"\n"
-            + "export BUN_INSTALL_BIN=\"$PREFIX/bin\"\n"
-            + "export BUN_INSTALL_CACHE_DIR=\"$HOME/.bun/install/cache\"\n"
-            + "export BUN_TMPDIR=\"$PREFIX/tmp\"\n"
-            + "export TMPDIR=\"$PREFIX/tmp\"\n"
-            + "export XDG_CACHE_HOME=\"$HOME/.cache\"\n"
-            + "export npm_config_cache=\"$HOME/.npm\"\n"
-            + "export npm_config_prefix=\"$PREFIX\"\n"
-            + "export npm_config_platform=android\n"
-            + "export npm_config_os=android\n"
-            + "case \"$(uname -m)\" in\n"
-            + "  aarch64|arm64) export npm_config_arch=arm64; export npm_config_cpu=arm64 ;;\n"
-            + "  x86_64|amd64)  export npm_config_arch=x64;   export npm_config_cpu=x64 ;;\n"
-            + "  *)             export npm_config_arch=arm64; export npm_config_cpu=arm64 ;;\n"
-            + "esac\n"
-            + "mkdir -p \"$BUN_INSTALL_CACHE_DIR\" \"$HOME/.bun/bin\" \"$HOME/repos\" \"$TMPDIR\"\n"
-            + "if [ ! -x \"$REAL\" ]; then\n"
-            + "  echo \"bun: missing Android binary at $REAL (reopen the app)\" >&2\n"
-            + "  exit 127\n"
-            + "fi\n"
-            // Seccomp SIGSYS→ENOSYS (openat2/fchmodat2) PLUS path redirector so
-            // bunx/child bins with #!/usr/bin/env node get shebang rewrite.
-            // Redirector alone used to SIGSYS on install; seccomp fixes that.
-            + "SECCOMP_SO=\"$PREFIX/lib/libinvapp-bun-seccomp.so\"\n"
-            + "REDIRECTOR_SO=\"$PREFIX/lib/libinvapp-redirector.so\"\n"
-            + "preload=\"\"\n"
-            + "[ -f \"$SECCOMP_SO\" ] && preload=\"$SECCOMP_SO\"\n"
-            + "[ -f \"$REDIRECTOR_SO\" ] && preload=\"${preload:+$preload:}$REDIRECTOR_SO\"\n"
-            + "export LD_PRELOAD=\"$preload\"\n"
-            + "set -- \"$@\"\n"
-            + "cmd=\"${1-}\"\n"
-            // Force Android optionalDependency filter. Bun reports platform=android but
-            // still resolves linux-* natives (e.g. @rolldown/binding-linux-arm-gnueabihf)
-            // for many scaffolds / Windows lockfiles → bad optional extracts.
-            + "case \"$cmd\" in\n"
-            + "  install|i|add|update|remove|rm|create)\n"
-            + "    shift\n"
-            + "    has_os=0; has_cpu=0\n"
-            + "    for a in \"$@\"; do\n"
-            + "      case \"$a\" in --os|--os=*) has_os=1 ;; --cpu|--cpu=*) has_cpu=1 ;; esac\n"
-            + "    done\n"
-            + "    extra=\"\"\n"
-            + "    [ \"$has_os\" = 0 ] && extra=\"$extra --os=android\"\n"
-            + "    if [ \"$has_cpu\" = 0 ]; then\n"
-            + "      case \"$(uname -m)\" in aarch64|arm64) extra=\"$extra --cpu=arm64\" ;;\n"
-            + "        x86_64|amd64) extra=\"$extra --cpu=x64\" ;; *) extra=\"$extra --cpu=arm64\" ;; esac\n"
-            + "    fi\n"
-            + "    # shellcheck disable=SC2086\n"
-            + "    exec \"$REAL\" \"$cmd\"$extra \"$@\"\n"
-            + "    ;;\n"
-            + "esac\n"
-            + "exec \"$REAL\" \"$@\"\n";
-        writeExec(new File(binDir, "bun"), bunWrapper);
+        // bun wrapper is now shared with the container: assets/invapp/bin/bun.
+        // It sources env.sh (PREFIX/HOME/etc.), loads the seccomp + redirector
+        // shims only when present (device), and forces Android --os/--cpu. On the
+        // device the portable #!@BASH@ shebang is resolved here to the app's bash,
+        // identical to the previous "#!" + bash inline form. The real binary is
+        // unchanged ($PREFIX/libexec/bun).
+        writeExec(new File(binDir, "bun"),
+                assetWithBashShebang(context, "invapp/bin/bun", bash));
 
         // bunx must run package bins under Bun. Stock `bun x` execs the bin
         // shebang (#!/usr/bin/env node); without node that exits 127 and often
         // prints nothing — the "silent fail" users hit for create-vite / serve.
-        String bunx = ""
-            + "#!" + bash + "\n"
-            + "PREFIX=\"" + prefix + "\"\n"
-            + "has_bun=0\n"
-            + "for a in \"$@\"; do\n"
-            + "  case \"$a\" in --bun) has_bun=1 ;; esac\n"
-            + "done\n"
-            + "if [ \"$has_bun\" = 1 ]; then\n"
-            + "  exec \"$PREFIX/bin/bun\" x \"$@\"\n"
-            + "fi\n"
-            + "exec \"$PREFIX/bin/bun\" x --bun \"$@\"\n";
-        writeExec(new File(binDir, "bunx"), bunx);
+        writeExec(new File(binDir, "bunx"),
+                assetWithBashShebang(context, "invapp/bin/bunx", bash));
 
         // Provide `node` → bun when nodejs package is not installed so
         // #!/usr/bin/env node scripts (npm bins, bunx children) actually run.
         ensureNodeBunShim(binDir, bash, prefix);
 
-        String bunDoctor = ""
-            + "#!" + bash + "\n"
-            + "PREFIX=\"" + prefix + "\"\n"
-            + "HOME=\"" + home + "\"\n"
-            + "echo \"wrapper: $PREFIX/bin/bun\"\n"
-            + "echo \"real:    $PREFIX/libexec/bun\"\n"
-            + "ls -la \"$PREFIX/bin/bun\" \"$PREFIX/libexec/bun\" \"$PREFIX/bin/bunx\" \"$PREFIX/bin/node\" 2>&1\n"
-            + "if command -v readelf >/dev/null; then\n"
-            + "  readelf -l \"$PREFIX/libexec/bun\" 2>/dev/null | grep -A1 INTERP || true\n"
-            + "fi\n"
-            + "\"$PREFIX/bin/bun\" --version\n"
-            + "echo \"node → $(command -v node 2>/dev/null || echo missing)\"\n"
-            + "if [ -f \"$PREFIX/bin/node\" ]; then head -2 \"$PREFIX/bin/node\"; fi\n"
-            + "echo \"LD_PRELOAD in shell: ${LD_PRELOAD:-unset}\"\n"
-            + "echo \"OPENSSL_CONF=${OPENSSL_CONF:-unset}\"\n"
-            + "echo \"--- bunx smoke ---\"\n"
-            + "bunx --bun cowsay ok 2>&1 | head -15 || true\n";
-        writeExec(new File(binDir, "bun-doctor"), bunDoctor);
+        writeExec(new File(binDir, "bun-doctor"),
+                assetWithBashShebang(context, "invapp/bin/bun-doctor", bash));
 
         // OpenCode V2 bootstrap (optional AI CLI → Preview).
         // Do NOT bun-install opencode-ai: bare libexec/bun hits SIGSYS (seccomp),
@@ -2394,6 +2315,42 @@ public final class TermuxBunInstaller {
             }
         } catch (Exception e) {
             Logger.logWarn(LOG_TAG, "Helper install failed for " + dest + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * Read a shell helper from app assets and resolve its portable
+     * {@code #!@BASH@} shebang to this app's bash — the same value the inline
+     * {@code "#!" + bash} literals resolved to before. The body is shared
+     * verbatim with the container (seed.sh resolves the identical shebang to
+     * {@code $PREFIX/bin/bash}). The asset sources env.sh, which preserves the
+     * already-set package-specific PREFIX/HOME, so one file serves both runtimes.
+     */
+    @NonNull
+    private static String assetWithBashShebang(@NonNull Context context,
+                                                 @NonNull String assetName,
+                                                 @NonNull String bash) {
+        try (InputStream in = context.getAssets().open(assetName);
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+            String content = new String(out.toByteArray(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            String marker = "#!@BASH@\n";
+            if (content.startsWith(marker)) {
+                content = "#!" + bash + "\n" + content.substring(marker.length());
+            } else if (content.startsWith("#!@BASH@")) {
+                content = "#!" + bash + "\n" + content.substring("#!@BASH@".length());
+            }
+            return content;
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "Failed reading asset " + assetName
+                    + ": " + e.getMessage());
+            // Never let a missing asset silently remove bun — degrade to a loud exit.
+            return "#!" + bash + "\n# missing asset " + assetName + " — reopen the app\nexit 127\n";
         }
     }
 
