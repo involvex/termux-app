@@ -35,12 +35,15 @@ jobs:
           echo "syntax OK ($(wc -l < scripts.txt) scripts)"
 
       # The helpers ship with '#!@BASH@' (resolved at install time by seed.sh),
-      # so tell shellcheck the dialect instead of letting it guess.
+      # so tell shellcheck the dialect instead of letting it guess. SC2239
+      # ("shebang must be an absolute path") is excluded for the same reason:
+      # the placeholder is by design, so linting the raw asset file would fail
+      # on all of bin/ instead of catching real bugs.
       - name: ShellCheck
         run: |
           set -eu
           rc=0
           while read -r f; do
-            shellcheck -s bash -S error "$f" || rc=1
+            shellcheck -s bash -S error -e SC2239 "$f" || rc=1
           done < scripts.txt
           exit $rc
