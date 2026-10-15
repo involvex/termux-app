@@ -1,19 +1,36 @@
 #!@BASH@
-# InVxTermux container -- td-dev [script] [args...]
-# Dev-server helper: `bun run <script>` with actionable errors.
+# InVxTermux — shared td-dev (device + container).
+# Dev-server helper: `bun run <script>` with actionable errors + Preview/LAN hints.
+# Source shared env (PREFIX/HOME/PATH, td_require_bun, INVAPP_ON_DEVICE).
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 
 SCRIPT="${1:-dev}"
 if [ "$#" -gt 0 ]; then shift; fi
 
-td_require_bun
+if ! command -v bun >/dev/null 2>&1; then
+  if [ "${INVAPP_ON_DEVICE:-0}" = 1 ]; then
+    echo "td-dev: bun missing — reopen the app" >&2
+  else
+    td_require_bun
+  fi
+  exit 127
+fi
+
 if [ ! -f package.json ]; then
-    echo "td-dev: no package.json in $(pwd)" >&2
+  echo "td-dev: no package.json in $(pwd)" >&2
+  if [ "${INVAPP_ON_DEVICE:-0}" = 1 ]; then
+    echo "hint: cd ~/repos/<project> first" >&2
+  else
     echo "hint: td-clone <git-url> [name] | td-scaffold <name> | cd ~/repos/<project>" >&2
-    exit 1
+  fi
+  exit 1
 fi
 
 echo "td-dev: bun run $SCRIPT $*"
-echo "When the port appears, publish it from the host: docker run -p <port>:<port> …"
+if [ "${INVAPP_ON_DEVICE:-0}" = 1 ]; then
+  echo "When the port appears: drawer → Preview → Scan (or Copy LAN)"
+else
+  echo "When the port appears, publish it from the host: docker run -p <port>:<port> …"
+fi
 echo ""
 exec bun run "$SCRIPT" "$@"

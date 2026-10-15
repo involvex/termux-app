@@ -29,6 +29,17 @@ export PREFIX HOME
 
 PATH="$PREFIX/bin:$HOME/.bun/bin:$HOME/.local/bin:$PATH"
 export PATH
+# Device vs container. The device prefix lives under the app package name
+# (com.involvex.termux_app); the stock container prefix is com.termux. Lets
+# shared helpers branch UX (drawer/Preview on-device vs. docker host outside)
+# from a single asset instead of a duplicate device-only copy. Detected via
+# the package name in $PREFIX, which is already normalized above.
+case "$PREFIX" in
+    *com.involvex*) INVAPP_ON_DEVICE=1 ;;
+    *)             INVAPP_ON_DEVICE=0 ;;
+esac
+export INVAPP_ON_DEVICE
+
 export TMPDIR="${TMPDIR:-$PREFIX/tmp}"
 mkdir -p "$TMPDIR" 2>/dev/null || true
 

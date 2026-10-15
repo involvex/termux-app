@@ -256,7 +256,7 @@ public final class TermuxBunInstaller {
 
         // Provide `node` → bun when nodejs package is not installed so
         // #!/usr/bin/env node scripts (npm bins, bunx children) actually run.
-        ensureNodeBunShim(binDir, bash, prefix);
+        ensureNodeBunShim(context, binDir, bash);
 
         writeExec(new File(binDir, "bun-doctor"),
                 assetWithBashShebang(context, "invapp/bin/bun-doctor", bash));
@@ -1525,27 +1525,11 @@ public final class TermuxBunInstaller {
         writeExec(new File(binDir, "td-upgrade"), tdUpgrade);
 
         // Dev-server helper: clear errors + Preview/LAN hints before bun run.
-        String tdDev = ""
-            + "#!" + bash + "\n"
-            + "PREFIX=\"" + prefix + "\"\n"
-            + "HOME=\"" + home + "\"\n"
-            + "export PATH=\"$PREFIX/bin:$HOME/.bun/bin:$PATH\"\n"
-            + "SCRIPT=\"${1:-dev}\"\n"
-            + "if [ \"$#\" -gt 0 ]; then shift; fi\n"
-            + "if ! command -v bun >/dev/null 2>&1; then\n"
-            + "  echo \"td-dev: bun missing — reopen the app\" >&2\n"
-            + "  exit 127\n"
-            + "fi\n"
-            + "if [ ! -f package.json ]; then\n"
-            + "  echo \"td-dev: no package.json in $(pwd)\" >&2\n"
-            + "  echo \"hint: cd ~/repos/<project> first\" >&2\n"
-            + "  exit 1\n"
-            + "fi\n"
-            + "echo \"td-dev: bun run $SCRIPT $*\"\n"
-            + "echo \"When the port appears: drawer → Preview → Scan (or Copy LAN)\"\n"
-            + "echo \"\"\n"
-            + "exec bun run \"$SCRIPT\" \"$@\"\n";
-        writeExec(new File(binDir, "td-dev"), tdDev);
+        // Shared with the container via invapp/bin/td-dev; branches UX on
+        // INVAPP_ON_DEVICE (env.sh) so phones show the drawer/Preview path and
+        // containers show the docker host path from a single asset.
+        writeExec(new File(binDir, "td-dev"),
+                assetWithBashShebang(context, "invapp/bin/td-dev", bash));
 
         // Vite golden-path scaffold under ~/repos (create-vite + host 0.0.0.0).
         // pwa / pwa-react overlay vite-plugin-pwa on vanilla / react bases.
@@ -2233,17 +2217,17 @@ public final class TermuxBunInstaller {
      * If {@code node} is missing (or is our previous shim), install a tiny
      * wrapper that execs Bun. Leaves a real {@code nodejs} package binary alone.
      */
-    private static void ensureNodeBunShim(@NonNull File binDir, @NonNull String bash,
-                                          @NonNull String prefix) {
+    private static void ensureNodeBunShim(@NonNull Context context, @NonNull File binDir,
+                                         @NonNull String bash) {
         File node = new File(binDir, "node");
         if (node.isFile() && !isInvappNodeShim(node)) {
             return;
         }
-        String shim = ""
-            + "#!" + bash + "\n"
-            + "# invapp-bun-node-shim — provides node for #!/usr/bin/env node bins\n"
-            + "exec \"" + prefix + "/bin/bun\" \"$@\"\n";
-        writeExec(node, shim);
+        // Content is shared with the container seed (assets/invapp/bin/node) so
+        // the shim text lives in one place. The container ships real nodejs-lts
+        // and seed.sh skips it, so this only lands on device when no real
+        // nodejs package is present. isInvappNodeShim guards real node above.
+        writeExec(node, assetWithBashShebang(context, "invapp/bin/node", bash));
     }
 
     private static boolean isInvappNodeShim(@NonNull File node) {
