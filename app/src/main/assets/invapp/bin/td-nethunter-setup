@@ -1,0 +1,119 @@
+#!@BASH@
+# InVxTermux — proot-distro GUI bridge: one-time setup (device-side).
+# Installs proot-distro (+ python3, unzip), fetches + verifies a noVNC client
+# and a pip-free websockify bridge, then a distro and a VNC server + openbox
+# session inside it. After this, run:  td-nethunter [distro] [port]
+#
+# Distro names are OCI refs for the Docker-Hub-backed proot-distro (5.x):
+#   ubuntu:22.04  ubuntu:24.04  debian:12  kalilinux/kali-rolling
+# `install` takes the image ref and derives the container name from it
+# (e.g. ubuntu:22.04 -> ubuntu); `login`/`list`/`vncserver` use that name.
+# Container twin is deferred (device-only): the container ships a rootfs, so
+# run this on the phone. Mirrors td-dev: sources env.sh, branches on
+# INVAPP_ON_DEVICE, and reuses the bun/opencode curl+sha256 verify pattern.
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+DISTRO_IMAGE="${1:-ubuntu:22.04}"
+# Container name proot-distro derives from the image ref (tag + path stripped).
+DISTRO_NAME="${DISTRO_IMAGE##*/}"
+DISTRO_NAME="${DISTRO_NAME%%:*}"
+
+STATE_DIR="$PREFIX/var/td-nethunter"
+NOVNC_DIR="$STATE_DIR/novnc"
+WS_DIR="$STATE_DIR/websockify"   # zip extracts to $WS_DIR/websockify-master/
+
+NOVNC_TAG="v1.4.0"
+NOVNC_SHA256="89b0354c94ad0b0c88092ec7a08e28086d3ed572f13660bac28d5470faaae9c1"
+WEBSOCKIFY_URL="https://github.com/novnc/websockify/archive/refs/heads/master.zip"
+WEBSOCKIFY_SHA256="a24c2fcb0bbb29b0ff68b355dcd4ba3324b629928b2fcbd426e46c70ebbe3cee"
+
+log() { printf 'td-nethunter-setup: %s\n' "$*"; }
+die() { printf 'td-nethunter-setup: ERROR: %s\n' "$*" >&2; exit 1; }
+
+if [ "${INVAPP_ON_DEVICE:-0}" != 1 ]; then
+  log "device-only helper"
+  echo "  Reopen InVxTermux on the phone and run: td-nethunter-setup [distro]" >&2
+  echo "  (the container ships a rootfs — device-only; see docker/README.md)" >&2
+  exit 1
+fi
+
+require() { command -v "$1" >/dev/null 2>&1 || die "need $1 — run: pkg install $1"; }
+require curl
+
+# Termux-side deps: proot-distro (distro runner) + python3 (runs websockify,
+# pip-free) + unzip. All fetched on demand so they don't bloat every install.
+command -v proot-distro >/dev/null 2>&1 || {
+  log "installing proot-distro + python3 + unzip"
+  pkg install -y --no-install-recommends proot-distro python unzip \
+    || die "pkg install failed"
+}
+require proot-distro
+require unzip
+command -v python3 >/dev/null 2>&1 || die "python3 missing — run: pkg install python"
+
+mkdir -p "$STATE_DIR" "$NOVNC_DIR" "$WS_DIR"
+
+# Fetch + verify noVNC client and websockify bridge (sha256-pinned).
+fetch_verify() { # fetch_verify <url> <sha256> <dest>
+  url=$1
+  sha=$2
+  dest=$3
+  tmp="$TMPDIR/$(basename "$url")"
+  log "fetching $(basename "$url")"
+  curl -fsSL --retry 3 --retry-delay 2 -o "$tmp" "$url" || die "download failed: $url"
+  printf '%s  %s\n' "$sha" "$tmp" | sha256sum -c - >/dev/null 2>&1 \
+    || die "checksum mismatch: $url (want $sha)"
+  rm -rf "$dest"
+  mkdir -p "$dest"
+  case "$tmp" in
+    *.tar.gz) tar -xzf "$tmp" -C "$dest" --strip-components=1 ;;
+    *.zip)    unzip -qo "$tmp" -d "$dest" ;;
+  esac
+  rm -f "$tmp"
+}
+
+[ -f "$NOVNC_DIR/vnc.html" ] || fetch_verify \
+  "https://github.com/novnc/noVNC/archive/refs/tags/$NOVNC_TAG.tar.gz" \
+  "$NOVNC_SHA256" "$NOVNC_DIR"
+# websockify zip extracts to $WS_DIR/websockify-master/; the python package is at
+# .../websockify-master/websockify/ (has __main__.py). We keep the repo root on
+# PYTHONPATH so `python3 -m websockify` resolves the package.
+[ -f "$WS_DIR/websockify-master/websockify/__main__.py" ] || fetch_verify \
+  "$WEBSOCKIFY_URL" "$WEBSOCKIFY_SHA256" "$WS_DIR"
+
+log "noVNC     -> $NOVNC_DIR               (served by websockify --web)"
+log "websockify -> $WS_DIR/websockify-master (python3 -m websockify)"
+
+# proot-distro: install the distro rootfs once (OCI/Docker-Hub ref).
+if ! proot-distro login "$DISTRO_NAME" -- true >/dev/null 2>&1; then
+  log "installing $DISTRO_IMAGE rootfs (first run; size varies)…"
+  proot-distro install "$DISTRO_IMAGE" || die "proot-distro install failed for $DISTRO_IMAGE"
+fi
+proot-distro login "$DISTRO_NAME" -- true >/dev/null 2>&1 \
+  || die "$DISTRO_NAME container not usable after install"
+
+# Inside the distro: VNC server + a minimal desktop (openbox + xterm). Package
+# names differ by distro; tolerate the common variants.
+log "installing VNC stack inside $DISTRO_NAME (apt)…"
+if ! proot-distro login "$DISTRO_NAME" -- sh -c '
+  apt-get update -qq
+  apt-get install -y --no-install-recommends \
+      tigervnc-standalone-server openbox xterm 2>/dev/null \
+    || apt-get install -y --no-install-recommends \
+      tightvncserver openbox xterm 2>/dev/null \
+    || apt-get install -y tigervnc-standalone-server openbox xterm
+'; then
+  die "VNC stack install failed inside $DISTRO_NAME"
+fi
+
+# xstartup: a minimal openbox session (idempotent rewrite).
+log "writing xstartup"
+proot-distro login "$DISTRO_NAME" -- sh -c "mkdir -p ~/.vnc && cat > ~/.vnc/xstartup" <<'XSTARTUP'
+#!/bin/sh
+openbox &
+xterm -geometry 88x24+10+10 &
+XSTARTUP
+
+touch "$STATE_DIR/$DISTRO_NAME.ready"
+log "$DISTRO_NAME ready — run: td-nethunter $DISTRO_IMAGE [port]"
+log "other distros: ubuntu:24.04  debian:12  kalilinux/kali-rolling"

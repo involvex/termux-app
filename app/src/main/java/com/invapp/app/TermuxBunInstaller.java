@@ -1531,6 +1531,14 @@ public final class TermuxBunInstaller {
         writeExec(new File(binDir, "td-dev"),
                 assetWithBashShebang(context, "invapp/bin/td-dev", bash));
 
+        // GUI bridge: a proot-distro desktop served over noVNC on Preview/LAN.
+        // Device-only; `td-nethunter-setup` installs proot-distro + noVNC/websockify
+        // + a distro VNC stack on first run, `td-nethunter` starts the bridge.
+        writeExec(new File(binDir, "td-nethunter-setup"),
+                assetWithBashShebang(context, "invapp/bin/td-nethunter-setup", bash));
+        writeExec(new File(binDir, "td-nethunter"),
+                assetWithBashShebang(context, "invapp/bin/td-nethunter", bash));
+
         // Vite golden-path scaffold under ~/repos (create-vite + host 0.0.0.0).
         // pwa / pwa-react overlay vite-plugin-pwa on vanilla / react bases.
         File libexecDir = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, "libexec");
@@ -2255,7 +2263,7 @@ public final class TermuxBunInstaller {
         }
         String[] names = {
             "am.termuxam", "ksu", "am", "login", "apt", "apt-get", "dpkg",
-            "bun", "bunx", "node", "td-ai", "td-dev", "td-scaffold", "td-clone",
+            "bun", "bunx", "node", "td-ai", "td-dev", "td-nethunter-setup", "td-nethunter", "td-scaffold", "td-clone",
             "td-screen-ocr", "termux-screenshot", "termux-api-start", "termux-api-stop",
             "opencode-setup", "opencode-fix-net", "opencode", "bun-doctor",
             "td-resource", "td-resource-linux", "td-resource-python",
