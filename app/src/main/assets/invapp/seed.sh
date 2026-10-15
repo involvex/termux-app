@@ -35,6 +35,21 @@ log()  { printf '[invapp] %s\n' "$*"; }
 warn() { printf '[invapp] WARN: %s\n' "$*" >&2; }
 die()  { printf '[invapp] ERROR: %s\n' "$*" >&2; exit 1; }
 
+# apt installs Recommends: by default (APT::Install-Recommends "1"). In this
+# image that pulls in `npm` (Recommends of nodejs-lts) and `python-pip`
+# (Recommends of python), and nothing the seed installs uses either one:
+# bun is the JS runtime and `bun x --bun` runs npx without npm, while
+# opencode-setup / cursor-agent-setup ship their own runtimes and never call
+# pip. They are pure attack surface -- npm's bundled node_modules and pip's
+# _vendor tree are exactly where an image CVE scan reports every finding, and
+# Termux has no fixed build of either yet (as of 2026.10: npm 11.21.0,
+# python-pip 26.2.1 are both the repo candidates).
+# `--no-install-recommends` is a plain apt-get flag and `pkg` is a thin
+# apt-get wrapper, so it passes straight through. Both remain available on
+# demand: `pkg install npm` / `pkg install python-pip`.
+# shellcheck disable=SC2086  # deliberate word splitting
+PKG_INSTALL="pkg install -y --no-install-recommends"
+
 [ -d "$PREFIX/bin" ] || die "no \$PREFIX/bin at $PREFIX — not a Termux rootfs"
 
 # termux-docker's Dockerfile sources this before touching the package manager;
@@ -65,7 +80,7 @@ install_packages() {
     [ $# -gt 0 ] || return 0
 
     log "pkg install ($# packages)"
-    if pkg install -y "$@" >/dev/null 2>&1; then
+    if $PKG_INSTALL "$@" >/dev/null 2>&1; then
         return 0
     fi
 
@@ -76,7 +91,7 @@ install_packages() {
     sleep 3
     missing=''
     for p in "$@"; do
-        if ! pkg install -y "$p" >/dev/null 2>&1; then
+        if ! $PKG_INSTALL "$p" >/dev/null 2>&1; then
             warn "not installed: $p"
             missing="$missing $p"
         fi
@@ -104,6 +119,10 @@ install_tree() {
         [ -e "$f" ] || continue
         name=$(basename "$f")
         [ -f "$f" ] || continue
+        # 'node' is provided by real nodejs-lts on the container; never let the
+        # bun shim clobber it. The device installs the shim via
+        # TermuxBunInstaller.ensureNodeBunShim only when no real nodejs exists.
+        [ "$name" = "node" ] && continue
         # '#!@BASH@' is resolved to this container's shell at install time, so
         # the same file works for any prefix layout.
         sed -e "1s|^#!@BASH@|#!$BASH_BIN|" "$f" > "$dst/$name"
