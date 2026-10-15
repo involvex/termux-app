@@ -100,4 +100,29 @@ public class ResourceScriptsInstallerTest {
         assertTrue(path.contains("/bin/"));
         assertTrue(path.endsWith(ResourceScriptsInstaller.ID_LINUX));
     }
+
+    @Test
+    public void linuxBody_resolvesBuildFromSimplestreamsIndex() {
+        String body = ResourceScriptsInstaller.linuxBody();
+        assertTrue(body.contains("streams/v1/images.json"));
+    }
+
+    @Test
+    public void linuxBody_imageUrlContainsReleaseSegment() {
+        String body = ResourceScriptsInstaller.linuxBody();
+        assertTrue(body.contains("$rel/$IMG_ARCH"));
+    }
+
+    @Test
+    public void linuxBody_doesNotGuessTodaysDate() {
+        String body = ResourceScriptsInstaller.linuxBody();
+        assertFalse(body.contains("DATE=$(date"));
+        assertFalse(body.contains("$IMG_ARCH/default/$DATE"));
+    }
+
+    @Test
+    public void linuxBody_aptSourcesFollowWinningRelease() {
+        String body = ResourceScriptsInstaller.linuxBody();
+        assertTrue(body.contains("\"deb $MIRROR $rel main universe\""));
+    }
 }
