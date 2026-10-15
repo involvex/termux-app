@@ -1,0 +1,8 @@
+#!@BASH@
+# invapp-bun-node-shim — provides `node` for #!/usr/bin/env node bins when the
+# nodejs package is absent. Delegates to bun; single-source with the device
+# installer (TermustBunInstaller.ensureNodeBunShim reads this asset). The
+# container ships real nodejs-lts, so seed.sh skips this file there. The
+# marker at top lets isInvappNodeShim detect/replace this shim without
+# clobbering a real nodejs package.
+exec "$PREFIX/bin/bun" "$@"

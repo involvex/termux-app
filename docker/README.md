@@ -12,13 +12,14 @@ string literals. On device, the same asset files are installed with
 `writeExecutableAsset` (`ShellLibraryInstaller`, `ResourceScriptsInstaller`,
 `TermuxHackerThemeInstaller`).
 
-Note: the device `bin/bun`, `bin/bunx`, `bin/bun-doctor`, `bin/node` and
-`opencode-setup` wrappers are still emitted from Java string literals in
-`TermuxBunInstaller.java` (they bake in device-only preloading of
-`libinvapp-bun-seccomp.so` / the path redirector). Migrating those to assets, so
-there is one copy of *every* helper, is the remaining step and is gated on an
-on-device validation pass — the glibc/`ld-linux` glue in `opencode-setup` cannot
-be runtime-checked here.
+Note: `bin/bun`, `bin/bunx`, `bin/bun-doctor`, `bin/node` and `td-dev` are now
+installed from the shared `bin/` assets on both device and container. What is
+still a Java string literal in `TermuxBunInstaller.java` is `opencode-setup`
+(glibc/`ld-linux` wrapper plus the Android DNS shim) and the `td-*` helpers
+whose device and container UX intentionally differ — they carry on-device hints
+("reopen the app", "drawer → Preview") that are meaningless in a container, so
+they are a reconciliation rather than a copy. Those stay gated on an on-device
+validation pass: the glibc/`ld-linux` glue cannot be runtime-checked here.
 
 ## What is in here
 
@@ -132,6 +133,52 @@ docker run -it --rm --security-opt seccomp=unconfined ghcr.io/involvex/termux-do
 
 This relaxes the host policy only. `bun-doctor` prints the same hint.
 
+## Image vulnerability surface (CVE scans)
+
+An image scan (`docker scout cves`, Trivy, Grype, Docker Desktop's scan tab)
+reports ~19 findings against this image. Every one of them comes from two Termux
+packages that are installed **only because apt installs `Recommends:` by
+default** (`APT::Install-Recommends "1"`) — and nothing the seed installs uses
+either of them:
+
+| Carrier | Why it is installed | Where the findings live |
+|---|---|---|
+| `npm` | `Recommends` of `nodejs-lts` | `/usr/lib/node_modules/npm/node_modules` — 185 `package.json` files: `undici` 6.28.0, `ip-address` 10.5.0, `brace-expansion` 5.0.9, … |
+| `python-pip` | `Recommends` of `python` | `pip/_vendor/` — `urllib3` 2.7.0, `setuptools` 70.3.0, `msgpack` 1.1.2 |
+
+`seed.sh` therefore installs the base set with `--no-install-recommends`
+(see `PKG_INSTALL`), so **neither package is baked into the image**. This is
+attack-surface reduction, not a CVE remediation — it removes the entire
+vulnerable tree rather than the affected versions.
+
+Why that is safe, all verified against the published image:
+
+* `apt-get -s remove npm python-pip` removes nothing else, and no installed
+  package `Depends:` on either.
+* Nothing in the seed tree invokes `npm`, `npx`, `pip` or `corepack`. `bun x
+  --bun` runs npx through bun; `opencode-setup` and `cursor-agent-setup` ship
+  their own runtimes and never call pip.
+* On a fresh `termux/termux-docker` rootfs, `pkg install -y
+  --no-install-recommends <base list>` installs cleanly with `npm`/`python-pip`/
+  `corepack` absent, and `bash git curl vim python3 node tar unzip jq tmux htop`
+  all still present.
+
+Not fixable from this repo: as of 2026-10 the newest Termux builds *are* the
+installed ones (`apt-cache policy` candidate == installed for both `npm`
+11.21.0 and `python-pip` 26.2.1), so the vendored flaws — CVE-2026-97689 /
+-97688 (urllib3 < 2.8.0), CVE-2025-47273 (setuptools < 78.1.1), the msgpack and
+undici advisories — have no fixed Termux package yet. Rebuilding does not help
+until [termux-packages](https://github.com/termux/termux-packages) republishes
+`python-pip` / `npm`. Everything else in the image (bootstrap, aosp-libs, and
+each package in `packages.list`) is owned by termux-packages, not this repo, so
+a version bump there is the only real remediation.
+
+If you need them anyway:
+
+```sh
+pkg install npm        # or: pkg install python-pip
+```
+
 ### `td-ai` server password
 
 OpenCode V2 serves `/api/info` behind Basic auth and prints a **session**
@@ -154,8 +201,8 @@ installers (`ShellLibraryInstaller`, `ResourceScriptsInstaller`,
 `TermuxHackerThemeInstaller`). When you edit a helper/config/shortcut, edit it
 there and both the image and the APK pick it up on the next build.
 
-The remaining divergence — device `bin/bun`/`bunx`/`bun-doctor`/`node` and
-`opencode-setup`, which are still Java string literals in
+The remaining divergence — `opencode-setup` and the `td-*` helpers whose
+device/container UX intentionally differs, still Java string literals in
 `TermuxBunInstaller.java` — is the only place two copies of a helper still
 exist (see "Note" above).
 

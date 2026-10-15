@@ -40,7 +40,12 @@ unzip
 zip
 xz-utils
 
-# python: many tools and the AI CLIs' helper scripts expect it
+# python: many tools and the AI CLIs' helper scripts expect it.
+# Note: Termux `python` Recommends python-pip, which the seed does NOT install
+# (--no-install-recommends): pip's _vendor/urllib3, _vendor/setuptools and
+# _vendor/msgpack are the source of every pypi CVE an image scan reports, and
+# Termux has no fixed build. Nothing seeded uses pip. `pkg install python-pip`
+# still works on demand.
 python
 
 # Termux:API command line tools. The CLIs install and list normally but any
@@ -48,5 +53,11 @@ python
 # like they do on a device without the plugin APK installed.
 termux-api
 
-# node fallback for 32-bit ABIs (bun has no armv7/386 build)
+# JS runtime. bun is the primary tool (installed by seed.sh); nodejs-lts is
+# only needed on ABIs where bun has no build (arm/i686).
+# Note: nodejs-lts Recommends npm, which the seed does NOT install
+# (--no-install-recommends): npm's bundled node_modules (undici, ip-address,
+# brace-expansion, ...) are the source of every npm CVE an image scan reports,
+# and Termux has no fixed build. Nothing seeded uses npm -- `bun x --bun` runs
+# npx without it. `pkg install npm` still works on demand.
 nodejs-lts
