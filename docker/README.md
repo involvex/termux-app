@@ -133,6 +133,60 @@ docker run -it --rm --security-opt seccomp=unconfined ghcr.io/involvex/termux-do
 
 This relaxes the host policy only. `bun-doctor` prints the same hint.
 
+### `bunx` / `npx` exec caveat (container only)
+
+This is **not** a regression from the CVE surface reduction — it is how
+`termux/termux-docker` runs *without* Android, and it reproduces identically on
+the published image (which still ships `npm`).
+
+**Symptom.** In the container, `bunx --bun <pkg>` (and `npx`, where present)
+downloads and extracts the package into `$TMPDIR/bunx-1000-<pkg>@...` — the
+install succeeds (e.g. 124 files extracted for `cowsay@1.6.0`) — but the bin
+**exec fails with exit 1 and no error message**. `bun run`, `bun install`, and
+invoking a package's JS directly (`bun node_modules/cowsay/cli.js hi`) all work.
+
+**Root cause.** Ecosystem CLIs declare their interpreter with an absolute
+shebang `#!/usr/bin/env node`. The Termux prefix installs `env` at
+`$PREFIX/bin/env`, but the container rootfs has **no `/usr/bin` at all** — so the
+kernel's literal lookup for `/usr/bin/env` returns `ENOENT` → `bad interpreter:
+/usr/bin/env: No such file or directory`. On a real Android device this works
+because `termux-exec`' (LD_PRELOAD) rewrites `/usr/bin/env` → `$PREFIX/bin/env`;
+in the container `termux-exec`'s postinst cannot read
+`android_build_version_sdk` (there is no `/system/bin/getprop`) and **skips
+enabling `$LD_PRELOAD`**, so the rewrite never happens.
+
+Evidence (x86_64 build on the stock base `termux/termux-docker:x86_64`):
+
+* `/usr/bin/env` and `/bin/env` — both absent; `$PREFIX/bin/env` present.
+* `bunx --bun cowsay@1.6.0 hi` → "Resolved, downloaded and extracted [124]" /
+  "Saved lockfile", then exit 1; no `cowsay` output. Same on the published image.
+* Reproducer: `PATH=$TMPDIR/bunx-*/node_modules/.bin:$PATH cowsay hi` →
+  `...cowsay: /usr/bin/env: bad interpreter: No such file or directory`.
+* **Fix proven:** bind-mount the `coreutils` `env` binary over `/usr/bin/env`
+  and the identical command prints the cow (exit 0). Forcing `LD_PRELOAD` with
+  the termux-exec lib does **not** fix it (the lib self-disables without the
+  Android SDK value), so the shim, not the hook, is what's missing.
+
+**Impact.** Does not affect the core dev workflow: `td-dev`, `td-scaffold` and
+`td-clone` call `bun`/`bun run` directly (shebang-free), so they are unaffected.
+It only blocks *executing* npm/PEP 508 ecosystem CLI entry points through their
+`#!/usr/bin/env <tool>` shebangs. `bunx`/`npx` can still be used for packages
+whose entry is invoked path-wise, or by applying the workaround below.
+
+**Workaround / fix (belongs in `involvex/termux-docker`, not here).** Add a root
+layer in the image build that exposes the interpreter, e.g.:
+
+```sh
+# in termux-docker's Dockerfile, as root, after seeding
+ln -sf "$PREFIX/bin/env" /usr/bin/env
+```
+
+`seed.sh` itself cannot do this: it runs as the non-root `system` user (uid 1000)
+and cannot create `/usr/bin`. This tree owns the *seed assets* only; the base
+rootfs fix lives in the `involvex/termux-docker` fork. Note the remaining
+`package.json` in the hardened image is `corepack` shipped inside `nodejs-lts`
+(not an npm tree) and is not among the reported advisories.
+
 ## Image vulnerability surface (CVE scans)
 
 An image scan (`docker scout cves`, Trivy, Grype, Docker Desktop's scan tab)
@@ -155,9 +209,11 @@ Why that is safe, all verified against the published image:
 
 * `apt-get -s remove npm python-pip` removes nothing else, and no installed
   package `Depends:` on either.
-* Nothing in the seed tree invokes `npm`, `npx`, `pip` or `corepack`. `bun x
-  --bun` runs npx through bun; `opencode-setup` and `cursor-agent-setup` ship
-  their own runtimes and never call pip.
+* Nothing in the seed tree invokes `npm`, `npx`, `pip` or `corepack` directly.
+  `bun x --bun` would run npx through bun — but in the container that only
+  *installs* the package; its exec still needs `/usr/bin/env`, which the
+  container lacks (see the `bunx`/`npx` exec caveat above). `opencode-setup`
+  and `cursor-agent-setup` ship their own runtimes and never call pip.
 * On a fresh `termux/termux-docker` rootfs, `pkg install -y
   --no-install-recommends <base list>` installs cleanly with `npm`/`python-pip`/
   `corepack` absent, and `bash git curl vim python3 node tar unzip jq tmux htop`
