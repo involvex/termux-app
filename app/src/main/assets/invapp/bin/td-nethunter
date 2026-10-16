@@ -1,8 +1,8 @@
 #!@BASH@
 # InVxTermux — run a proot-distro desktop and bridge it to a noVNC client on
 # Preview/LAN.  Usage:  td-nethunter [distro] [port]   |   td-nethunter --stop
-#   distro  OCI ref for proot-distro (default ubuntu:22.04);
-#           also: ubuntu:24.04 debian:12 kalilinux/kali-rolling
+#   distro  OCI ref for proot-distro (default: Kali NetHunter kali-rolling);
+#           also: ubuntu:22.04  ubuntu:24.04  debian:12
 #   port    host TCP port for the noVNC bridge (default 6080)
 # The VNC server is display :1 (127.0.0.1:5901) in the shared netns (proot-distro
 # does not isolate the network). websockify bridges WS<->VNC and also serves the
@@ -37,11 +37,11 @@ fi
 
 # --- device-only (container twin deferred) ---
 if [ "${INVAPP_ON_DEVICE:-0}" != 1 ]; then
-  log "device-only — Reopen InVxTermux on the phone: td-nethunter ${1:-ubuntu:22.04} ${PORT}" >&2
+  log "device-only — Reopen InVxTermux on the phone: td-nethunter ${1:-kalilinux/kali-rolling} ${PORT}" >&2
   exit 1
 fi
 
-DISTRO_IMAGE="${DISTRO_IMAGE:-ubuntu:22.04}"
+DISTRO_IMAGE="${DISTRO_IMAGE:-kalilinux/kali-rolling}"
 # Container name proot-distro derives from the image ref (tag + path stripped).
 DISTRO_NAME="${DISTRO_IMAGE##*/}"
 DISTRO_NAME="${DISTRO_NAME%%:*}"

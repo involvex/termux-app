@@ -4,16 +4,18 @@
 # and a pip-free websockify bridge, then a distro and a VNC server + openbox
 # session inside it. After this, run:  td-nethunter [distro] [port]
 #
-# Distro names are OCI refs for the Docker-Hub-backed proot-distro (5.x):
-#   ubuntu:22.04  ubuntu:24.04  debian:12  kalilinux/kali-rolling
+# Distro names are OCI refs for the Docker-Hub-backed proot-distro (5.x).
+# Default is Kali NetHunter (kalilinux/kali-rolling); also supported:
+#   ubuntu:22.04  ubuntu:24.04  debian:12
 # `install` takes the image ref and derives the container name from it
-# (e.g. ubuntu:22.04 -> ubuntu); `login`/`list`/`vncserver` use that name.
+# (e.g. ubuntu:22.04 -> ubuntu, kalilinux/kali-rolling -> kali-rolling);
+# `login`/`list` use that name.
 # Container twin is deferred (device-only): the container ships a rootfs, so
 # run this on the phone. Mirrors td-dev: sources env.sh, branches on
 # INVAPP_ON_DEVICE, and reuses the bun/opencode curl+sha256 verify pattern.
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 
-DISTRO_IMAGE="${1:-ubuntu:22.04}"
+DISTRO_IMAGE="${1:-kalilinux/kali-rolling}"
 # Container name proot-distro derives from the image ref (tag + path stripped).
 DISTRO_NAME="${DISTRO_IMAGE##*/}"
 DISTRO_NAME="${DISTRO_NAME%%:*}"
@@ -84,17 +86,36 @@ fetch_verify() { # fetch_verify <url> <sha256> <dest>
 log "noVNC     -> $NOVNC_DIR               (served by websockify --web)"
 log "websockify -> $WS_DIR/websockify-master (python3 -m websockify)"
 
+# proot-distro: usability probe helper — captures login output so failures
+# are diagnosable (the discarded-output check caused a mystery death), and
+# retries without proot's seccomp filters, which some Android devices reject.
+LOGIN_LOG="$STATE_DIR/login-check.log"
+pd_usable() { # pd_usable <container>
+  rm -f "$LOGIN_LOG"
+  if proot-distro login "$1" -- true >>"$LOGIN_LOG" 2>&1; then return 0; fi
+  PROOT_NO_SECCOMP=1 proot-distro login "$1" -- true >>"$LOGIN_LOG" 2>&1
+}
+pd_fail() { # pd_fail <message>
+  if [ -s "$LOGIN_LOG" ]; then
+    echo "td-nethunter-setup: login log tail ($LOGIN_LOG):" >&2
+    tail -5 "$LOGIN_LOG" >&2
+  fi
+  die "$1"
+}
+
 # proot-distro: install the distro rootfs once (OCI/Docker-Hub ref).
-if ! proot-distro login "$DISTRO_NAME" -- true >/dev/null 2>&1; then
+if ! pd_usable "$DISTRO_NAME"; then
   log "installing $DISTRO_IMAGE rootfs (first run; size varies)…"
   proot-distro install "$DISTRO_IMAGE" || die "proot-distro install failed for $DISTRO_IMAGE"
 fi
-proot-distro login "$DISTRO_NAME" -- true >/dev/null 2>&1 \
-  || die "$DISTRO_NAME container not usable after install"
+pd_usable "$DISTRO_NAME" \
+  || pd_fail "$DISTRO_NAME container not usable after install"
 
 # Inside the distro: VNC server + a minimal desktop (openbox + xterm). Package
-# names differ by distro; tolerate the common variants.
+# names differ by distro; tolerate the common variants. Output is captured so
+# a failed apt run shows its tail instead of a bare die.
 log "installing VNC stack inside $DISTRO_NAME (apt)…"
+APT_LOG="$STATE_DIR/apt-install.log"
 if ! proot-distro login "$DISTRO_NAME" -- sh -c '
   apt-get update -qq
   apt-get install -y --no-install-recommends \
@@ -102,9 +123,24 @@ if ! proot-distro login "$DISTRO_NAME" -- sh -c '
     || apt-get install -y --no-install-recommends \
       tightvncserver openbox xterm 2>/dev/null \
     || apt-get install -y tigervnc-standalone-server openbox xterm
-'; then
+' >"$APT_LOG" 2>&1; then
+  if [ -s "$APT_LOG" ]; then echo "td-nethunter-setup: apt log tail:" >&2; tail -5 "$APT_LOG" >&2; fi
   die "VNC stack install failed inside $DISTRO_NAME"
 fi
+
+# Kali only: pull in the small NetHunter CLI helpers (best effort — skip
+# gracefully if the meta package is unavailable in kali-rolling).
+case "$DISTRO_NAME" in
+  kali*)
+    log "installing NetHunter helpers (nethunter-utils, best effort)…"
+    if proot-distro login "$DISTRO_NAME" \
+        -- apt-get install -y --no-install-recommends nethunter-utils \
+        >>"$APT_LOG" 2>&1; then
+      log "NetHunter CLI helpers installed"
+    else
+      log "nethunter-utils not available — kali base desktop only"
+    fi ;;
+esac
 
 # xstartup: a minimal openbox session (idempotent rewrite).
 log "writing xstartup"
@@ -116,4 +152,4 @@ XSTARTUP
 
 touch "$STATE_DIR/$DISTRO_NAME.ready"
 log "$DISTRO_NAME ready — run: td-nethunter $DISTRO_IMAGE [port]"
-log "other distros: ubuntu:24.04  debian:12  kalilinux/kali-rolling"
+log "other distros: ubuntu:22.04  ubuntu:24.04  debian:12"

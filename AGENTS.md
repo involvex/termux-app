@@ -218,7 +218,7 @@ td-ai                # OpenCode on 0.0.0.0:4096 → Preview 127.0.0.1 / LAN Copy
 # GUI: proot-distro desktop over noVNC via Preview/LAN
 # td-nethunter-setup [distro]   # one-time: proot-distro + noVNC/websockify + distro VNC
 # td-nethunter [distro] [port]  # VNC in distro + websockify 0.0.0.0:port -> Preview /vnc.html
-# distros: ubuntu:22.04 ubuntu:24.04 debian:12 kalilinux/kali-rolling
+# distros: kalilinux/kali-rolling (default — Kali NetHunter) ubuntu:22.04 ubuntu:24.04 debian:12
 # Cursor cloud My Machines (optional):
 # cursor-agent-setup && agent login && td-agent-worker start
 # td-upgrade           # pkg + opencode + agent rewrap + Bun stamp
