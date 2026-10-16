@@ -14,6 +14,10 @@ PORT="${2:-6080}"
 STATE_DIR="$PREFIX/var/td-nethunter"
 NOVNC_DIR="$STATE_DIR/novnc"
 WS_DIR="$STATE_DIR/websockify"
+# Decouple proot's loader temp from the shared $PREFIX/tmp (loader vanish race).
+PROOT_TMP_DIR="$STATE_DIR/proot-tmp"
+mkdir -p "$PROOT_TMP_DIR"
+export PROOT_TMP_DIR
 WS_REPO="$WS_DIR/websockify-master"   # repo root (contains the websockify/ package)
 DISPLAY_NUM="${TD_NETHUNTER_DISPLAY:-1}"
 VNCPORT=$((5900 + DISPLAY_NUM))
@@ -92,8 +96,10 @@ if ! vnc_listening "$VNCPORT"; then
   # -SecurityTypes None = no password (localhost-only, so the desktop is not
   # reachable off-device); -desktop names the session (xstartup runs openbox).
   proot-distro login "$DISTRO_NAME" -- Xtigervnc ":$DISPLAY_NUM" -localhost \
-    -SecurityTypes None -geometry 1280x720 -depth 24 -desktop td-nethunter 2>/dev/null \
-    || log "VNC start failed (already running, or Xtigervnc missing in $DISTRO_NAME)"
+    -SecurityTypes None -geometry 1280x720 -depth 24 -desktop td-nethunter \
+    >"$STATE_DIR/vnc-start.log" 2>&1 \
+    || { log "VNC start failed (already running, or Xtigervnc missing in $DISTRO_NAME)"
+         [ -s "$STATE_DIR/vnc-start.log" ] && tail -10 "$STATE_DIR/vnc-start.log" >&2; }
 else
   log "VNC already listening on 127.0.0.1:$VNCPORT"
 fi

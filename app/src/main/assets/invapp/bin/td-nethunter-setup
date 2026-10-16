@@ -23,6 +23,12 @@ DISTRO_NAME="${DISTRO_NAME%%:*}"
 STATE_DIR="$PREFIX/var/td-nethunter"
 NOVNC_DIR="$STATE_DIR/novnc"
 WS_DIR="$STATE_DIR/websockify"   # zip extracts to $WS_DIR/websockify-master/
+# proot's loader extracts into its temp dir; $PREFIX/tmp is shared with other
+# proot sessions (opencode container etc.) — loader files can vanish mid-run
+# ("can't chmod proot-XXXX ... loader doesn't work"). Decouple it.
+PROOT_TMP_DIR="$STATE_DIR/proot-tmp"
+mkdir -p "$PROOT_TMP_DIR"
+export PROOT_TMP_DIR
 
 NOVNC_TAG="v1.4.0"
 NOVNC_SHA256="89b0354c94ad0b0c88092ec7a08e28086d3ed572f13660bac28d5470faaae9c1"
@@ -119,7 +125,7 @@ pd_usable() { # pd_usable <container>
 pd_fail() { # pd_fail <message>
   if [ -s "$LOGIN_LOG" ]; then
     echo "td-nethunter-setup: login log tail ($LOGIN_LOG):" >&2
-    tail -5 "$LOGIN_LOG" >&2
+    tail -15 "$LOGIN_LOG" >&2
   fi
   die "$1"
 }
@@ -145,7 +151,7 @@ if ! proot-distro login "$DISTRO_NAME" -- sh -c '
       tightvncserver openbox xterm 2>/dev/null \
     || apt-get install -y tigervnc-standalone-server openbox xterm
 ' >"$APT_LOG" 2>&1; then
-  if [ -s "$APT_LOG" ]; then echo "td-nethunter-setup: apt log tail:" >&2; tail -5 "$APT_LOG" >&2; fi
+  if [ -s "$APT_LOG" ]; then echo "td-nethunter-setup: apt log tail:" >&2; tail -15 "$APT_LOG" >&2; fi
   die "VNC stack install failed inside $DISTRO_NAME"
 fi
 
