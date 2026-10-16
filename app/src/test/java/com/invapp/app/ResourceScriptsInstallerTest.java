@@ -125,4 +125,12 @@ public class ResourceScriptsInstallerTest {
         String body = ResourceScriptsInstaller.linuxBody();
         assertTrue(body.contains("\"deb $MIRROR $rel main universe\""));
     }
+
+    @Test
+    public void linuxBody_guardsAgainstPipProotShim() {
+        String body = ResourceScriptsInstaller.linuxBody();
+        assertTrue(body.contains("reinstalling proot"));
+        assertTrue(body.contains("7f 45 4c 46"));
+        assertTrue(body.contains("pip uninstall proot"));
+    }
 }

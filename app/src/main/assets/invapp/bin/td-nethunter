@@ -20,6 +20,24 @@ VNCPORT=$((5900 + DISPLAY_NUM))
 PIDFILE="$STATE_DIR/websockify.pid"
 
 log() { printf 'td-nethunter: %s\n' "$*"; }
+die() { printf 'td-nethunter: ERROR: %s\n' "$*" >&2; exit 1; }
+
+# proot-distro login execs $PREFIX/bin/proot; a pip shim can shadow it.
+ensure_real_proot() {
+  p="$PREFIX/bin/proot"
+  if [ ! -f "$p" ]; then
+    log "installing proot (missing)"
+    pkg install -y proot || die "pkg install proot failed"
+  elif ! head -c 4 "$p" 2>/dev/null | od -An -tx1 | grep -q '7f 45 4c 46'; then
+    log "rogue 'proot' shim at $p (not an ELF binary) — reinstalling proot"
+    pkg reinstall -y proot 2>/dev/null \
+      || apt-get install -y --reinstall proot \
+      || { rm -f "$p"; pkg install -y proot; } \
+      || die "proot repair failed"
+  fi
+  "$p" --version >/dev/null 2>&1 \
+    || die "proot at $p still unusable — try: pip uninstall proot && pkg install -y -f proot"
+}
 
 # --- --stop: kill the noVNC bridge (pidfile). Distro VNC is left alone;
 # tear it with `proot-distro destroy <name>`.
@@ -67,6 +85,7 @@ command -v python3 >/dev/null 2>&1 || {
 # Start the distro VNC server unless something is already on 127.0.0.1:$VNCPORT.
 # proot-distro shares the netns, so the port is reachable from Termux itself.
 vnc_listening() { (exec 3<>/dev/tcp/127.0.0.1/"$1") 2>/dev/null; }
+ensure_real_proot
 if ! vnc_listening "$VNCPORT"; then
   log "starting VNC on $DISTRO_NAME :$DISPLAY_NUM -> 127.0.0.1:$VNCPORT"
   # Xtigervnc directly: the vncserver wrapper needs ssh, which the distro lacks.
