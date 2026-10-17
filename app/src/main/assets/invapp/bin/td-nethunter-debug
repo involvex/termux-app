@@ -1,0 +1,106 @@
+#!@BASH@
+# InVxTermux — nethunter guest environment self-test (device-only, no root).
+# Prints every layer proot-distro needs: environment, proot temp handling, the
+# guest rootfs contents, and DIRECT proot exec attempts (bypassing proot-distro
+# so its shell-wrapping can't mask results). Paste the whole output back on
+# failure. Usage: td-nethunter-debug [distro]   (default kali-rolling)
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+DISTRO="${1:-kali-rolling}"
+RFS="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO"
+DTMP="$PREFIX/var/td-nethunter/debug-proot-tmp"
+
+h() { printf '\n== %s\n' "$*"; }
+
+h "environment"
+echo "PREFIX=$PREFIX"
+echo "TMPDIR=${TMPDIR-<unset>}"
+echo "LD_PRELOAD=${LD_PRELOAD-<unset>}"
+echo "PROOT_TMP_DIR=${PROOT_TMP_DIR-<unset>}"
+
+h "tools"
+for t in proot proot-distro python3 bash; do
+  printf '%-14s %s\n' "$t" "$(command -v "$t" 2>/dev/null || echo MISSING)"
+done
+
+h "proot --version"
+proot --version 2>&1 | head -3 || true
+
+h "default tmp: $PREFIX/tmp"
+if [ -d "$PREFIX/tmp" ]; then
+  ls -ld "$PREFIX/tmp"
+  t="$PREFIX/tmp/.invdbg.$$"
+  if touch "$t" 2>/dev/null; then
+    echo "write: ok"
+    if chmod 700 "$t" 2>/dev/null; then echo "chmod: ok"; else echo "chmod: FAILED"; fi
+    rm -f "$t"
+  else
+    echo "write: FAILED (perms/full disk/noexec?)"
+  fi
+else
+  echo "MISSING — creating (proot's default temp location)"
+  mkdir -p "$PREFIX/tmp" && echo "created ok"
+fi
+echo "leftover proot temp dirs: $(ls -d "$PREFIX/tmp"/proot-* 2>/dev/null | head -5 | tr '\n' ' ')"
+
+h "private proot temp: $DTMP"
+mkdir -p "$DTMP"
+t="$DTMP/.invdbg.$$"
+if touch "$t" 2>/dev/null && chmod 700 "$t" 2>/dev/null && rm -f "$t"; then
+  echo "write+chmod: ok"
+else
+  echo "write+chmod: FAILED"
+fi
+mkd="$DTMP/pd.$$"
+if mkdir "$mkd" 2>/dev/null && chmod 700 "$mkd" 2>/dev/null && rmdir "$mkd"; then
+  echo "mkdtemp-style: ok"
+else
+  echo "mkdtemp-style: FAILED"
+fi
+
+h "guest rootfs ($DISTRO) — plain host files"
+if [ -d "$RFS" ]; then
+  ls -ld "$RFS/bin" "$RFS/usr/bin" 2>&1
+  for f in /usr/bin/bash /bin/bash /bin/sh /usr/bin/env; do
+    if [ -e "$RFS$f" ]; then
+      printf '%-16s present  first bytes: %s\n' "$f" \
+        "$(head -c 8 "$RFS$f" 2>/dev/null | od -An -tx1 | tr -s ' ' | head -1)"
+    else
+      printf '%-16s MISSING\n' "$f"
+    fi
+  done
+  grep '^root:' "$RFS/etc/passwd" 2>/dev/null || echo "no root: line in passwd"
+  df -h "$PREFIX" 2>/dev/null | tail -2
+else
+  echo "NOT INSTALLED — run td-nethunter-setup first"
+fi
+
+# Direct proot tests: -0 fake root, -R rootfs + standard binds. No proot-distro
+# involved, so a pass here means proot itself works and the problem is in
+# proot-distro's login path (guest passwd shell), and vice versa.
+h "direct proot, private temp + LD_PRELOAD cleared"
+if [ -e "$RFS/bin/sh" ]; then
+  env -u LD_PRELOAD PROOT_TMP_DIR="$DTMP" \
+    proot -0 -R "$RFS" -w / /bin/sh -c \
+    'echo GUEST-EXEC-OK; uname -m; ls /bin/sh' 2>&1 | head -6
+  echo "rc=$?"
+else
+  echo "cannot test — $RFS/bin/sh missing"
+fi
+
+h "direct proot, private temp, LD_PRELOAD as injected"
+if [ -e "$RFS/bin/sh" ]; then
+  PROOT_TMP_DIR="$DTMP" \
+    proot -0 -R "$RFS" -w / /bin/sh -c 'echo GUEST-EXEC-OK' 2>&1 | head -6
+  echo "rc=$?"
+fi
+
+h "direct proot, default tmp dir"
+if [ -e "$RFS/bin/sh" ]; then
+  env -u PROOT_TMP_DIR \
+    proot -0 -R "$RFS" -w / /bin/sh -c 'echo GUEST-EXEC-OK' 2>&1 | head -6
+  echo "rc=$?"
+fi
+
+h "done"
+echo "Paste the entire output back if anything failed."
