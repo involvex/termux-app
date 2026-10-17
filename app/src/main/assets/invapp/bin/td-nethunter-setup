@@ -37,6 +37,7 @@ WEBSOCKIFY_SHA256="a24c2fcb0bbb29b0ff68b355dcd4ba3324b629928b2fcbd426e46c70ebbe3
 
 log() { printf 'td-nethunter-setup: %s\n' "$*"; }
 die() { printf 'td-nethunter-setup: ERROR: %s\n' "$*" >&2; exit 1; }
+REV="2026.10.17-2 (PROOT_TMP_DIR + guest-shell repair)"
 
 if [ "${INVAPP_ON_DEVICE:-0}" != 1 ]; then
   log "device-only helper"
@@ -58,6 +59,7 @@ command -v proot-distro >/dev/null 2>&1 || {
 require proot-distro
 require unzip
 command -v python3 >/dev/null 2>&1 || die "python3 missing — run: pkg install python"
+log "rev $REV"
 
 # A pip-installed 'proot' console script can shadow Termux's ELF proot at
 # $PREFIX/bin (login then dies with "No 'pyproject.toml' file found" — seen
@@ -117,16 +119,61 @@ log "websockify -> $WS_DIR/websockify-master (python3 -m websockify)"
 # are diagnosable (the discarded-output check caused a mystery death), and
 # retries without proot's seccomp filters, which some Android devices reject.
 LOGIN_LOG="$STATE_DIR/login-check.log"
+ROOTFS_DIR="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO_NAME"
+
+# proot-distro 5.x routes EVERY login — even `login NAME -- CMD` — through the
+# guest's root shell from the rootfs /etc/passwd. If that shell (e.g. kali's
+# /usr/bin/bash) is missing in the extracted rootfs, proot dies with
+# `execve("/usr/bin/bash"): No such file or directory` and nothing can log in.
+# Rewrite root's shell to the first guest shell binary that actually exists.
+repair_guest_shell() {
+  [ -d "$ROOTFS_DIR" ] || return 1
+  if [ -e "$ROOTFS_DIR/usr/bin/bash" ]; then gs=/usr/bin/bash
+  elif [ -e "$ROOTFS_DIR/bin/bash" ]; then gs=/bin/bash
+  else gs=/bin/sh
+  fi
+  cur=$(awk -F: '$1=="root"{print $7}' "$ROOTFS_DIR/etc/passwd" 2>/dev/null)
+  [ -z "$cur" ] || [ -e "$ROOTFS_DIR$cur" ] && return 0
+  log "guest root shell '$cur' does not resolve in rootfs → rewriting to $gs"
+  sed -i "s|^\(root:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:\).*|\1$gs|" \
+    "$ROOTFS_DIR/etc/passwd"
+}
+
+# Human-readable state of the guest rootfs + proot environment, printed on
+# login failure so a device run is self-describing.
+rootfs_report() {
+  if [ -d "$ROOTFS_DIR" ]; then
+    echo "--- rootfs: $ROOTFS_DIR" >&2
+    ls -ld "$ROOTFS_DIR/bin" "$ROOTFS_DIR/usr/bin" 2>&1 | head -2 >&2
+    for f in /usr/bin/bash /bin/bash /bin/sh /usr/bin/env; do
+      [ -e "$ROOTFS_DIR$f" ] && echo "rootfs$f: present" \
+        || echo "rootfs$f: MISSING" >&2
+    done
+    echo "rootfs root shell: $(awk -F: '$1=="root"{print $7}' "$ROOTFS_DIR/etc/passwd" 2>/dev/null)" >&2
+    echo "free space: $(df -h "$PREFIX" 2>/dev/null | tail -1)" >&2
+  else
+    echo "rootfs dir MISSING: $ROOTFS_DIR" >&2
+  fi
+  echo "LD_PRELOAD=${LD_PRELOAD-<unset>}" >&2
+  echo "PROOT_TMP_DIR=$PROOT_TMP_DIR ($(ls "$PROOT_TMP_DIR" 2>/dev/null | head -3 | tr '\n' ' '))" >&2
+}
+
 pd_usable() { # pd_usable <container>
   rm -f "$LOGIN_LOG"
   if proot-distro login "$1" -- true >>"$LOGIN_LOG" 2>&1; then return 0; fi
-  PROOT_NO_SECCOMP=1 proot-distro login "$1" -- true >>"$LOGIN_LOG" 2>&1
+  PROOT_NO_SECCOMP=1 proot-distro login "$1" -- true >>"$LOGIN_LOG" 2>&1 && return 0
+  # explicit /bin/sh bypasses guest passwd-shell resolution; if this works
+  # while `true` failed, the root shell itself was the problem.
+  echo "--- probe: explicit /bin/sh" >>"$LOGIN_LOG"
+  PROOT_NO_SECCOMP=1 proot-distro login "$1" -- /bin/sh -c "true" \
+    >>"$LOGIN_LOG" 2>&1
 }
 pd_fail() { # pd_fail <message>
   if [ -s "$LOGIN_LOG" ]; then
     echo "td-nethunter-setup: login log tail ($LOGIN_LOG):" >&2
     tail -15 "$LOGIN_LOG" >&2
   fi
+  rootfs_report >&2
   die "$1"
 }
 
@@ -134,9 +181,12 @@ pd_fail() { # pd_fail <message>
 if ! pd_usable "$DISTRO_NAME"; then
   log "installing $DISTRO_IMAGE rootfs (first run; size varies)…"
   proot-distro install "$DISTRO_IMAGE" || die "proot-distro install failed for $DISTRO_IMAGE"
+  repair_guest_shell
 fi
-pd_usable "$DISTRO_NAME" \
-  || pd_fail "$DISTRO_NAME container not usable after install"
+if ! pd_usable "$DISTRO_NAME"; then
+  repair_guest_shell
+  pd_usable "$DISTRO_NAME" || pd_fail "$DISTRO_NAME container not usable after install"
+fi
 
 # Inside the distro: VNC server + a minimal desktop (openbox + xterm). Package
 # names differ by distro; tolerate the common variants. Output is captured so

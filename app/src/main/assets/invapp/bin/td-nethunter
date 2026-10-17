@@ -25,6 +25,7 @@ PIDFILE="$STATE_DIR/websockify.pid"
 
 log() { printf 'td-nethunter: %s\n' "$*"; }
 die() { printf 'td-nethunter: ERROR: %s\n' "$*" >&2; exit 1; }
+log "rev 2026.10.17-2 (PROOT_TMP_DIR + guest-shell repair)"
 
 # proot-distro login execs $PREFIX/bin/proot; a pip shim can shadow it.
 ensure_real_proot() {
@@ -90,6 +91,23 @@ command -v python3 >/dev/null 2>&1 || {
 # proot-distro shares the netns, so the port is reachable from Termux itself.
 vnc_listening() { (exec 3<>/dev/tcp/127.0.0.1/"$1") 2>/dev/null; }
 ensure_real_proot
+
+# Repair a guest root shell proot can't exec: proot-distro 5.x routes EVERY
+# login (including `-- Xtigervnc …`) through the guest /etc/passwd shell;
+# an unresolvable shell makes login die with `execve(...): No such file`.
+_rfs="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO_NAME"
+if [ -d "$_rfs" ]; then
+  if [ -e "$_rfs/usr/bin/bash" ]; then gs=/usr/bin/bash
+  elif [ -e "$_rfs/bin/bash" ]; then gs=/bin/bash
+  else gs=/bin/sh
+  fi
+  cur=$(awk -F: '$1=="root"{print $7}' "$_rfs/etc/passwd" 2>/dev/null)
+  if [ -n "$cur" ] && [ ! -e "$_rfs$cur" ]; then
+    log "guest root shell '$cur' unusable in rootfs → rewriting to $gs"
+    sed -i "s|^\(root:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:\).*|\1$gs|" \
+      "$_rfs/etc/passwd" || log "passwd rewrite failed"
+  fi
+fi
 if ! vnc_listening "$VNCPORT"; then
   log "starting VNC on $DISTRO_NAME :$DISPLAY_NUM -> 127.0.0.1:$VNCPORT"
   # Xtigervnc directly: the vncserver wrapper needs ssh, which the distro lacks.
