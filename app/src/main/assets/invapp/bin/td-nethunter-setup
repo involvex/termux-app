@@ -37,7 +37,7 @@ WEBSOCKIFY_SHA256="a24c2fcb0bbb29b0ff68b355dcd4ba3324b629928b2fcbd426e46c70ebbe3
 
 log() { printf 'td-nethunter-setup: %s\n' "$*"; }
 die() { printf 'td-nethunter-setup: ERROR: %s\n' "$*" >&2; exit 1; }
-REV="2026.10.17-2 (PROOT_TMP_DIR + guest-shell repair)"
+REV="2026.10.22-1 (PROOT_TMP_DIR + guest-shell repair + 5.x container path)"
 
 if [ "${INVAPP_ON_DEVICE:-0}" != 1 ]; then
   log "device-only helper"
@@ -119,7 +119,13 @@ log "websockify -> $WS_DIR/websockify-master (python3 -m websockify)"
 # are diagnosable (the discarded-output check caused a mystery death), and
 # retries without proot's seccomp filters, which some Android devices reject.
 LOGIN_LOG="$STATE_DIR/login-check.log"
-ROOTFS_DIR="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO_NAME"
+# proot-distro 5.x stores rootfs under containers/<name>/rootfs; older builds
+# used installed-rootfs/<name>. Prefer the new layout, fall back to legacy.
+ROOTFS_DIR="$PREFIX/var/lib/proot-distro/containers/$DISTRO_NAME/rootfs"
+[ -d "$ROOTFS_DIR" ] \
+  || ROOTFS_DIR="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO_NAME"
+# proot's default temp dir must exist (its loader + exit-cleanup live there).
+mkdir -p "$PREFIX/tmp"
 
 # proot-distro 5.x routes EVERY login — even `login NAME -- CMD` — through the
 # guest's root shell from the rootfs /etc/passwd. If that shell (e.g. kali's

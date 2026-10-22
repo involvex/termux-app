@@ -7,7 +7,9 @@
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 
 DISTRO="${1:-kali-rolling}"
-RFS="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO"
+# proot-distro 5.x layout (legacy fallback: installed-rootfs/<name>).
+RFS="$PREFIX/var/lib/proot-distro/containers/$DISTRO/rootfs"
+[ -d "$RFS" ] || RFS="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO"
 DTMP="$PREFIX/var/td-nethunter/debug-proot-tmp"
 
 h() { printf '\n== %s\n' "$*"; }

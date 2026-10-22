@@ -18,6 +18,7 @@ WS_DIR="$STATE_DIR/websockify"
 PROOT_TMP_DIR="$STATE_DIR/proot-tmp"
 mkdir -p "$PROOT_TMP_DIR"
 export PROOT_TMP_DIR
+mkdir -p "$PREFIX/tmp"   # proot's default temp dir must exist (loader + cleanup)
 WS_REPO="$WS_DIR/websockify-master"   # repo root (contains the websockify/ package)
 DISPLAY_NUM="${TD_NETHUNTER_DISPLAY:-1}"
 VNCPORT=$((5900 + DISPLAY_NUM))
@@ -25,7 +26,7 @@ PIDFILE="$STATE_DIR/websockify.pid"
 
 log() { printf 'td-nethunter: %s\n' "$*"; }
 die() { printf 'td-nethunter: ERROR: %s\n' "$*" >&2; exit 1; }
-log "rev 2026.10.17-2 (PROOT_TMP_DIR + guest-shell repair)"
+log "rev 2026.10.22-1 (PROOT_TMP_DIR + guest-shell repair + 5.x container path)"
 
 # proot-distro login execs $PREFIX/bin/proot; a pip shim can shadow it.
 ensure_real_proot() {
@@ -92,10 +93,11 @@ command -v python3 >/dev/null 2>&1 || {
 vnc_listening() { (exec 3<>/dev/tcp/127.0.0.1/"$1") 2>/dev/null; }
 ensure_real_proot
 
-# Repair a guest root shell proot can't exec: proot-distro 5.x routes EVERY
-# login (including `-- Xtigervnc …`) through the guest /etc/passwd shell;
-# an unresolvable shell makes login die with `execve(...): No such file`.
-_rfs="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO_NAME"
+# Rootfs path: proot-distro 5.x uses containers/<name>/rootfs (legacy:
+# installed-rootfs/<name>); repair a guest root shell proot can't exec —
+# EVERY login (including `-- Xtigervnc …`) runs through it.
+_rfs="$PREFIX/var/lib/proot-distro/containers/$DISTRO_NAME/rootfs"
+[ -d "$_rfs" ] || _rfs="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO_NAME"
 if [ -d "$_rfs" ]; then
   if [ -e "$_rfs/usr/bin/bash" ]; then gs=/usr/bin/bash
   elif [ -e "$_rfs/bin/bash" ]; then gs=/bin/bash
