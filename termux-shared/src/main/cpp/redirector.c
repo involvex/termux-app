@@ -2,6 +2,7 @@
 #include <dlfcn.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
@@ -241,6 +242,16 @@ static void rewrite_termux_paths_in_script(const char* path) {
     orig_close(fd);
     data[size] = '\0';
 
+    /*
+     * Text-only guard: the rewrite below is string-based (strstr/strlen).
+     * Rewriting any binary content would truncate at the first NUL and
+     * produce a corrupt file.
+     */
+    if (memchr(data, '\0', (size_t)size) != NULL) {
+        free(data);
+        return;
+    }
+
     int has_shebang = size >= 2 && data[0] == '#' && data[1] == '!';
     int is_maint = path_is_dpkg_maintainer_script(path);
     if (!has_shebang && !is_maint) {
@@ -330,12 +341,50 @@ static void rewrite_termux_paths_in_script(const char* path) {
         oi = strlen(out);
     }
 
-    fd = orig_open(path, O_WRONLY | O_TRUNC);
+    /*
+     * Skip when nothing changed: scripts under $PREFIX/bin are exec'd many
+     * times (e.g. compiler wrappers during parallel builds); rewriting the
+     * byte-identical content on every exec would churn the file and race
+     * other processes reading/executing it.
+     */
+    if (body == data && oi == (size_t)size
+        && memcmp(out, data, (size_t)size) == 0) {
+        free(data);
+        free(prefixed);
+        free(out);
+        return;
+    }
+
+    /*
+     * Atomic replace: write a sibling temp file and rename over the target.
+     * An in-place O_TRUNC write lets concurrent bash/compiler readers see a
+     * half-written script (torn reads — "line 8: syntax error" garbage).
+     */
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        free(data);
+        free(prefixed);
+        free(out);
+        return;
+    }
+    char tmp_path[PATH_MAX];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.rwXXXXXX", path);
+    fd = mkstemp(tmp_path);
     if (fd >= 0) {
-        if (orig_write(fd, out, oi) == (ssize_t)oi) {
-            LOGI("rewrote package paths in script: %s", path);
+        int ok = orig_write(fd, out, oi) == (ssize_t)oi;
+        if (ok) {
+            ok = fchmod(fd, st.st_mode) == 0;
         }
         orig_close(fd);
+        if (ok) {
+            if (rename(tmp_path, path) == 0) {
+                LOGI("rewrote package paths in script: %s", path);
+            } else {
+                unlink(tmp_path);
+            }
+        } else {
+            unlink(tmp_path);
+        }
     }
 
     free(data);
