@@ -11,11 +11,11 @@ import static org.junit.Assert.assertTrue;
 public class ResourceScriptsInstallerTest {
 
     @Test
-    public void catalog_hasSixHelpers() {
+    public void catalog_hasSevenHelpers() {
         String[] ids = ResourceScriptsInstaller.allScriptIds();
-        assertEquals(6, ids.length);
+        assertEquals(7, ids.length);
         assertEquals(ResourceScriptsInstaller.ID_LINUX, ids[0]);
-        assertEquals(ResourceScriptsInstaller.ID_CATALOG, ids[5]);
+        assertEquals(ResourceScriptsInstaller.ID_CATALOG, ids[6]);
     }
 
     @Test
@@ -91,6 +91,25 @@ public class ResourceScriptsInstallerTest {
         assertTrue(body.contains("td-ai"));
         assertTrue(body.contains("4096"));
         assertTrue(body.contains("cursor-agent"));
+    }
+
+    @Test
+    public void litertBody_nativeAndroidWheelNoUvNoProot() {
+        String body = ResourceScriptsInstaller.scriptBody(
+            ResourceScriptsInstaller.ID_LITERT);
+        assertNotNull(body);
+        assertTrue(body.contains("litert-lm-api"));
+        assertTrue(body.contains("android_23_arm64_v8a"));
+        assertTrue(body.contains("site-packages"));
+        // Engine wheel is resolved from PyPI JSON and extracted manually.
+        assertTrue(body.contains("zipfile.ZipFile"));
+        // No uv (glibc python breaks under the path remapper) and no proot.
+        assertFalse(body.contains("uv tool"));
+        assertFalse(body.contains("proot-distro"));
+        // Never hardcodes the upstream package id.
+        assertFalse(body.contains("/data/data/com.termux"));
+        // Passthrough entrypoint exists.
+        assertTrue(body.contains("\"$VENV/bin/litert-lm\" \"$@\""));
     }
 
     @Test

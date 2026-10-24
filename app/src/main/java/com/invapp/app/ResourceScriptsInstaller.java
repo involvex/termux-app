@@ -20,7 +20,8 @@ import java.nio.charset.StandardCharsets;
  * <p>Scripts: {@code td-resource-linux} (proot Ubuntu/Debian),
  * {@code td-resource-python}, {@code td-resource-qemu} (native pkgs only),
  * {@code td-resource-bun}, {@code td-resource-ai} (opencode/agent health),
- * {@code td-resource} (catalog lister).
+ * {@code td-resource-litert-lm} (on-device LLM: LiteRT-LM CLI + native
+ * Android engine wheel), {@code td-resource} (catalog lister).
  *
  * <p>Installer itself preserves {@code libinvapp-redirector.so} via
  * {@code LD_PRELOAD} (never bare {@code unset} at top level). The generated
@@ -36,15 +37,16 @@ public final class ResourceScriptsInstaller {
     public static final String ID_QEMU = "td-resource-qemu";
     public static final String ID_BUN = "td-resource-bun";
     public static final String ID_AI = "td-resource-ai";
+    public static final String ID_LITERT = "td-resource-litert-lm";
     public static final String ID_CATALOG = "td-resource";
 
     private ResourceScriptsInstaller() {}
 
-    /** All helper ids seeded into {@code $PREFIX/bin}. */
+    /** All helper ids seeded into {@code $PREFIX/bin}. Catalog stays last. */
     @NonNull
     public static String[] allScriptIds() {
         return new String[] {
-            ID_LINUX, ID_PYTHON, ID_QEMU, ID_BUN, ID_AI, ID_CATALOG
+            ID_LINUX, ID_PYTHON, ID_QEMU, ID_BUN, ID_AI, ID_LITERT, ID_CATALOG
         };
     }
 
@@ -92,6 +94,8 @@ public final class ResourceScriptsInstaller {
                 return bunBody();
             case ID_AI:
                 return aiBody();
+            case ID_LITERT:
+                return litertBody();
             case ID_CATALOG:
                 return catalogBody();
             default:
@@ -332,14 +336,103 @@ public final class ResourceScriptsInstaller {
             + "echo \"Chat API fail ('typo in the url or port'): rm -rf ~/.cache/opencode && opencode-fix-net && td-ai\"\n";
     }
 
+    /**
+     * LiteRT-LM on-device LLM runtime (Google AI Edge cli + native engine).
+     *
+     * <p>Install strategy: pure-Python CLI wheel in a venv (pkg python), plus
+     * Google's native {@code litert-lm-api} wheel tagged
+     * {@code android_23_<abi>} — Termux pip never selects that platform tag and
+     * {@code uv tool install} pulls a glibc python that dies under the path
+     * remapper, so the wheel is resolved from the PyPI JSON index and extracted
+     * manually into the venv's site-packages. Any further args are passed
+     * through to {@code litert-lm}.
+     */
+    @NonNull
+    static String litertBody() {
+        return header(ID_LITERT)
+            + "VENV=\"$HOME/litert-lm.venv\"\n"
+            + "usage() {\n"
+            + "  echo \"usage: td-resource-litert-lm [--reinstall] [litert-lm ARGS...]\" >&2\n"
+            + "  echo \"  no args: install/refresh the LiteRT-LM CLI + native engine\" >&2\n"
+            + "  echo \"  ARGS: passthrough to the venv litert-lm (e.g. run --help)\" >&2\n"
+            + "  exit 0\n"
+            + "}\n"
+            + "if [ \"${1-}\" = \"-h\" ] || [ \"${1-}\" = \"--help\" ]; then usage; fi\n"
+            + "if [ \"${1-}\" = \"--reinstall\" ]; then rm -rf \"$VENV\"; shift; fi\n"
+            + "if [ $# -gt 0 ]; then\n"
+            + "  [ -x \"$VENV/bin/litert-lm\" ] || { echo \"not installed yet — run without args first\" >&2; exit 1; }\n"
+            + "  exec \"$VENV/bin/litert-lm\" \"$@\"\n"
+            + "fi\n"
+            + "PY=python3\n"
+            + "if ! command -v \"$PY\" >/dev/null 2>&1; then\n"
+            + "  echo \"td-resource-litert-lm: pkg install python…\"\n"
+            + "  pkg install -y python || { echo \"pkg install failed\" >&2; exit 1; }\n"
+            + "  PY=python3\n"
+            + "fi\n"
+            + "if [ ! -x \"$VENV/bin/python\" ]; then\n"
+            + "  echo \"td-resource-litert-lm: creating venv $VENV\"\n"
+            + "  \"$PY\" -m venv \"$VENV\" || { echo \"venv creation failed\" >&2; exit 1; }\n"
+            + "fi\n"
+            + "PY=\"$VENV/bin/python\"\n"
+            + "PIP=\"$VENV/bin/pip\"\n"
+            + "[ -x \"$PIP\" ] || \"$PY\" -m ensurepip --default-pip >/dev/null 2>&1 || true\n"
+            + "[ -x \"$PIP\" ] || { echo \"pip missing in venv\" >&2; exit 1; }\n"
+            + "\"$PIP\" install -q -U pip\n"
+            + "\"$PIP\" install -q --no-deps litert-lm\n"
+            + "\"$PIP\" install -q -U click prompt_toolkit questionary typing-extensions huggingface_hub\n"
+            + "\"$PIP\" install -q litert-lm-builder\n"
+            + "echo \"td-resource-litert-lm: resolving native engine wheel (android_23/$(uname -m))\"\n"
+            + "\"$PY\" <<'PYEOF' || { echo \"native engine setup failed — paste the output above back\" >&2; exit 1; }\n"
+            + "import json, os, re, sys, tempfile, urllib.request, zipfile, sysconfig\n"
+            + "site = sysconfig.get_paths()[\"purelib\"]\n"
+            + "print(\"site-packages: \" + site)\n"
+            + "arch = \"android_23_arm64_v8a\" if os.uname().machine == \"aarch64\" else \"android_23_x86_64\"\n"
+            + "data = json.load(urllib.request.urlopen(\"https://pypi.org/pypi/litert-lm-api/json\"))\n"
+            + "def ver_key(v):\n"
+            + "    return [int(x) for x in re.findall(r\"\\d+\", v)]\n"
+            + "url = None\n"
+            + "for v in sorted(data[\"releases\"], key=ver_key, reverse=True):\n"
+            + "    hit = [f for f in data[\"releases\"][v] if arch in f[\"filename\"] and f.get(\"url\")]\n"
+            + "    if hit:\n"
+            + "        url = hit[0][\"url\"]\n"
+            + "        print(\"native engine: litert-lm-api \" + v)\n"
+            + "        break\n"
+            + "if not url:\n"
+            + "    sys.exit(\"no \" + arch + \" wheel for litert-lm-api on PyPI\")\n"
+            + "tmp = os.path.join(tempfile.gettempdir(), os.path.basename(url))\n"
+            + "urllib.request.urlretrieve(url, tmp)\n"
+            + "with zipfile.ZipFile(tmp) as z:\n"
+            + "    for info in z.infolist():\n"
+            + "        z.extract(info, site)\n"
+            + "        mode = info.external_attr >> 16\n"
+            + "        if mode:\n"
+            + "            os.chmod(os.path.join(site, info.filename), mode)\n"
+            + "os.remove(tmp)\n"
+            + "import litert_lm\n"
+            + "print(\"native engine import OK: \" + litert_lm.__file__)\n"
+            + "PYEOF\n"
+            + "\"$VENV/bin/litert-lm\" --help >/dev/null 2>&1 \\\n"
+            + "  || { echo \"litert-lm CLI failed to run — paste output back\" >&2; exit 1; }\n"
+            + "if [ -e \"$PREFIX/bin/litert-lm\" ] && [ ! -L \"$PREFIX/bin/litert-lm\" ]; then\n"
+            + "  echo \"td-resource-litert-lm: $PREFIX/bin/litert-lm already exists — not clobbering\"\n"
+            + "else\n"
+            + "  ln -sf \"$VENV/bin/litert-lm\" \"$PREFIX/bin/litert-lm\"\n"
+            + "fi\n"
+            + "echo \"OK: LiteRT-LM ready — no uv, no proot: the engine is the native Android wheel.\"\n"
+            + "echo \"Chat one-shot:\" \n"
+            + "echo \"  litert-lm run --from-huggingface-repo=litert-community/gemma-4-E4B-it-litert-lm gemma-4-E4B-it.litertlm --backend=cpu --prompt='What is 2+2?'\"\n"
+            + "echo \"  (models download multi-GB — check free space; --backend=gpu on supported devices)\"\n"
+            + "echo \"Also: litert-lm run <model> (chat) | litert-lm serve <model> (OpenAI-style)\" \n";
+    }
+
     /** Catalog lister. */
     @NonNull
     static String catalogBody() {
         return header(ID_CATALOG)
             + "echo \"InVxTermux resources (Ultra-inspired, no tmux):\"\n"
-            + "for h in td-resource-linux td-resource-python td-resource-qemu td-resource-bun td-resource-ai; do\n"
+            + "for h in td-resource-linux td-resource-python td-resource-qemu td-resource-bun td-resource-ai td-resource-litert-lm; do\n"
             + "  if command -v \"$h\" >/dev/null 2>&1; then st=\"ready\"; else st=\"missing (reopen app)\"; fi\n"
-            + "  printf '  %-20s %s\\n' \"$h\" \"$st\"\n"
+            + "  printf '  %-24s %s\\n' \"$h\" \"$st\"\n"
             + "done\n"
             + "echo \"Usage: <helper> --help\"\n";
     }
@@ -354,7 +447,7 @@ public final class ResourceScriptsInstaller {
             + "# invapp td-resource completions\n"
             + "_invapp_td_resource() {\n"
             + "  local cur=\"${COMP_WORDS[COMP_CWORD]}\"\n"
-            + "  local cmds=\"td-resource td-resource-linux td-resource-python td-resource-qemu td-resource-bun td-resource-ai\"\n"
+            + "  local cmds=\"td-resource td-resource-linux td-resource-python td-resource-qemu td-resource-bun td-resource-ai td-resource-litert-lm\"\n"
             + "  if [ \"$COMP_CWORD\" -eq 1 ]; then\n"
             + "    COMPREPLY=( $(compgen -W \"$cmds\" -- \"$cur\") )\n"
             + "    return\n"
@@ -362,10 +455,11 @@ public final class ResourceScriptsInstaller {
             + "  case \"${COMP_WORDS[1]}\" in\n"
             + "    td-resource-linux) COMPREPLY=( $(compgen -W \"--run --reinstall --help\" -- \"$cur\") ) ;;\n"
             + "    td-resource-python) COMPREPLY=( $(compgen -W \"--venv --help\" -- \"$cur\") ) ;;\n"
+            + "    td-resource-litert-lm) COMPREPLY=( $(compgen -W \"--reinstall --help\" -- \"$cur\") ) ;;\n"
             + "    *) COMPREPLY=( $(compgen -W \"--help\" -- \"$cur\") ) ;;\n"
             + "  esac\n"
             + "}\n"
-            + "for _c in td-resource td-resource-linux td-resource-python td-resource-qemu td-resource-bun td-resource-ai; do\n"
+            + "for _c in td-resource td-resource-linux td-resource-python td-resource-qemu td-resource-bun td-resource-ai td-resource-litert-lm; do\n"
             + "  complete -F _invapp_td_resource \"$_c\" 2>/dev/null || true\n"
             + "done\n"
             + "unset _c\n";
