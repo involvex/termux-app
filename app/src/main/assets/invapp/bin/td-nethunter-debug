@@ -1,9 +1,11 @@
 #!@BASH@
 # InVxTermux — nethunter guest environment self-test (device-only, no root).
 # Prints every layer proot-distro needs: environment, proot temp handling, the
-# guest rootfs contents, and DIRECT proot exec attempts (bypassing proot-distro
-# so its shell-wrapping can't mask results). Paste the whole output back on
-# failure. Usage: td-nethunter-debug [distro]   (default kali-rolling)
+# guest rootfs contents (incl. ELF interpreter sniff), and DIRECT proot exec
+# attempts (bypassing proot-distro so its shell-wrapping can't mask results).
+# Paste the whole output back on failure. Usage: td-nethunter-debug [distro]
+#   (default kali-rolling)
+# rev: 2026.10.24-1
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 
 DISTRO="${1:-kali-rolling}"
@@ -73,6 +75,29 @@ if [ -d "$RFS" ]; then
   done
   grep '^root:' "$RFS/etc/passwd" 2>/dev/null || echo "no root: line in passwd"
   df -h "$PREFIX" 2>/dev/null | tail -2
+  # ELF interpreter: proot relies on the guest loader existing for *every*
+  # exec'd guest binary. Missing /lib/ld-linux-aarch64.so.1 (or its usr-merge
+  # target) produces exactly "execve(...): No such file or directory" even
+  # though the shell file itself is present and is a valid ELF.
+  echo "-- ELF interpreter sniff + presence --"
+  for f in /bin/sh /bin/bash; do
+    interp=""
+    if [ -e "$RFS$f" ]; then
+      interp="$(grep -aoE '(/lib|/usr/lib|/lib64|/usr/lib64)[^ ]*ld(-[^ ]*)?\.so\.[0-9]+' "$RFS$f" 2>/dev/null | head -1)"
+      printf '  %-10s PT_INTERP: %-34s' "$f" "${interp:-<none-found>}"
+      if [ -n "$interp" ] && [ -e "$RFS$interp" ]; then
+        echo "present"
+      elif [ -n "$interp" ]; then
+        echo "MISSING in rootfs  <-- likely root cause"
+      else
+        echo "static or sniff failed"
+      fi
+    fi
+  done
+  echo "-- rootfs interpreter dirs --"
+  ls -ld "$RFS/lib" "$RFS/lib64" "$RFS/usr/lib" "$RFS/usr/lib/aarch64-linux-gnu" 2>&1
+  ls -l "$RFS/usr/lib/ld-linux-aarch64.so.1" "$RFS/lib/ld-linux-aarch64.so.1" \
+        "$RFS/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1" 2>&1
 else
   echo "NOT INSTALLED — run td-nethunter-setup first"
 fi

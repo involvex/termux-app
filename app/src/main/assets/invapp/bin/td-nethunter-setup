@@ -37,7 +37,7 @@ WEBSOCKIFY_SHA256="a24c2fcb0bbb29b0ff68b355dcd4ba3324b629928b2fcbd426e46c70ebbe3
 
 log() { printf 'td-nethunter-setup: %s\n' "$*"; }
 die() { printf 'td-nethunter-setup: ERROR: %s\n' "$*" >&2; exit 1; }
-REV="2026.10.22-1 (PROOT_TMP_DIR + guest-shell repair + 5.x container path)"
+REV="2026.10.24-1 (guest-shell repair + 5.x container path; interpreter probe)"
 
 if [ "${INVAPP_ON_DEVICE:-0}" != 1 ]; then
   log "device-only helper"
