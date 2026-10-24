@@ -106,6 +106,9 @@ public class ResourceScriptsInstallerTest {
         // No uv (glibc python breaks under the path remapper) and no proot.
         assertFalse(body.contains("uv tool"));
         assertFalse(body.contains("proot-distro"));
+        // hf-xet has no Android wheel — hub must install without it.
+        assertTrue(body.contains("HF_HUB_DISABLE_XET"));
+        assertTrue(body.contains("--no-deps huggingface_hub"));
         // Never hardcodes the upstream package id.
         assertFalse(body.contains("/data/data/com.termux"));
         // Passthrough entrypoint exists.
