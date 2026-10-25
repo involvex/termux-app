@@ -59,3 +59,13 @@ native-tmp/
 
 # Session-specific OpenCode debug doctors
 scripts/opencode-debug-doctor*.sh
+
+# Local compose overrides (INVAPP_IMAGE, etc.) — do not commit
+.env
+
+# Kotlin build cache (KSP/kapt session dirs)
+.kotlin/
+
+# Container bind-mount targets (host working trees, home caches)
+docker/repos/
+docker/home-cache/
