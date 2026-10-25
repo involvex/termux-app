@@ -41,10 +41,10 @@ docker run -it --rm -p 5173:5173 -p 4096:4096 ghcr.io/involvex/termux-docker:x86
 ```
 
 `td-dev` and `td-scaffold` bind `0.0.0.0` for exactly this reason. There is also
-a compose file:
+a compose file at the **repo root** (`compose.yaml`), so no `cd docker/`:
 
 ```bash
-cd termux-app/docker && docker compose up -it
+cd termux-app && docker compose up -d && docker compose exec invtermux bash
 ```
 
 ## What works, what cannot

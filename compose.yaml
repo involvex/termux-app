@@ -1,0 +1,52 @@
+# InVxTermux dev container — lives at the repo root so `docker compose …`
+# works from the checkout without cd docker/ first.
+#
+#   docker compose up -d
+#   docker compose exec invtermux bash
+#
+# ~/repos is bind-mounted from docker/repos, so the same git working tree is
+# used on the phone and in the container. Build the image with the
+# termux-docker fork:
+#
+#   cd ../termux-docker
+#   TERMUX_DOCKER__IMAGE_NAME=invtermux \
+#     INVAPP_SRC=../termux-app/app/src/main/assets/invapp ./generate.sh --invapp
+#
+# Project name pinned (`docker`) so the stack created while the compose file
+# still lived in docker/ is picked up here instead of name-colliding.
+#
+name: docker
+
+services:
+  invtermux:
+    image: ${INVAPP_IMAGE:-ghcr.io/involvex/termux-docker:latest}
+    container_name: invtermux
+    hostname: invtermux
+    tty: true
+    stdin_open: true
+    working_dir: /data/data/com.termux/files/home/repos
+    command:
+      - bash
+      - -l
+    environment:
+      # Default cwd is ~/repos, same as the app.
+      HOME: /data/data/com.termux/files/home
+      PREFIX: /data/data/com.termux/files/usr
+      LANG: en_US.UTF-8
+      TERM: xterm-256color
+      TZ: UTC
+    volumes:
+      # Bind the working tree. On Docker Desktop/Windows use a named volume or a
+      # WSL path instead: Termux packages are built for bionic and a bind mount
+      # from a Windows filesystem is slow and may not preserve exec bits.
+      - ./docker/repos:/data/data/com.termux/files/home/repos
+      - ./docker/home-cache:/data/data/com.termux/files/home/.cache
+    ports:
+      # td-dev / vite (5173), td-ai (4096)
+      - "5173:5173"
+      - "4096:4096"
+      # "3000:3000" # other dev servers
+    # Only needed if bun reports "Bad system call" (Docker's default seccomp
+    # profile can reject openat2/fchmodat2). See docker/README.md.
+    # security_opt:
+    #   - seccomp=unconfined

@@ -26,16 +26,19 @@ validation pass: the glibc/`ld-linux` glue cannot be runtime-checked here.
 ```text
 docker/
   README.md              this file
-  docker-compose.yml     ready-to-use dev container definition
-  invapp/
-    seed.sh              runs once inside the image build (as the `system` user)
-    env.sh               shared environment + arch capability table
-    packages.list        base packages installed into every image
-    packages-extra.list  optional/heavy packages (td-install-extras)
-    bin/                 helpers installed into $PREFIX/bin
-    libexec/             helpers used by bin/ (vite PWA writer)
-    config/              ~/.termux files, profile.d snippet, completions
-    shortcuts/           ~/.shortcuts templates (run by hand, no widget launcher)
+  repos/                 ~/repos bind target (host side)
+  home-cache/            ~/.cache bind target (host side)
+../compose.yaml          ready-to-use dev container definition (repo root)
+  -> so `docker compose …` works from the checkout without cd docker/
+app/src/main/assets/invapp/
+  seed.sh              runs once inside the image build (as the `system` user)
+  env.sh               shared environment + arch capability table
+  packages.list        base packages installed into every image
+  packages-extra.list  optional/heavy packages (td-install-extras)
+  bin/                 helpers installed into $PREFIX/bin
+  libexec/             helpers used by bin/ (vite PWA writer)
+  config/              ~/.termux files, profile.d snippet, completions
+  shortcuts/           ~/.shortcuts templates (run by hand, no widget launcher)
 ```
 
 ## Build
@@ -75,10 +78,12 @@ docker run -it --rm -p 5173:5173 -p 4096:4096 ghcr.io/involvex/termux-docker:x86
 td-info          # inside: what this image can and cannot do
 ```
 
-Or with compose, working on the same repo as the phone:
+Or with compose, working on the same repo as the phone (compose file is at the
+repo root, next to `gradlew`):
 
 ```sh
-docker compose up -it
+cd ../termux-app && docker compose up -d     # start
+docker compose exec invtermux bash           # enter a shell in the container
 ```
 
 Ports are published on the host side (`docker run -p`) — the app's Preview

@@ -238,6 +238,8 @@ TERMUX_DOCKER__INVAPP_WITH_AI=1 ./generate.sh --invapp   # bake in opencode + cu
 docker run -it ghcr.io/involvex/termux-docker:aarch64
 docker run -it --rm -p 5173:5173 -p 4096:4096 ghcr.io/involvex/termux-docker:x86_64
 docker run --rm ghcr.io/involvex/termux-docker:x86_64 td-info
+# OR the root compose file (same working tree via docker/ bind mounts):
+docker compose up -d && docker compose exec invtermux bash
 ```
 
 `app/src/main/assets/invapp/` here owns the tooling; the fork owns rootfs generation. Keep
@@ -317,7 +319,8 @@ termux-app/
 ├── termux-api/         # API plugin
 ├── termux-widget/      # Classic ~/.shortcuts Termux:Widget
 ├── termux-terminal-widget/ # Command-output home widget (not classic Termux:Widget)
-├── docker/          # container seed tree (invapp/) + compose file; image built by involvex/termux-docker
+├── compose.yaml       # root-level dev-container definition (docker compose)
+├── docker/            # container seed tree docs + bind-mount dirs; image built by involvex/termux-docker
 ├── .github/workflows/  # CI above + ISSUE_TEMPLATE/
 ├── fastlane/ docs/en/ site/  # store metadata, docs, sponsors page
 └── build.gradle settings.gradle gradle.properties README.md ROADMAP.md AGENTS.md
