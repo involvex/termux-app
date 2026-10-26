@@ -108,8 +108,10 @@ fi
 h "direct proot, private temp + LD_PRELOAD cleared"
 if [ -e "$RFS/bin/sh" ]; then
   env -u LD_PRELOAD PROOT_TMP_DIR="$DTMP" \
-    proot -0 -R "$RFS" -w / /bin/sh -c \
-    'echo GUEST-EXEC-OK; uname -m; ls /bin/sh' 2>&1 | head -6
+    proot -0 -R "$RFS" -w / \
+    -b /dev -b /proc -b /sys \
+    -b "$PREFIX:/termux" \
+    /bin/sh -c 'echo GUEST-EXEC-OK; uname -m; ls /bin/sh' 2>&1 | head -10
   echo "rc=$?"
 else
   echo "cannot test — $RFS/bin/sh missing"
@@ -118,16 +120,34 @@ fi
 h "direct proot, private temp, LD_PRELOAD as injected"
 if [ -e "$RFS/bin/sh" ]; then
   PROOT_TMP_DIR="$DTMP" \
-    proot -0 -R "$RFS" -w / /bin/sh -c 'echo GUEST-EXEC-OK' 2>&1 | head -6
+    proot -0 -R "$RFS" -w / \
+    -b /dev -b /proc -b /sys \
+    -b "$PREFIX:/termux" \
+    /bin/sh -c 'echo GUEST-EXEC-OK' 2>&1 | head -10
   echo "rc=$?"
 fi
 
 h "direct proot, default tmp dir"
 if [ -e "$RFS/bin/sh" ]; then
   env -u PROOT_TMP_DIR \
-    proot -0 -R "$RFS" -w / /bin/sh -c 'echo GUEST-EXEC-OK' 2>&1 | head -6
+    proot -0 -R "$RFS" -w / \
+    -b /dev -b /proc -b /sys \
+    -b "$PREFIX:/termux" \
+    /bin/sh -c 'echo GUEST-EXEC-OK' 2>&1 | head -10
   echo "rc=$?"
 fi
 
 h "done"
 echo "Paste the entire output back if anything failed."
+
+
+  echo "-- library deps (host side) --"
+  readelf -l "$RFS/bin/sh" 2>&1 | grep -A1 "Requesting program interpreter"
+  echo "--- ldd of sh ---"
+  ldd "$RFS/bin/sh" 2>&1 | head -20
+  echo "--- ldd of ld-linux ---"
+  ldd "$RFS/lib/ld-linux-aarch64.so.1" 2>&1 | head -10
+  for lib in libc.so.6 libdl.so.2 libpthread.so.0; do
+    p=$(find "$RFS/usr/lib" "$RFS/lib" -name "$lib" 2>&1 | head -1)
+    echo "$lib: ${p:-MISSING}"
+  done
