@@ -215,10 +215,13 @@ APT_LOG="$STATE_DIR/apt-install.log"
 if ! td_guest_login "$DISTRO_NAME" sh -c '
   apt-get update -qq
   apt-get install -y --no-install-recommends \
+      tigervnc-standalone-server tigervnc-tools \
+      openbox xterm dbus-x11 x11-xserver-utils xfonts-base 2>/dev/null \
+    || apt-get install -y --no-install-recommends \
       tigervnc-standalone-server openbox xterm 2>/dev/null \
     || apt-get install -y --no-install-recommends \
       tightvncserver openbox xterm 2>/dev/null \
-    || apt-get install -y tigervnc-standalone-server openbox xterm
+    || apt-get install -y tigervnc-standalone-server tigervnc openbox xterm
 ' >"$APT_LOG" 2>&1; then
   if [ -s "$APT_LOG" ]; then echo "td-nethunter-setup: apt log tail:" >&2; tail -15 "$APT_LOG" >&2; fi
   die "VNC stack install failed inside $DISTRO_NAME"
@@ -240,10 +243,22 @@ esac
 
 # xstartup: a minimal openbox session (idempotent rewrite).
 log "writing xstartup"
-td_guest_login "$DISTRO_NAME" sh -c "mkdir -p ~/.vnc && cat > ~/.vnc/xstartup" <<'XSTARTUP'
+td_guest_login "$DISTRO_NAME" sh -c "mkdir -p ~/.vnc && cat > ~/.vnc/xstartup && chmod +x ~/.vnc/xstartup" <<'XSTARTUP'
 #!/bin/sh
-openbox &
-xterm -geometry 88x24+10+10 &
+xrdb $HOME/.Xresources 2>/dev/null || true
+xsetroot -solid grey 2>/dev/null || true
+# try common session managers
+if command -v xfce4-session >/dev/null 2>&1; then
+  exec xfce4-session
+elif command -v startxfce4 >/dev/null 2>&1; then
+  exec startxfce4
+elif command -v lxsession >/dev/null 2>&1; then
+  exec lxsession
+else
+  openbox-session 2>/dev/null || openbox &
+  xterm -geometry 88x24+10+10 &
+  wait
+fi
 XSTARTUP
 
 touch "$STATE_DIR/$DISTRO_NAME.ready"

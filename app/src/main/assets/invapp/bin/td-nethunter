@@ -108,32 +108,46 @@ if [ -d "$_rfs" ]; then
     sed -i "s|^\(root:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:\).*|\1$gs|" \
       "$_rfs/etc/passwd" || log "passwd rewrite failed"
   fi
+  # ensure xstartup is executable
+  chmod +x "$_rfs/root/.vnc/xstartup" 2>/dev/null || true
 fi
 if ! vnc_listening "$VNCPORT"; then
   log "starting VNC on $DISTRO_NAME :$DISPLAY_NUM -> 127.0.0.1:$VNCPORT"
-  # Xtigervnc directly: the vncserver wrapper needs ssh, which the distro lacks.
-  # -SecurityTypes None = no password (localhost-only, so the desktop is not
-  # reachable off-device); -desktop names the session (xstartup runs openbox).
-  # Two things make the server outlive this script: it is started with
-  # `nohup … &` *inside* the guest, and TD_PROOT_KEEP_ALIVE=1 stops proot from
-  # reaping tracees on exit (proot-distro behaves the same; that is why its
-  # logins can leave a desktop running).
-  _vnc_cmd="nohup Xtigervnc :$DISPLAY_NUM -localhost -SecurityTypes None \
--geometry 1280x720 -depth 24 -desktop td-nethunter \
->/root/.td-nethunter-vnc.log 2>&1 &"
+  # Try multiple approaches: Xtigervnc directly, or vncserver wrapper
+  _vnc_cmd='
+    chmod +x /root/.vnc/xstartup 2>/dev/null || true
+    if command -v Xtigervnc >/dev/null 2>&1; then
+      nohup Xtigervnc :'$DISPLAY_NUM' -localhost -SecurityTypes None \
+        -geometry 1280x720 -depth 24 -desktop td-nethunter \
+        -xstartup /root/.vnc/xstartup \
+        >/root/.td-nethunter-vnc.log 2>&1 &
+    elif command -v Xvnc >/dev/null 2>&1; then
+      nohup Xvnc :'$DISPLAY_NUM' -localhost -SecurityTypes None \
+        -geometry 1280x720 -depth 24 -desktop td-nethunter \
+        -xstartup /root/.vnc/xstartup \
+        >/root/.td-nethunter-vnc.log 2>&1 &
+    elif command -v vncserver >/dev/null 2>&1; then
+      vncserver -kill :'$DISPLAY_NUM' >/dev/null 2>&1 || true
+      nohup vncserver :'$DISPLAY_NUM' -geometry 1280x720 -depth 24 -localhost yes \
+        -xstartup /root/.vnc/xstartup >/root/.td-nethunter-vnc.log 2>&1 &
+    else
+      echo "NO_VNC_SERVER_FOUND" >> /root/.td-nethunter-vnc.log
+      exit 1
+    fi
+  '
   TD_PROOT_KEEP_ALIVE=1 td_guest_login "$DISTRO_NAME" /bin/sh -c "$_vnc_cmd" \
     >"$STATE_DIR/vnc-start.log" 2>&1
-  # Xtigervnc needs a moment before the port answers.
+  # VNC needs a moment before the port answers.
   _i=0
-  while [ "$_i" -lt 15 ] && ! vnc_listening "$VNCPORT"; do
+  while [ "$_i" -lt 25 ] && ! vnc_listening "$VNCPORT"; do
     sleep 1
     _i=$((_i + 1))
   done
   if vnc_listening "$VNCPORT"; then
     log "VNC listening on 127.0.0.1:$VNCPORT"
   else
-    log "VNC did not come up (Xtigervnc missing in $DISTRO_NAME?) — launcher log:"
-    [ -s "$STATE_DIR/vnc-start.log" ] && tail -10 "$STATE_DIR/vnc-start.log" >&2
+    log "VNC did not come up (VNC server missing in $DISTRO_NAME?) — launcher log:"
+    [ -s "$STATE_DIR/vnc-start.log" ] && tail -15 "$STATE_DIR/vnc-start.log" >&2
     log "  guest log: td-guest $DISTRO_NAME cat /root/.td-nethunter-vnc.log"
   fi
 else
