@@ -391,20 +391,39 @@ public final class ResourceScriptsInstaller {
             + "fi\n"
             + "if [ ! -x \"$VENV/bin/python\" ]; then\n"
             + "  echo \"td-resource-litert-lm: creating venv $VENV\"\n"
-            + "  \"$PY\" -m venv \"$VENV\" || { echo \"venv creation failed\" >&2; exit 1; }\n"
+            // --without-pip + --system-site-packages, for two Termux quirks:
+            // ensurepip's bundled wheels are stripped from the package, so the
+            // pip bootstrap fails; and a failing bootstrap aborts venv creation
+            // before --system-site-packages is written to pyvenv.cfg, leaving
+            // the flag silently false. pip comes from pkg on Termux and the
+            // venv inherits it through system site-packages.
+            + "  \"$PY\" -m venv --without-pip --system-site-packages \"$VENV\" || true\n"
+            + "  [ -x \"$VENV/bin/python\" ] || { echo \"venv creation failed\" >&2; exit 1; }\n"
             + "fi\n"
-            + "PY=\"$VENV/bin/python\"\n"
-            + "PIP=\"$VENV/bin/pip\"\n"
-            + "[ -x \"$PIP\" ] || \"$PY\" -m ensurepip --default-pip >/dev/null 2>&1 || true\n"
-            + "[ -x \"$PIP\" ] || { echo \"pip missing in venv\" >&2; exit 1; }\n"
-            + "\"$PIP\" install -q -U pip\n"
-            + "\"$PIP\" install -q --no-deps litert-lm\n"
-            + "if ! \"$PIP\" install -q -U click prompt_toolkit questionary typing-extensions huggingface_hub; then\n"
+            + "PY_VENV=\"$VENV/bin/python\"\n"
+            + "if ! \"$PY_VENV\" -m pip --version >/dev/null 2>&1; then\n"
+            + "  echo \"td-resource-litert-lm: pip missing — installing python-pip, recreating the venv\"\n"
+            + "  pkg install -y python-pip >/dev/null 2>&1 || pkg install -y pip >/dev/null 2>&1 || true\n"
+            + "  rm -rf \"$VENV\"\n"
+            + "  \"$PY\" -m venv --without-pip --system-site-packages \"$VENV\" || true\n"
+            + "  [ -x \"$PY_VENV\" ] || { echo \"venv recreation failed\" >&2; exit 1; }\n"
+            + "  \"$PY_VENV\" -m pip --version >/dev/null 2>&1 \\\n"
+            + "    || { echo \"pip still missing — run: pkg install python-pip\" >&2; exit 1; }\n"
+            + "fi\n"
+            + "PY=\"$PY_VENV\"\n"
+            // pip lives in the system site-packages here, so -U can fail to
+            // uninstall it; never fatal.
+            + "\"$PY\" -m pip install -q -U pip || true\n"
+            + "\"$PY\" -m pip install -q --no-deps litert-lm\n"
+            + "if ! \"$PY\" -m pip install -q -U click prompt_toolkit questionary typing-extensions huggingface_hub; then\n"
             + "  echo \"(huggingface_hub install failed — hf-xet has no Android (bionic) wheel; installing hub without it — downloads use plain HTTP)\"\n"
-            + "  \"$PIP\" install -q -U --no-deps huggingface_hub\n"
-            + "  \"$PIP\" install -q -U click prompt_toolkit questionary typing-extensions filelock fsspec packaging pyyaml requests tqdm httpx2\n"
+            + "  \"$PY\" -m pip install -q -U --no-deps huggingface_hub\n"
+            + "  \"$PY\" -m pip install -q -U click prompt_toolkit questionary typing-extensions filelock fsspec packaging pyyaml requests tqdm\n"
+            // huggingface_hub 2.x hard-requires httpx2 (pure-python httpx fork);
+            // httpx is the older client. Both are pure python, so this lands.
+            + "  \"$PY\" -m pip install -q -U httpx2 || \"$PY\" -m pip install -q -U httpx || true\n"
             + "fi\n"
-            + "\"$PIP\" install -q litert-lm-builder\n"
+            + "\"$PY\" -m pip install -q litert-lm-builder\n"
             + "echo \"td-resource-litert-lm: resolving native engine wheel (android_23/$(uname -m))\"\n"
             + "\"$PY\" <<'PYEOF' || { echo \"native engine setup failed — paste the output above back\" >&2; exit 1; }\n"
             + "import json, os, re, sys, tempfile, urllib.request, zipfile, sysconfig\n"
@@ -435,6 +454,50 @@ public final class ResourceScriptsInstaller {
             + "import litert_lm\n"
             + "print(\"native engine import OK: \" + litert_lm.__file__)\n"
             + "PYEOF\n"
+            // Termux's python3 for Android is built without os.link, but
+            // `litert-lm import` hardlinks (or copies) the model into place and
+            // calls os.link unconditionally -> AttributeError. Install a shim
+            // module plus a .pth so every venv python gets it at startup; a real
+            // linkat() is used when libc exports it, otherwise a copy.
+            + "SITE=\"$(\"$PY\" -c 'import sysconfig; print(sysconfig.get_paths()[\"purelib\"])')\"\n"
+            + "cat > \"$SITE/invapp_android_compat.py\" <<'PYCOMPAT'\n"
+            + "# InVxTermux: Android python builds ship without os.link, but\n"
+            + "# `litert-lm import` hardlinks a model into place. Provide os.link()\n"
+            + "# via libc linkat(), falling back to a copy (slow but correct).\n"
+            + "import errno\n"
+            + "import os\n"
+            + "\n"
+            + "if not hasattr(os, \"link\"):\n"
+            + "    def _invapp_link(src, dst, *, src_dir_fd=None, dst_dir_fd=None,\n"
+            + "                     follow_symlinks=True):\n"
+            + "        if isinstance(src, int) or isinstance(dst, int):\n"
+            + "            raise NotImplementedError(\"os.link() with file descriptors\")\n"
+            + "        if src_dir_fd is not None or dst_dir_fd is not None:\n"
+            + "            raise NotImplementedError(\"os.link() with dir_fd\")\n"
+            + "        err = 0\n"
+            + "        try:\n"
+            + "            import ctypes\n"
+            + "            libc = ctypes.CDLL(\"libc.so\", use_errno=True)\n"
+            + "            linkat = libc.linkat\n"
+            + "            linkat.restype = ctypes.c_int\n"
+            + "            linkat.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int,\n"
+            + "                               ctypes.c_char_p, ctypes.c_int]\n"
+            + "            if linkat(-100, os.fsencode(src), -100, os.fsencode(dst), 0) == 0:\n"
+            + "                return\n"
+            + "            err = ctypes.get_errno()\n"
+            + "        except Exception:\n"
+            + "            err = 0\n"
+            + "        # Same contract as the real call: an existing target is an error,\n"
+            + "        # everything else falls back to a copy (EXDEV/EPERM/no linkat()).\n"
+            + "        if err == errno.EEXIST:\n"
+            + "            raise FileExistsError(err, os.strerror(err), dst)\n"
+            + "        import shutil\n"
+            + "        shutil.copyfile(src, dst, follow_symlinks=follow_symlinks)\n"
+            + "        shutil.copystat(src, dst, follow_symlinks=follow_symlinks)\n"
+            + "\n"
+            + "    os.link = _invapp_link\n"
+            + "PYCOMPAT\n"
+            + "printf 'import invapp_android_compat\\n' > \"$SITE/invapp-android.pth\"\n"
             // $PREFIX/bin/litert-lm is a wrapper, not a symlink to the venv
             // script: the engine needs the GL stubs preloaded, and users invoke
             // `litert-lm` directly. Existing non-wrapper files are left alone.
@@ -456,6 +519,11 @@ public final class ResourceScriptsInstaller {
             + "  chmod 0700 \"$PREFIX/bin/litert-lm.new\"\n"
             + "  mv -f \"$PREFIX/bin/litert-lm.new\" \"$PREFIX/bin/litert-lm\"\n"
             + "fi\n"
+            // Prove the shim is live: the .pth only takes effect in a new
+            // interpreter, so this check would catch a stale/ignored file.
+            + "if ! \"$PY\" -c 'import os, sys; sys.exit(0 if hasattr(os, \"link\") else 1)' >/dev/null 2>&1; then\n"
+            + "  echo \"warning: os.link shim inactive — 'litert-lm import' would fail\" >&2\n"
+            + "fi\n"
             // Hard requirement: --help exercises the native engine import, so a
             // pass here means commands can actually run.
             + "if ! \"$PREFIX/bin/litert-lm\" --help >/dev/null 2>&1; then\n"
@@ -468,6 +536,8 @@ public final class ResourceScriptsInstaller {
             + "echo \"Chat one-shot (CPU):\"\n"
             + "echo \"  litert-lm run --from-huggingface-repo=litert-community/gemma-4-E4B-it-litert-lm gemma-4-E4B-it.litertlm --backend=cpu --prompt='What is 2+2?'\"\n"
             + "echo \"  (models download multi-GB — check free space; --backend=gpu is unsupported: no GL driver here)\"\n"
+            + "echo \"Import a downloaded model (os.link shim installed):\"\n"
+            + "echo \"  litert-lm import <file>.litertlm\"\n"
             + "echo \"Also: litert-lm run <model> (chat) | litert-lm serve <model> (OpenAI-style)\"\n";
     }
 
