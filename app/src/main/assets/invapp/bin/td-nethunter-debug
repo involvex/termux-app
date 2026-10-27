@@ -187,7 +187,7 @@ run_h clean PROOT_NO_SECCOMP=1 PROOT_TMP_DIR="$DTMP" \
   /bin/sh -c 'echo GUEST-EXEC-OK'
 
 h "layer 3c: proot -R, LD_PRELOAD left as injected"
-run_h PROOT_TMP_DIR="$DTMP" \
+run_h env PROOT_TMP_DIR="$DTMP" \
   proot -0 -R "$RFS" -w / -b /dev -b /proc -b /sys -b "$PREFIX:/termux" \
   /bin/sh -c 'echo GUEST-EXEC-OK'
 
@@ -196,9 +196,31 @@ run_h clean env -u PROOT_TMP_DIR \
   proot -0 -R "$RFS" -w / -b /dev -b /proc -b /sys -b "$PREFIX:/termux" \
   /bin/sh -c 'echo GUEST-EXEC-OK'
 
-# Layer 4: what proot-distro itself would run. --get-proot-cmd prints the exact
-# argv + environment the login path builds, without executing it.
-h "layer 4: proot-distro login (as the helpers call it)"
+# Layer 3e/3f: the production invocation (td_proot_exec) execs the *login*
+# shell, which on Kali is /usr/bin/bash — not /bin/sh. bash and dash differ
+# enough (size, libtinfo, brk behaviour) that a dash-only pass proves nothing.
+# 3e is exactly what td_guest_login runs; 3f is the same with dash as control.
+h "layer 3e: production argv, /usr/bin/bash (what td_guest_login runs)"
+run_h clean PROOT_TMP_DIR="$DTMP" PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
+  proot -0 --kill-on-exit --link2symlink -r "$RFS" -w /root \
+  -b /dev -b /proc -b /sys -b /dev/urandom:/dev/random -b "$PREFIX:/termux" \
+  /usr/bin/env -i HOME=/root TERM=xterm-256color \
+  PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+  /usr/bin/bash -c 'echo BASH-OK; uname -m'
+
+h "layer 3f: same, /usr/bin/dash (control)"
+run_h clean PROOT_TMP_DIR="$DTMP" PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
+  proot -0 --kill-on-exit --link2symlink -r "$RFS" -w /root \
+  -b /dev -b /proc -b /sys -b /dev/urandom:/dev/random -b "$PREFIX:/termux" \
+  /usr/bin/env -i HOME=/root TERM=xterm-256color \
+  PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+  /usr/bin/dash -c 'echo DASH-OK'
+
+# Layer 4: what proot-distro itself would run. This is NOT the path the helpers
+# take any more (they exec proot directly); it stays in the report because
+# `proot-distro login` is what users type, and its failure mode is the reason
+# td_guest_login exists.
+h "layer 4: proot-distro login (diagnostic — helpers no longer use it first)"
 if command -v proot-distro >/dev/null 2>&1; then
   run_h clean PROOT_TMP_DIR="$DTMP" proot-distro login "$DISTRO" -- true
   echo "-- proot-distro --get-proot-cmd --"

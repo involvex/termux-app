@@ -114,13 +114,28 @@ if ! vnc_listening "$VNCPORT"; then
   # Xtigervnc directly: the vncserver wrapper needs ssh, which the distro lacks.
   # -SecurityTypes None = no password (localhost-only, so the desktop is not
   # reachable off-device); -desktop names the session (xstartup runs openbox).
-  # td_guest_login falls back to a direct proot exec when proot-distro's login
-  # path cannot exec the guest shell.
-  td_guest_login "$DISTRO_NAME" Xtigervnc ":$DISPLAY_NUM" -localhost \
-    -SecurityTypes None -geometry 1280x720 -depth 24 -desktop td-nethunter \
-    >"$STATE_DIR/vnc-start.log" 2>&1 \
-    || { log "VNC start failed (already running, or Xtigervnc missing in $DISTRO_NAME)"
-         [ -s "$STATE_DIR/vnc-start.log" ] && tail -10 "$STATE_DIR/vnc-start.log" >&2; }
+  # Two things make the server outlive this script: it is started with
+  # `nohup … &` *inside* the guest, and TD_PROOT_KEEP_ALIVE=1 stops proot from
+  # reaping tracees on exit (proot-distro behaves the same; that is why its
+  # logins can leave a desktop running).
+  _vnc_cmd="nohup Xtigervnc :$DISPLAY_NUM -localhost -SecurityTypes None \
+-geometry 1280x720 -depth 24 -desktop td-nethunter \
+>/root/.td-nethunter-vnc.log 2>&1 &"
+  TD_PROOT_KEEP_ALIVE=1 td_guest_login "$DISTRO_NAME" /bin/sh -c "$_vnc_cmd" \
+    >"$STATE_DIR/vnc-start.log" 2>&1
+  # Xtigervnc needs a moment before the port answers.
+  _i=0
+  while [ "$_i" -lt 15 ] && ! vnc_listening "$VNCPORT"; do
+    sleep 1
+    _i=$((_i + 1))
+  done
+  if vnc_listening "$VNCPORT"; then
+    log "VNC listening on 127.0.0.1:$VNCPORT"
+  else
+    log "VNC did not come up (Xtigervnc missing in $DISTRO_NAME?) — launcher log:"
+    [ -s "$STATE_DIR/vnc-start.log" ] && tail -10 "$STATE_DIR/vnc-start.log" >&2
+    log "  guest log: td-guest $DISTRO_NAME cat /root/.td-nethunter-vnc.log"
+  fi
 else
   log "VNC already listening on 127.0.0.1:$VNCPORT"
 fi

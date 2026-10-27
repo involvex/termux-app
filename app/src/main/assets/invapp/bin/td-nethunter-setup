@@ -164,8 +164,9 @@ rootfs_report() {
 }
 
 pd_usable() { # pd_usable <container>
+  [ -d "$ROOTFS_DIR" ] || return 1
   rm -f "$LOGIN_LOG"
-  # td_guest_login tries proot-distro first, then a direct proot exec.
+  # td_guest_login runs a direct proot exec first, proot-distro login second.
   if td_guest_login "$1" true >>"$LOGIN_LOG" 2>&1; then return 0; fi
   # explicit /bin/sh bypasses guest passwd-shell resolution; if this works
   # while `true` failed, the root shell itself was the problem.

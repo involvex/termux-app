@@ -52,7 +52,7 @@ public final class ShellLibraryInstaller {
 
 
     /** Library version — bump to force refresh on upgrade. */
-    public static final String LIBRARY_VERSION = "1.5.0";
+    public static final String LIBRARY_VERSION = "1.6.0";
 
     private ShellLibraryInstaller() {}
 

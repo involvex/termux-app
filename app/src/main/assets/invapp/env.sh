@@ -163,6 +163,13 @@ td_proot_exec() {
     fi
     _tmp="${TD_NETHUNTER_STATE:-$PREFIX/var/td-nethunter}/proot-tmp"
     mkdir -p "$_tmp" "$PREFIX/tmp" 2>/dev/null || true
+    # --kill-on-exit reaps tracees when proot exits, which also kills a daemon
+    # started inside the guest (the VNC server td-nethunter launches). Callers
+    # that need the guest to outlive the session set TD_PROOT_KEEP_ALIVE=1 —
+    # proot-distro itself never kills on exit, which is how its logins leave a
+    # desktop running.
+    _koe="--kill-on-exit"
+    [ "${TD_PROOT_KEEP_ALIVE:-0}" = 1 ] && _koe=""
     # Keep LD_LIBRARY_PATH: proot's own libraries still come from $PREFIX/lib.
     _ldr="$(td_proot_loader)" || _ldr=""
     if [ -n "$_ldr" ]; then
@@ -170,7 +177,7 @@ td_proot_exec() {
             PROOT_LOADER="$_ldr" \
             PROOT_TMP_DIR="$_tmp" \
             PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
-            proot -0 --kill-on-exit --link2symlink -r "$_rfs" -w /root \
+            proot -0 $_koe --link2symlink -r "$_rfs" -w /root \
             -b /dev -b /proc -b /sys \
             -b /dev/urandom:/dev/random \
             -b "$PREFIX:/termux" \
@@ -183,7 +190,7 @@ td_proot_exec() {
         env -u LD_PRELOAD \
             PROOT_TMP_DIR="$_tmp" \
             PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
-            proot -0 --kill-on-exit --link2symlink -r "$_rfs" -w /root \
+            proot -0 $_koe --link2symlink -r "$_rfs" -w /root \
             -b /dev -b /proc -b /sys \
             -b /dev/urandom:/dev/random \
             -b "$PREFIX:/termux" \
@@ -196,18 +203,29 @@ td_proot_exec() {
 }
 
 # td_guest_login <container-name> <cmd...>
-# proot-distro first (it owns container state and the guest environment), then
-# a direct proot exec we control end to end. The fallback is what makes the
-# GUI helpers work when proot-distro's login path cannot exec the guest shell.
+# A direct proot exec first, `proot-distro login` only as a second opinion.
+#
+# The order matters: on this fork `proot-distro login` dies with
+#   proot error: execve("/usr/bin/bash"): No such file or directory
+# even though the guest shell and its ELF interpreter are both present, while
+# the same guest runs fine under `proot -R` with the loader pinned (layer 3 of
+# td-nethunter-debug). proot-distro also launches proot with a scrubbed
+# environment, so proot's compiled-in com.termux RUNPATH/lib paths are gone and
+# proot itself can fail to link (libtalloc.so.2). The direct exec avoids both.
+#
 # LD_PRELOAD is left in place for proot-distro itself: it is a Termux Python
 # program that needs the redirector to find its own stdlib.
 td_guest_login() {
     _name="$1"
     shift
+    [ $# -gt 0 ] || set -- /usr/bin/bash -l
+    if td_proot_exec "$_name" "$@"; then
+        return 0
+    fi
     if command -v proot-distro >/dev/null 2>&1; then
+        echo "td_guest_login: direct proot failed — retrying via proot-distro login" >&2
         PROOT_TMP_DIR="${TD_NETHUNTER_STATE:-$PREFIX/var/td-nethunter}/proot-tmp" \
             proot-distro login "$_name" -- "$@" && return 0
-        echo "td_guest_login: proot-distro login failed — using direct proot" >&2
     fi
-    td_proot_exec "$_name" "$@"
+    return 1
 }

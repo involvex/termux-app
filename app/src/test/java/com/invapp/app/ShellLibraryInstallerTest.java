@@ -8,12 +8,12 @@ public class ShellLibraryInstallerTest {
 
     @Test
     public void libraryVersion_isStableSemver() {
-        assertEquals("1.5.0", ShellLibraryInstaller.libraryVersion());
+        assertEquals("1.6.0", ShellLibraryInstaller.libraryVersion());
     }
 
     @Test
     public void libraryConstants_areAccessible() {
         assertNotNull(ShellLibraryInstaller.class);
-        assertEquals("1.5.0", ShellLibraryInstaller.LIBRARY_VERSION);
+        assertEquals("1.6.0", ShellLibraryInstaller.LIBRARY_VERSION);
     }
 }

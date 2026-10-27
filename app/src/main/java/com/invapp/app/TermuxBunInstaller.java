@@ -1580,6 +1580,10 @@ public final class TermuxBunInstaller {
                 assetWithBashShebang(context, "invapp/bin/td-nethunter", bash));
         writeExec(new File(binDir, "td-nethunter-debug"),
                 assetWithBashShebang(context, "invapp/bin/td-nethunter-debug", bash));
+        // Guest shell/command runner: direct proot exec, because
+        // `proot-distro login` cannot exec the guest shell on this fork.
+        writeExec(new File(binDir, "td-guest"),
+                assetWithBashShebang(context, "invapp/bin/td-guest", bash));
 
         // Vite golden-path scaffold under ~/repos (create-vite + host 0.0.0.0).
         // pwa / pwa-react overlay vite-plugin-pwa on vanilla / react bases.

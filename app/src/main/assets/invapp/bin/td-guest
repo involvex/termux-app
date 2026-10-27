@@ -1,0 +1,36 @@
+#!@BASH@
+# InVxTermux — shell / command runner inside a proot-distro container.
+# Usage: td-guest [distro] [cmd...]
+#   distro  container name (default kali-rolling); anything that is not an
+#           installed container name is treated as the start of cmd
+#   cmd     default: /usr/bin/bash -l
+# Examples:
+#   td-guest                              # root shell in kali-rolling
+#   td-guest ubuntu                       # root shell in ubuntu
+#   td-guest kali-rolling bash -lc 'apt update'
+# Why not `proot-distro login`: on this fork it dies with
+#   execve("/usr/bin/bash"): No such file or directory
+# even though the guest shell and loader are present, and it hands proot an
+# environment whose compiled-in com.termux paths no longer resolve. td-guest
+# uses the direct proot exec from env.sh (loader pinned, LD_PRELOAD cleared).
+# rev: 2026.10.27-1
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+DISTRO="kali-rolling"
+if [ $# -gt 0 ] && [ -d "$(td_proot_rootfs "$1")" ]; then
+    DISTRO="$1"
+    shift
+fi
+
+if [ ! -d "$(td_proot_rootfs "$DISTRO")" ]; then
+    echo "td-guest: no container '$DISTRO' — install one first:" >&2
+    echo "  td-nethunter-setup [distro]     # e.g. kalilinux/kali-rolling" >&2
+    echo "  installed: $(ls "$PREFIX/var/lib/proot-distro/containers" 2>/dev/null | tr '\n' ' ')" >&2
+    exit 1
+fi
+
+# No argv: interactive root shell. The direct exec sets HOME/TERM/PATH itself.
+# No `exec`: td_guest_login is a shell function, and the guest shell must stay a
+# child so Ctrl-C / exit return here cleanly.
+[ $# -gt 0 ] || set -- /usr/bin/bash -l
+td_guest_login "$DISTRO" "$@"
