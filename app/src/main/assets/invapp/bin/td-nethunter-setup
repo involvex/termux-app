@@ -37,7 +37,7 @@ WEBSOCKIFY_SHA256="a24c2fcb0bbb29b0ff68b355dcd4ba3324b629928b2fcbd426e46c70ebbe3
 
 log() { printf 'td-nethunter-setup: %s\n' "$*"; }
 die() { printf 'td-nethunter-setup: ERROR: %s\n' "$*" >&2; exit 1; }
-REV="2026.10.24-1 (guest-shell repair + 5.x container path; interpreter probe)"
+REV="2026.10.27-1 (direct-proot fallback + shared rootfs/TMP resolution)"
 
 if [ "${INVAPP_ON_DEVICE:-0}" != 1 ]; then
   log "device-only helper"
@@ -120,10 +120,9 @@ log "websockify -> $WS_DIR/websockify-master (python3 -m websockify)"
 # retries without proot's seccomp filters, which some Android devices reject.
 LOGIN_LOG="$STATE_DIR/login-check.log"
 # proot-distro 5.x stores rootfs under containers/<name>/rootfs; older builds
-# used installed-rootfs/<name>. Prefer the new layout, fall back to legacy.
-ROOTFS_DIR="$PREFIX/var/lib/proot-distro/containers/$DISTRO_NAME/rootfs"
-[ -d "$ROOTFS_DIR" ] \
-  || ROOTFS_DIR="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO_NAME"
+# used installed-rootfs/<name>. Resolved by the shared helper so the setup, the
+# run script and the self-test cannot disagree about which path they mean.
+ROOTFS_DIR="$(td_proot_rootfs "$DISTRO_NAME")"
 # proot's default temp dir must exist (its loader + exit-cleanup live there).
 mkdir -p "$PREFIX/tmp"
 
@@ -166,13 +165,12 @@ rootfs_report() {
 
 pd_usable() { # pd_usable <container>
   rm -f "$LOGIN_LOG"
-  if proot-distro login "$1" -- true >>"$LOGIN_LOG" 2>&1; then return 0; fi
-  PROOT_NO_SECCOMP=1 proot-distro login "$1" -- true >>"$LOGIN_LOG" 2>&1 && return 0
+  # td_guest_login tries proot-distro first, then a direct proot exec.
+  if td_guest_login "$1" true >>"$LOGIN_LOG" 2>&1; then return 0; fi
   # explicit /bin/sh bypasses guest passwd-shell resolution; if this works
   # while `true` failed, the root shell itself was the problem.
   echo "--- probe: explicit /bin/sh" >>"$LOGIN_LOG"
-  PROOT_NO_SECCOMP=1 proot-distro login "$1" -- /bin/sh -c "true" \
-    >>"$LOGIN_LOG" 2>&1
+  td_guest_login "$1" /bin/sh -c true >>"$LOGIN_LOG" 2>&1
 }
 pd_fail() { # pd_fail <message>
   if [ -s "$LOGIN_LOG" ]; then
@@ -199,7 +197,7 @@ fi
 # a failed apt run shows its tail instead of a bare die.
 log "installing VNC stack inside $DISTRO_NAME (apt)…"
 APT_LOG="$STATE_DIR/apt-install.log"
-if ! proot-distro login "$DISTRO_NAME" -- sh -c '
+if ! td_guest_login "$DISTRO_NAME" sh -c '
   apt-get update -qq
   apt-get install -y --no-install-recommends \
       tigervnc-standalone-server openbox xterm 2>/dev/null \
@@ -216,8 +214,8 @@ fi
 case "$DISTRO_NAME" in
   kali*)
     log "installing NetHunter helpers (nethunter-utils, best effort)…"
-    if proot-distro login "$DISTRO_NAME" \
-        -- apt-get install -y --no-install-recommends nethunter-utils \
+    if td_guest_login "$DISTRO_NAME" \
+        apt-get install -y --no-install-recommends nethunter-utils \
         >>"$APT_LOG" 2>&1; then
       log "NetHunter CLI helpers installed"
     else
@@ -227,7 +225,7 @@ esac
 
 # xstartup: a minimal openbox session (idempotent rewrite).
 log "writing xstartup"
-proot-distro login "$DISTRO_NAME" -- sh -c "mkdir -p ~/.vnc && cat > ~/.vnc/xstartup" <<'XSTARTUP'
+td_guest_login "$DISTRO_NAME" sh -c "mkdir -p ~/.vnc && cat > ~/.vnc/xstartup" <<'XSTARTUP'
 #!/bin/sh
 openbox &
 xterm -geometry 88x24+10+10 &

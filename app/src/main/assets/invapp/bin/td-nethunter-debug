@@ -5,30 +5,51 @@
 # attempts (bypassing proot-distro so its shell-wrapping can't mask results).
 # Paste the whole output back on failure. Usage: td-nethunter-debug [distro]
 #   (default kali-rolling)
-# rev: 2026.10.24-1
+# rev: 2026.10.27-1
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 
 DISTRO="${1:-kali-rolling}"
 # proot-distro 5.x layout (legacy fallback: installed-rootfs/<name>).
 RFS="$PREFIX/var/lib/proot-distro/containers/$DISTRO/rootfs"
-[ -d "$RFS" ] || RFS="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO"
+if [ -d "$RFS" ]; then
+  RFS_LAYOUT="containers/$DISTRO/rootfs (5.x)"
+else
+  RFS="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO"
+  RFS_LAYOUT="installed-rootfs/$DISTRO (legacy)"
+fi
 DTMP="$PREFIX/var/td-nethunter/debug-proot-tmp"
 
 h() { printf '\n== %s\n' "$*"; }
+# proot's preload namespace must be clear for a guest exec: the path redirector
+# and termux-exec rewrite absolute paths (/bin, /usr/bin, /data/data/com.termux)
+# — exactly what must not happen to a guest argv. proot-distro itself drops
+# LD_PRELOAD from the environment it hands to proot, so a direct proot run that
+# keeps it is not comparable.
+clean() { env -u LD_PRELOAD "$@"; }
+# run_h <cmd...>: head the output, then report the *command's* status (a bare
+# `cmd | head; echo $?` would report head's).
+run_h() {
+  "$@" 2>&1 | head -16
+  printf 'rc=%s\n' "${PIPESTATUS[0]}"
+}
 
 h "environment"
 echo "PREFIX=$PREFIX"
 echo "TMPDIR=${TMPDIR-<unset>}"
 echo "LD_PRELOAD=${LD_PRELOAD-<unset>}"
 echo "PROOT_TMP_DIR=${PROOT_TMP_DIR-<unset>}"
+echo "uname=$(uname -a)"
 
 h "tools"
-for t in proot proot-distro python3 bash; do
+for t in proot proot-distro python3 bash readelf ldd; do
   printf '%-14s %s\n' "$t" "$(command -v "$t" 2>/dev/null || echo MISSING)"
 done
 
 h "proot --version"
 proot --version 2>&1 | head -3 || true
+ls -l "$PREFIX/bin/proot" 2>&1
+echo "proot loader dir:"
+ls -l "$PREFIX/libexec/proot" 2>&1 | head -5
 
 h "default tmp: $PREFIX/tmp"
 if [ -d "$PREFIX/tmp" ]; then
@@ -62,92 +83,125 @@ else
   echo "mkdtemp-style: FAILED"
 fi
 
-h "guest rootfs ($DISTRO) — plain host files"
-if [ -d "$RFS" ]; then
-  ls -ld "$RFS/bin" "$RFS/usr/bin" 2>&1
-  for f in /usr/bin/bash /bin/bash /bin/sh /usr/bin/env; do
-    if [ -e "$RFS$f" ]; then
-      printf '%-16s present  first bytes: %s\n' "$f" \
-        "$(head -c 8 "$RFS$f" 2>/dev/null | od -An -tx1 | tr -s ' ' | head -1)"
-    else
-      printf '%-16s MISSING\n' "$f"
-    fi
-  done
-  grep '^root:' "$RFS/etc/passwd" 2>/dev/null || echo "no root: line in passwd"
-  df -h "$PREFIX" 2>/dev/null | tail -2
-  # ELF interpreter: proot relies on the guest loader existing for *every*
-  # exec'd guest binary. Missing /lib/ld-linux-aarch64.so.1 (or its usr-merge
-  # target) produces exactly "execve(...): No such file or directory" even
-  # though the shell file itself is present and is a valid ELF.
-  echo "-- ELF interpreter sniff + presence --"
-  for f in /bin/sh /bin/bash; do
-    interp=""
-    if [ -e "$RFS$f" ]; then
-      interp="$(grep -aoE '(/lib|/usr/lib|/lib64|/usr/lib64)[^ ]*ld(-[^ ]*)?\.so\.[0-9]+' "$RFS$f" 2>/dev/null | head -1)"
-      printf '  %-10s PT_INTERP: %-34s' "$f" "${interp:-<none-found>}"
-      if [ -n "$interp" ] && [ -e "$RFS$interp" ]; then
-        echo "present"
-      elif [ -n "$interp" ]; then
-        echo "MISSING in rootfs  <-- likely root cause"
-      else
-        echo "static or sniff failed"
-      fi
-    fi
-  done
-  echo "-- rootfs interpreter dirs --"
-  ls -ld "$RFS/lib" "$RFS/lib64" "$RFS/usr/lib" "$RFS/usr/lib/aarch64-linux-gnu" 2>&1
-  ls -l "$RFS/usr/lib/ld-linux-aarch64.so.1" "$RFS/lib/ld-linux-aarch64.so.1" \
-        "$RFS/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1" 2>&1
-else
+# Layer 1: proot itself, no rootfs at all. A failure here is a broken proot
+# (missing loader, ptrace/seccomp, temp dir), not a rootfs problem.
+h "layer 1: proot with the HOST shell (no -r)"
+run_h clean PROOT_TMP_DIR="$DTMP" proot -0 "$PREFIX/bin/sh" -c 'echo HOST-PROOT-OK'
+
+h "layer 1b: same with PROOT_NO_SECCOMP=1"
+run_h clean PROOT_NO_SECCOMP=1 PROOT_TMP_DIR="$DTMP" \
+  proot -0 "$PREFIX/bin/sh" -c 'echo HOST-PROOT-OK'
+
+h "guest rootfs ($DISTRO) — $RFS_LAYOUT"
+if [ ! -d "$RFS" ]; then
   echo "NOT INSTALLED — run td-nethunter-setup first"
+  echo
+  echo "Paste the entire output back if anything failed."
+  exit 0
 fi
+ls -ld "$RFS/bin" "$RFS/usr/bin" 2>&1
+for f in /usr/bin/bash /bin/bash /bin/sh /usr/bin/env /usr/bin/dash; do
+  if [ -L "$RFS$f" ]; then
+    printf '%-16s symlink -> %s\n' "$f" "$(readlink "$RFS$f")"
+  elif [ -e "$RFS$f" ]; then
+    printf '%-16s present  first bytes: %s  mode: %s\n' "$f" \
+      "$(head -c 8 "$RFS$f" 2>/dev/null | od -An -tx1 | tr -s ' ' | head -1)" \
+      "$(ls -l "$RFS$f" | awk '{print $1}')"
+  else
+    printf '%-16s MISSING\n' "$f"
+  fi
+done
+grep '^root:' "$RFS/etc/passwd" 2>/dev/null || echo "no root: line in passwd"
+df -h "$PREFIX" 2>/dev/null | tail -2
 
-# Direct proot tests: -0 fake root, -R rootfs + standard binds. No proot-distro
-# involved, so a pass here means proot itself works and the problem is in
-# proot-distro's login path (guest passwd shell), and vice versa.
-h "direct proot, private temp + LD_PRELOAD cleared"
-if [ -e "$RFS/bin/sh" ]; then
-  env -u LD_PRELOAD PROOT_TMP_DIR="$DTMP" \
-    proot -0 -R "$RFS" -w / \
-    -b /dev -b /proc -b /sys \
-    -b "$PREFIX:/termux" \
-    /bin/sh -c 'echo GUEST-EXEC-OK; uname -m; ls /bin/sh' 2>&1 | head -10
-  echo "rc=$?"
+# proot relies on the guest loader existing for *every* exec'd binary. A missing
+# /lib/ld-linux-aarch64.so.1 (or its usr-merge target) produces exactly
+# "execve(...): No such file or directory" even though the shell file itself is
+# present and is a valid ELF: execve(2) answers ENOENT when PT_INTERP does not
+# resolve. That is the single most likely cause of the reported failure.
+echo "-- ELF interpreter sniff + presence --"
+for f in /bin/sh /usr/bin/bash; do
+  interp=""
+  if [ -e "$RFS$f" ]; then
+    interp="$(grep -aoE '(/lib|/usr/lib|/lib64|/usr/lib64)[^ ]*ld(-[^ ]*)?\.so\.[0-9]+' "$RFS$f" 2>/dev/null | head -1)"
+    printf '  %-12s PT_INTERP: %-38s' "$f" "${interp:-<none-found>}"
+    if [ -n "$interp" ] && [ -e "$RFS$interp" ]; then
+      echo "present"
+    elif [ -n "$interp" ]; then
+      echo "MISSING in rootfs  <-- likely root cause"
+    else
+      echo "static or sniff failed"
+    fi
+  fi
+done
+echo "-- rootfs interpreter dirs --"
+ls -ld "$RFS/lib" "$RFS/lib64" "$RFS/usr/lib" "$RFS/usr/lib/aarch64-linux-gnu" 2>&1
+ls -l "$RFS/usr/lib/ld-linux-aarch64.so.1" "$RFS/lib/ld-linux-aarch64.so.1" \
+      "$RFS/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1" 2>&1
+
+echo "-- library deps (host side) --"
+if command -v readelf >/dev/null 2>&1; then
+  readelf -l "$RFS/bin/sh" 2>&1 | grep -A1 "Requesting program interpreter"
+  readelf -h "$RFS/bin/sh" 2>&1 | grep -E 'Class|Machine|Type'
+fi
+if command -v ldd >/dev/null 2>&1; then
+  echo "--- ldd of sh (guest libs are NOT in the host loader path: errors expected) ---"
+  ldd "$RFS/bin/sh" 2>&1 | head -10
+fi
+for lib in libc.so.6 libdl.so.2 libpthread.so.0 libm.so.6; do
+  p=$(find "$RFS/usr/lib" "$RFS/lib" -name "$lib" 2>/dev/null | head -1)
+  echo "  $lib: ${p:-MISSING}"
+done
+
+# Layer 2: the guest loader itself, run by the HOST. No proot involved: if this
+# prints GUEST-OK the rootfs + dynamic loader are healthy and the fault is in
+# proot's exec translation. If it fails, proot is not what broke.
+h "layer 2: guest loader run directly on the host (no proot)"
+if [ -e "$RFS/lib/ld-linux-aarch64.so.1" ] && [ -e "$RFS/bin/sh" ]; then
+  run_h clean "$RFS/lib/ld-linux-aarch64.so.1" \
+    --library-path "$RFS/usr/lib/aarch64-linux-gnu:$RFS/lib/aarch64-linux-gnu:$RFS/usr/lib" \
+    "$RFS/bin/sh" -c 'echo GUEST-OK; uname -m'
 else
-  echo "cannot test — $RFS/bin/sh missing"
+  echo "cannot test — loader or /bin/sh missing"
 fi
 
-h "direct proot, private temp, LD_PRELOAD as injected"
-if [ -e "$RFS/bin/sh" ]; then
-  PROOT_TMP_DIR="$DTMP" \
-    proot -0 -R "$RFS" -w / \
-    -b /dev -b /proc -b /sys \
-    -b "$PREFIX:/termux" \
-    /bin/sh -c 'echo GUEST-EXEC-OK' 2>&1 | head -10
-  echo "rc=$?"
+# Layer 3: proot with the real rootfs. -R adds the standard binds; the bind list
+# matches what proot-distro passes (/dev, /proc, /sys are mandatory).
+h "layer 3: proot -R, private temp, LD_PRELOAD cleared"
+run_h clean PROOT_TMP_DIR="$DTMP" \
+  proot -0 -R "$RFS" -w / -b /dev -b /proc -b /sys -b "$PREFIX:/termux" \
+  /bin/sh -c 'echo GUEST-EXEC-OK; uname -m; ls -l /bin/sh'
+
+h "layer 3b: proot -R with PROOT_NO_SECCOMP=1"
+run_h clean PROOT_NO_SECCOMP=1 PROOT_TMP_DIR="$DTMP" \
+  proot -0 -R "$RFS" -w / -b /dev -b /proc -b /sys -b "$PREFIX:/termux" \
+  /bin/sh -c 'echo GUEST-EXEC-OK'
+
+h "layer 3c: proot -R, LD_PRELOAD left as injected"
+run_h PROOT_TMP_DIR="$DTMP" \
+  proot -0 -R "$RFS" -w / -b /dev -b /proc -b /sys -b "$PREFIX:/termux" \
+  /bin/sh -c 'echo GUEST-EXEC-OK'
+
+h "layer 3d: proot -R, default temp dir"
+run_h clean env -u PROOT_TMP_DIR \
+  proot -0 -R "$RFS" -w / -b /dev -b /proc -b /sys -b "$PREFIX:/termux" \
+  /bin/sh -c 'echo GUEST-EXEC-OK'
+
+# Layer 4: what proot-distro itself would run. --get-proot-cmd prints the exact
+# argv + environment the login path builds, without executing it.
+h "layer 4: proot-distro login (as the helpers call it)"
+if command -v proot-distro >/dev/null 2>&1; then
+  run_h clean PROOT_TMP_DIR="$DTMP" proot-distro login "$DISTRO" -- true
+  echo "-- proot-distro --get-proot-cmd --"
+  run_h clean PROOT_TMP_DIR="$DTMP" proot-distro login "$DISTRO" --get-proot-cmd
+else
+  echo "proot-distro MISSING"
 fi
 
-h "direct proot, default tmp dir"
-if [ -e "$RFS/bin/sh" ]; then
-  env -u PROOT_TMP_DIR \
-    proot -0 -R "$RFS" -w / \
-    -b /dev -b /proc -b /sys \
-    -b "$PREFIX:/termux" \
-    /bin/sh -c 'echo GUEST-EXEC-OK' 2>&1 | head -10
-  echo "rc=$?"
-fi
+h "layer 5: verbosity (first 40 lines of PROOT_VERBOSE=-1)"
+clean PROOT_VERBOSE=-1 PROOT_TMP_DIR="$DTMP" \
+  proot -0 -R "$RFS" -w / -b /dev -b /proc -b /sys \
+  /bin/sh -c 'echo GUEST-EXEC-OK' 2>&1 | head -40
 
 h "done"
 echo "Paste the entire output back if anything failed."
-
-
-  echo "-- library deps (host side) --"
-  readelf -l "$RFS/bin/sh" 2>&1 | grep -A1 "Requesting program interpreter"
-  echo "--- ldd of sh ---"
-  ldd "$RFS/bin/sh" 2>&1 | head -20
-  echo "--- ldd of ld-linux ---"
-  ldd "$RFS/lib/ld-linux-aarch64.so.1" 2>&1 | head -10
-  for lib in libc.so.6 libdl.so.2 libpthread.so.0; do
-    p=$(find "$RFS/usr/lib" "$RFS/lib" -name "$lib" 2>&1 | head -1)
-    echo "$lib: ${p:-MISSING}"
-  done

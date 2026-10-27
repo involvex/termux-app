@@ -106,3 +106,73 @@ td_require_git() {
         exit 127
     fi
 }
+
+# --- proot guest execution (td-nethunter*) -----------------------------------
+# The GUI helpers need THREE things proot-distro does not give us on this fork:
+# a rootfs path that resolves across proot-distro layouts, proot's temp dir
+# decoupled from the shared $PREFIX/tmp, and an exec that a fallback can take
+# over when `proot-distro login` fails. All three live here so the scripts,
+# the self-test and the container twin agree.
+
+# td_proot_rootfs <container-name> — print the container's rootfs path.
+# proot-distro 5.x keeps containers under containers/<name>/rootfs; older
+# builds used installed-rootfs/<name>. The path is printed whether or not it
+# exists, so callers can report the path they tried.
+td_proot_rootfs() {
+    _rfs="$PREFIX/var/lib/proot-distro/containers/$1/rootfs"
+    if [ ! -d "$_rfs" ]; then
+        _rfs="$PREFIX/var/lib/proot-distro/installed-rootfs/$1"
+    fi
+    printf '%s\n' "$_rfs"
+}
+
+# td_proot_exec <container-name> <cmd...>
+# Runs <cmd> as root inside the guest, with the binds a desktop needs.
+#
+# LD_PRELOAD is dropped, not left alone: the path redirector and termux-exec
+# rewrite absolute paths (/bin, /usr/bin, /data/data/com.termux) at exec time,
+# and a guest argv must reach proot untouched — proot-distro pops it for proot
+# for the same reason. PROOT_TMP_DIR is private so a concurrent proot session
+# cannot wipe the loader proot extracts there.
+# PROOT_NO_SECCOMP defaults to 1: Android's seccomp filter rejects the ptrace
+# setup proot uses on several devices, and the cost is only speed.
+td_proot_exec() {
+    _name="$1"
+    shift
+    _rfs="$(td_proot_rootfs "$_name")"
+    if [ ! -d "$_rfs" ]; then
+        echo "td_proot_exec: no rootfs for '$_name' (looked in $_rfs)" >&2
+        return 1
+    fi
+    _tmp="${TD_NETHUNTER_STATE:-$PREFIX/var/td-nethunter}/proot-tmp"
+    mkdir -p "$_tmp" "$PREFIX/tmp" 2>/dev/null || true
+    env -u LD_PRELOAD \
+        PROOT_TMP_DIR="$_tmp" \
+        PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
+        proot -0 --kill-on-exit --link2symlink -r "$_rfs" -w /root \
+        -b /dev -b /proc -b /sys \
+        -b /dev/urandom:/dev/random \
+        -b "$PREFIX:/termux" \
+        /usr/bin/env -i \
+        HOME=/root \
+        TERM="${TERM:-xterm-256color}" \
+        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+        "$@"
+}
+
+# td_guest_login <container-name> <cmd...>
+# proot-distro first (it owns container state and the guest environment), then
+# a direct proot exec we control end to end. The fallback is what makes the
+# GUI helpers work when proot-distro's login path cannot exec the guest shell.
+# LD_PRELOAD is left in place for proot-distro itself: it is a Termux Python
+# program that needs the redirector to find its own stdlib.
+td_guest_login() {
+    _name="$1"
+    shift
+    if command -v proot-distro >/dev/null 2>&1; then
+        PROOT_TMP_DIR="${TD_NETHUNTER_STATE:-$PREFIX/var/td-nethunter}/proot-tmp" \
+            proot-distro login "$_name" -- "$@" && return 0
+        echo "td_guest_login: proot-distro login failed — using direct proot" >&2
+    fi
+    td_proot_exec "$_name" "$@"
+}
