@@ -116,14 +116,29 @@ td_require_git() {
 
 # td_proot_rootfs <container-name> — print the container's rootfs path.
 # proot-distro 5.x keeps containers under containers/<name>/rootfs; older
-# builds used installed-rootfs/<name>. The path is printed whether or not it
-# exists, so callers can report the path they tried.
+# builds used installed-rootfs/<name>. An existing directory always wins. If
+# neither exists, print the 5.x path: that is where an install will put it, so
+# a probe run just before `proot-distro install` reports the real destination
+# instead of the legacy one (printing the legacy path made a fresh install look
+# broken and sent every re-run to the wrong directory).
 td_proot_rootfs() {
-    _rfs="$PREFIX/var/lib/proot-distro/containers/$1/rootfs"
-    if [ ! -d "$_rfs" ]; then
-        _rfs="$PREFIX/var/lib/proot-distro/installed-rootfs/$1"
+    _new="$PREFIX/var/lib/proot-distro/containers/$1/rootfs"
+    _old="$PREFIX/var/lib/proot-distro/installed-rootfs/$1"
+    if [ -d "$_new" ]; then
+        printf '%s\n' "$_new"
+    elif [ -d "$_old" ]; then
+        printf '%s\n' "$_old"
+    else
+        printf '%s\n' "$_new"
     fi
-    printf '%s\n' "$_rfs"
+}
+
+# td_proot_rootfs_candidates <container-name> — print both known layouts, one
+# per line, so a diagnostic can show exactly what was probed.
+td_proot_rootfs_candidates() {
+    printf '%s\n' \
+        "$PREFIX/var/lib/proot-distro/containers/$1/rootfs" \
+        "$PREFIX/var/lib/proot-distro/installed-rootfs/$1"
 }
 
 # td_proot_loader — print the proot loader path, or nothing.

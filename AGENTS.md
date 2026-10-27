@@ -173,6 +173,14 @@ See `ROADMAP.md`.
   `td-guest [distro] [cmd...]` for an interactive root shell or a one-off
   command. Never drop `LD_PRELOAD` for `proot-distro` itself: it is Termux
   Python and needs the redirector to find its own stdlib.
+- `td-nethunter-setup` → "container not usable after install" on a **first**
+  run while `td-guest <distro>` works — the setup used to resolve the rootfs
+  path once *before* `proot-distro install`, so it cached the legacy
+  `installed-rootfs/<name>` path and then reported it missing while the real
+  rootfs sat in `containers/<name>/rootfs` (proot-distro 5.x). `pd_usable`
+  now re-resolves on every call and `td_proot_rootfs` prefers the existing
+  directory, defaulting to the 5.x path when neither exists. Failure reports
+  print both candidates plus `proot-distro list`.
 
 ## 2. Useful Commands
 

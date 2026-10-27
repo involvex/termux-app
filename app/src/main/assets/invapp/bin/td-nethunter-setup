@@ -37,7 +37,7 @@ WEBSOCKIFY_SHA256="a24c2fcb0bbb29b0ff68b355dcd4ba3324b629928b2fcbd426e46c70ebbe3
 
 log() { printf 'td-nethunter-setup: %s\n' "$*"; }
 die() { printf 'td-nethunter-setup: ERROR: %s\n' "$*" >&2; exit 1; }
-REV="2026.10.27-1 (direct-proot fallback + shared rootfs/TMP resolution)"
+REV="2026.10.27-2 (fresh-install rootfs re-resolution)"
 
 if [ "${INVAPP_ON_DEVICE:-0}" != 1 ]; then
   log "device-only helper"
@@ -147,25 +147,35 @@ repair_guest_shell() {
 # Human-readable state of the guest rootfs + proot environment, printed on
 # login failure so a device run is self-describing.
 rootfs_report() {
+  echo "--- proot-distro list:" >&2
+  proot-distro list 2>&1 | head -20 >&2
+  echo "--- rootfs paths probed for $DISTRO_NAME:" >&2
+  td_proot_rootfs_candidates "$DISTRO_NAME" | while read -r p; do
+    if [ -d "$p" ]; then echo "  present: $p" >&2
+    else echo "  missing: $p" >&2; fi
+  done
+  echo "--- resolved rootfs: $ROOTFS_DIR" >&2
   if [ -d "$ROOTFS_DIR" ]; then
-    echo "--- rootfs: $ROOTFS_DIR" >&2
     ls -ld "$ROOTFS_DIR/bin" "$ROOTFS_DIR/usr/bin" 2>&1 | head -2 >&2
     for f in /usr/bin/bash /bin/bash /bin/sh /usr/bin/env; do
-      [ -e "$ROOTFS_DIR$f" ] && echo "rootfs$f: present" \
-        || echo "rootfs$f: MISSING" >&2
+      [ -e "$ROOTFS_DIR$f" ] && echo "  rootfs$f: present" \
+        || echo "  rootfs$f: MISSING" >&2
     done
-    echo "rootfs root shell: $(awk -F: '$1=="root"{print $7}' "$ROOTFS_DIR/etc/passwd" 2>/dev/null)" >&2
-    echo "free space: $(df -h "$PREFIX" 2>/dev/null | tail -1)" >&2
-  else
-    echo "rootfs dir MISSING: $ROOTFS_DIR" >&2
+    echo "  root shell: $(awk -F: '$1=="root"{print $7}' "$ROOTFS_DIR/etc/passwd" 2>/dev/null)" >&2
+    echo "  free space: $(df -h "$PREFIX" 2>/dev/null | tail -1)" >&2
   fi
   echo "LD_PRELOAD=${LD_PRELOAD-<unset>}" >&2
   echo "PROOT_TMP_DIR=$PROOT_TMP_DIR ($(ls "$PROOT_TMP_DIR" 2>/dev/null | head -3 | tr '\n' ' '))" >&2
 }
 
 pd_usable() { # pd_usable <container>
-  [ -d "$ROOTFS_DIR" ] || return 1
+  # Re-resolve on every call. A first install moves the rootfs from "nowhere"
+  # to containers/<name>/rootfs; caching the path once before the install made
+  # a perfectly good container look broken right after a fresh install
+  # ("rootfs dir MISSING: …/installed-rootfs/<name>").
+  ROOTFS_DIR="$(td_proot_rootfs "$1")"
   rm -f "$LOGIN_LOG"
+  [ -d "$ROOTFS_DIR" ] || return 1
   # td_guest_login runs a direct proot exec first, proot-distro login second.
   if td_guest_login "$1" true >>"$LOGIN_LOG" 2>&1; then return 0; fi
   # explicit /bin/sh bypasses guest passwd-shell resolution; if this works
@@ -185,7 +195,11 @@ pd_fail() { # pd_fail <message>
 # proot-distro: install the distro rootfs once (OCI/Docker-Hub ref).
 if ! pd_usable "$DISTRO_NAME"; then
   log "installing $DISTRO_IMAGE rootfs (first run; size varies)…"
-  proot-distro install "$DISTRO_IMAGE" || die "proot-distro install failed for $DISTRO_IMAGE"
+  # A re-run on an existing container makes install exit non-zero; the probe
+  # below decides, so this is not fatal on its own.
+  proot-distro install "$DISTRO_IMAGE" \
+    || log "proot-distro install returned non-zero — probing for an existing container"
+  ROOTFS_DIR="$(td_proot_rootfs "$DISTRO_NAME")"
   repair_guest_shell
 fi
 if ! pd_usable "$DISTRO_NAME"; then
