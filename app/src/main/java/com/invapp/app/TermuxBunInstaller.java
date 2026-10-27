@@ -64,6 +64,7 @@ public final class TermuxBunInstaller {
                 if (BUNDLED_BUN_VERSION.equals(readStamp(stamp))) {
                     installShellHelpers(context);
                     installOpencodeShimFromAssets(context);
+                    installLitertGlStubsFromAssets(context);
                     ensureWorkspaceDirs();
                     return;
                 }
@@ -167,6 +168,7 @@ public final class TermuxBunInstaller {
 
         installShellHelpers(context);
         installOpencodeShimFromAssets(context);
+        installLitertGlStubsFromAssets(context);
     }
 
     /**
@@ -207,6 +209,44 @@ public final class TermuxBunInstaller {
             Logger.logInfo(LOG_TAG, "Installed OpenCode DNS shim → " + dest);
         } catch (Exception e) {
             Logger.logWarn(LOG_TAG, "OpenCode shim asset install failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Ships no-op EGL/GLES stubs so the LiteRT-LM native engine can be loaded.
+     *
+     * <p>{@code litert-lm-api} (every Android wheel, 0.14 → 0.18) links
+     * {@code libGLESv2.so}, {@code libEGL.so} and {@code libGLESv3.so}. The
+     * system {@code libGLESv3.so} has an undefined reference to
+     * {@code android::egl_get_connection()}, a <em>vendor</em> libEGL symbol an
+     * app process cannot resolve, so {@code dlopen()} of the engine dies with
+     * {@code cannot locate symbol "_ZN7android18egl_get_connectionEv"}. The CPU
+     * backend never calls GL, so stubs with the system SONAMEs resolve the
+     * engine's references and the loader stops pulling in the graphics stack.
+     *
+     * <p>Installed to {@code $PREFIX/lib/litert-lm-gl/} (never
+     * {@code $PREFIX/lib}, where every process would see them) and preloaded by
+     * the {@code litert-lm} wrapper only.
+     */
+    private static void installLitertGlStubsFromAssets(@NonNull Context context) {
+        String abi = android.os.Build.SUPPORTED_ABIS.length > 0
+            ? android.os.Build.SUPPORTED_ABIS[0] : "";
+        String assetDir;
+        if ("arm64-v8a".equals(abi) || "aarch64".equals(abi)) {
+            assetDir = "arm64-v8a";
+        } else if ("x86_64".equals(abi)) {
+            assetDir = "x86_64";
+        } else {
+            return; // 32-bit ABIs have no litert-lm-api wheel.
+        }
+        File destDir = new File(TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH,
+            "litert-lm-gl");
+        for (String soname : new String[] {"libEGL.so", "libGLESv2.so", "libGLESv3.so"}) {
+            File dest = new File(destDir, soname);
+            if (!ShellLibraryInstaller.writeAssetToFile(
+                    context, "litert-lm-gl/" + assetDir + "/" + soname, dest, 0644)) {
+                Logger.logWarn(LOG_TAG, "LiteRT-LM GL stub install failed: " + soname);
+            }
         }
     }
 

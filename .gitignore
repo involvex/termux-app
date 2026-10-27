@@ -54,6 +54,9 @@ public/
 # OpenCode glibc DNS shim (arm64) shipped in APK assets
 !app/src/main/assets/opencode/*.so
 
+# LiteRT-LM no-op EGL/GLES stubs (arm64-v8a + x86_64) shipped in APK assets
+!app/src/main/assets/litert-lm-gl/*/*.so
+
 # Local debug scratch (OpenCode/glibc) — do not commit
 native-tmp/
 
