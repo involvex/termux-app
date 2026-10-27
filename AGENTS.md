@@ -138,6 +138,26 @@ See `ROADMAP.md`.
   maintainer script shebang is `#!/data/data/com.termux/.../sh`. Reopen app,
   `invapp-fix-dpkg-scripts`, `pkg install -f openjdk-17` (apt/dpkg/pkg need
   redirector wrappers from `TermuxShellEnvironment`).
+- `litert-lm` → `cannot locate symbol "_ZN7android18egl_get_connectionEv"` /
+  `egl_*` — every Android `litert-lm-api` wheel (0.14 → 0.18) hard-links
+  `libEGL/libGLESv2/libGLESv3`, and the system `libGLESv3.so` needs a
+  vendor-only libEGL symbol an app process cannot resolve, so the engine
+  cannot even be `dlopen()`ed for `--help`. The APK ships no-op stubs in
+  `$PREFIX/lib/litert-lm-gl/` (`assets/litert-lm-gl/<abi>/`, copied by
+  `TermuxBunInstaller`); the generated `$PREFIX/bin/litert-lm` wrapper
+  preloads them. Do **not** "fix" this by pinning another wheel version (all
+  of them link the same GLs) or by installing a GPU driver: the CPU backend
+  never calls GL, and `--backend=gpu` stays unsupported.
+- `proot-distro login` → `execve("/usr/bin/sh"): No such file or directory`
+  while the guest shell is verifiably present — either the guest loader
+  (`PT_INTERP`) is missing in the rootfs, or proot's own exec path breaks on
+  the device. `td-nethunter-debug` prints each layer (host proot, guest loader
+  run directly, `proot -R`, `proot-distro --get-proot-cmd`, `PROOT_VERBOSE`).
+  `td_guest_login` (`$PREFIX/lib/invapp/env.sh`) retries with a direct `proot`
+  exec that drops `LD_PRELOAD` (termux-exec/redirector rewrite a guest argv
+  such as `/usr/bin/sh`) and sets `PROOT_NO_SECCOMP=1`. Never drop
+  `LD_PRELOAD` for `proot-distro` itself: it is Termux Python and needs the
+  redirector to find its own stdlib.
 
 ## 2. Useful Commands
 
