@@ -155,7 +155,10 @@ See `ROADMAP.md`.
   run directly, `proot -R`, `proot-distro --get-proot-cmd`, `PROOT_VERBOSE`).
   `td_guest_login` (`$PREFIX/lib/invapp/env.sh`) retries with a direct `proot`
   exec that drops `LD_PRELOAD` (termux-exec/redirector rewrite a guest argv
-  such as `/usr/bin/sh`) and sets `PROOT_NO_SECCOMP=1`. Never drop
+  such as `/usr/bin/sh`) and sets `PROOT_NO_SECCOMP=1`, plus `PROOT_LOADER`
+  (proot's compiled-in `.../com.termux/.../libexec/proot/loader` only resolves
+  through the redirector on this fork, so dropping the preload without it
+  breaks proot itself). Never drop
   `LD_PRELOAD` for `proot-distro` itself: it is Termux Python and needs the
   redirector to find its own stdlib.
 

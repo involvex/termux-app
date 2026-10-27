@@ -126,14 +126,31 @@ td_proot_rootfs() {
     printf '%s\n' "$_rfs"
 }
 
+# td_proot_loader — print the proot loader path, or nothing.
+# Termux proot has "$PREFIX/libexec/proot/loader" compiled in, and $PREFIX is
+# the *fork* prefix here, not com.termux. Pointing PROOT_LOADER at the real
+# file is what lets the helpers run proot with a clean LD_PRELOAD (see below);
+# without it proot only finds its loader through the path redirector.
+td_proot_loader() {
+    for _l in "$PREFIX/libexec/proot/loader" "$PREFIX/lib/proot/loader"; do
+        if [ -x "$_l" ]; then
+            printf '%s\n' "$_l"
+            return 0
+        fi
+    done
+    return 1
+}
+
 # td_proot_exec <container-name> <cmd...>
 # Runs <cmd> as root inside the guest, with the binds a desktop needs.
 #
 # LD_PRELOAD is dropped, not left alone: the path redirector and termux-exec
 # rewrite absolute paths (/bin, /usr/bin, /data/data/com.termux) at exec time,
 # and a guest argv must reach proot untouched — proot-distro pops it for proot
-# for the same reason. PROOT_TMP_DIR is private so a concurrent proot session
-# cannot wipe the loader proot extracts there.
+# for the same reason. PROOT_LOADER is set explicitly to compensate: proot's
+# compiled-in loader path points at com.termux, which only resolves through the
+# redirector on this fork. PROOT_TMP_DIR is private so a concurrent proot
+# session cannot wipe the loader proot extracts there.
 # PROOT_NO_SECCOMP defaults to 1: Android's seccomp filter rejects the ptrace
 # setup proot uses on several devices, and the cost is only speed.
 td_proot_exec() {
@@ -146,18 +163,36 @@ td_proot_exec() {
     fi
     _tmp="${TD_NETHUNTER_STATE:-$PREFIX/var/td-nethunter}/proot-tmp"
     mkdir -p "$_tmp" "$PREFIX/tmp" 2>/dev/null || true
-    env -u LD_PRELOAD \
-        PROOT_TMP_DIR="$_tmp" \
-        PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
-        proot -0 --kill-on-exit --link2symlink -r "$_rfs" -w /root \
-        -b /dev -b /proc -b /sys \
-        -b /dev/urandom:/dev/random \
-        -b "$PREFIX:/termux" \
-        /usr/bin/env -i \
-        HOME=/root \
-        TERM="${TERM:-xterm-256color}" \
-        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-        "$@"
+    # Keep LD_LIBRARY_PATH: proot's own libraries still come from $PREFIX/lib.
+    _ldr="$(td_proot_loader)" || _ldr=""
+    if [ -n "$_ldr" ]; then
+        env -u LD_PRELOAD \
+            PROOT_LOADER="$_ldr" \
+            PROOT_TMP_DIR="$_tmp" \
+            PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
+            proot -0 --kill-on-exit --link2symlink -r "$_rfs" -w /root \
+            -b /dev -b /proc -b /sys \
+            -b /dev/urandom:/dev/random \
+            -b "$PREFIX:/termux" \
+            /usr/bin/env -i \
+            HOME=/root \
+            TERM="${TERM:-xterm-256color}" \
+            PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            "$@"
+    else
+        env -u LD_PRELOAD \
+            PROOT_TMP_DIR="$_tmp" \
+            PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
+            proot -0 --kill-on-exit --link2symlink -r "$_rfs" -w /root \
+            -b /dev -b /proc -b /sys \
+            -b /dev/urandom:/dev/random \
+            -b "$PREFIX:/termux" \
+            /usr/bin/env -i \
+            HOME=/root \
+            TERM="${TERM:-xterm-256color}" \
+            PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            "$@"
+    fi
 }
 
 # td_guest_login <container-name> <cmd...>

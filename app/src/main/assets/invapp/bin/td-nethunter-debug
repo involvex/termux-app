@@ -20,12 +20,20 @@ fi
 DTMP="$PREFIX/var/td-nethunter/debug-proot-tmp"
 
 h() { printf '\n== %s\n' "$*"; }
-# proot's preload namespace must be clear for a guest exec: the path redirector
-# and termux-exec rewrite absolute paths (/bin, /usr/bin, /data/data/com.termux)
-# — exactly what must not happen to a guest argv. proot-distro itself drops
-# LD_PRELOAD from the environment it hands to proot, so a direct proot run that
-# keeps it is not comparable.
-clean() { env -u LD_PRELOAD "$@"; }
+# clean <cmd...>: run with proot's preload namespace cleared. The path
+# redirector + termux-exec rewrite absolute paths at exec time; a guest argv
+# must reach proot untouched (proot-distro pops LD_PRELOAD for proot too).
+# PROOT_LOADER compensates: proot's compiled-in loader path is com.termux,
+# which only resolves through the redirector on this fork — td_proot_exec sets
+# it the same way, so these layers mirror the production invocation.
+PLOADER="$(td_proot_loader 2>/dev/null)" || PLOADER=""
+clean() {
+  if [ -n "$PLOADER" ]; then
+    env -u LD_PRELOAD PROOT_LOADER="$PLOADER" "$@"
+  else
+    env -u LD_PRELOAD "$@"
+  fi
+}
 # run_h <cmd...>: head the output, then report the *command's* status (a bare
 # `cmd | head; echo $?` would report head's).
 run_h() {
@@ -48,6 +56,7 @@ done
 h "proot --version"
 proot --version 2>&1 | head -3 || true
 ls -l "$PREFIX/bin/proot" 2>&1
+echo "proot loader: ${PLOADER:-MISSING (only reachable via the path redirector)}"
 echo "proot loader dir:"
 ls -l "$PREFIX/libexec/proot" 2>&1 | head -5
 
