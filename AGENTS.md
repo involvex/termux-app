@@ -148,19 +148,31 @@ See `ROADMAP.md`.
   preloads them. Do **not** "fix" this by pinning another wheel version (all
   of them link the same GLs) or by installing a GPU driver: the CPU backend
   never calls GL, and `--backend=gpu` stays unsupported.
+- `litert-lm import` → `AttributeError: module 'os' has no attribute 'link'` —
+  Termux's Android `python3` is built without `os.link`, but `import` hardlinks
+  the model into place. `td-resource-litert-lm` installs
+  `invapp_android_compat.py` + `invapp-android.pth` into the venv's
+  site-packages, giving a real `linkat()` with a copy fallback (`FileExistsError`
+  kept). Re-run the installer after a `--reinstall`. Related: the venv must be
+  created with `--without-pip --system-site-packages` — ensurepip's bundled
+  wheels are stripped from the Termux package, and a failing ensurepip aborts
+  venv creation *before* `--system-site-packages` is written, so the flag would
+  silently stay false. pip itself comes from `pkg install python-pip`.
 - `proot-distro login` → `execve("/usr/bin/sh"): No such file or directory`
   while the guest shell is verifiably present — either the guest loader
   (`PT_INTERP`) is missing in the rootfs, or proot's own exec path breaks on
   the device. `td-nethunter-debug` prints each layer (host proot, guest loader
-  run directly, `proot -R`, `proot-distro --get-proot-cmd`, `PROOT_VERBOSE`).
-  `td_guest_login` (`$PREFIX/lib/invapp/env.sh`) retries with a direct `proot`
-  exec that drops `LD_PRELOAD` (termux-exec/redirector rewrite a guest argv
-  such as `/usr/bin/sh`) and sets `PROOT_NO_SECCOMP=1`, plus `PROOT_LOADER`
-  (proot's compiled-in `.../com.termux/.../libexec/proot/loader` only resolves
-  through the redirector on this fork, so dropping the preload without it
-  breaks proot itself). Never drop
-  `LD_PRELOAD` for `proot-distro` itself: it is Termux Python and needs the
-  redirector to find its own stdlib.
+  run directly, `proot -R`, the production `bash`/`dash` argv,
+  `proot-distro --get-proot-cmd`, `PROOT_VERBOSE`). `td_guest_login`
+  (`$PREFIX/lib/invapp/env.sh`) runs a direct `proot` exec **first** and only
+  falls back to `proot-distro login`; the direct path drops `LD_PRELOAD`
+  (termux-exec/redirector rewrite a guest argv such as `/usr/bin/sh`) and sets
+  `PROOT_NO_SECCOMP=1`, plus `PROOT_LOADER` (proot's compiled-in
+  `.../com.termux/.../libexec/proot/loader` only resolves through the redirector
+  on this fork, so dropping the preload without it breaks proot itself). Use
+  `td-guest [distro] [cmd...]` for an interactive root shell or a one-off
+  command. Never drop `LD_PRELOAD` for `proot-distro` itself: it is Termux
+  Python and needs the redirector to find its own stdlib.
 
 ## 2. Useful Commands
 
@@ -241,6 +253,7 @@ td-ai                # OpenCode on 0.0.0.0:4096 → Preview 127.0.0.1 / LAN Copy
 # GUI: proot-distro desktop over noVNC via Preview/LAN
 # td-nethunter-setup [distro]   # one-time: proot-distro + noVNC/websockify + distro VNC
 # td-nethunter [distro] [port]  # VNC in distro + websockify 0.0.0.0:port -> Preview /vnc.html
+# td-guest [distro] [cmd...]    # root shell / one-off command in the container (direct proot)
 # distros: kalilinux/kali-rolling (default — Kali NetHunter) ubuntu:22.04 ubuntu:24.04 debian:12
 # Cursor cloud My Machines (optional):
 # cursor-agent-setup && agent login && td-agent-worker start
