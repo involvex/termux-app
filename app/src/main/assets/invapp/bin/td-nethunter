@@ -158,6 +158,12 @@ log "noVNC bridge -> 0.0.0.0:$PORT  (VNC 127.0.0.1:$VNCPORT)"
 echo "  When the port appears: drawer -> Preview -> Scan"
 echo "  open /vnc.html   (or Copy LAN: http://<wifi-ip>:$PORT/vnc.html)"
 
+# Verify websockify can import
+if ! PYTHONPATH="$WS_REPO${PYTHONPATH:+:$PYTHONPATH}" python3 -c "import websockify" >/dev/null 2>&1; then
+  log "websockify module not importable from $WS_REPO — check PYTHONPATH"
+  PYTHONPATH="$WS_REPO${PYTHONPATH:+:$PYTHONPATH}" python3 -c "import websockify; print(websockify.__file__)" 2>&1 | head -2 >&2
+fi
+
 # websockify bridges WS<->VNC and serves the noVNC client: the listen address
 # and VNC target are POSITIONAL ([source_addr:]source_port target_addr:target_port);
 # there is no --listen flag. PYTHONPATH=WS_REPO so `python3 -m websockify` finds
@@ -165,4 +171,4 @@ echo "  open /vnc.html   (or Copy LAN: http://<wifi-ip>:$PORT/vnc.html)"
 echo $$ > "$PIDFILE"
 exec env PYTHONPATH="$WS_REPO${PYTHONPATH:+:$PYTHONPATH}" \
   python3 -m websockify \
-    --web "$NOVNC_DIR" "0.0.0.0:$PORT" "127.0.0.1:$VNCPORT"
+    --web "$NOVNC_DIR" "0.0.0.0:$PORT" "127.0.0.1:$VNCPORT" 2>&1 | tee -a "$STATE_DIR/websockify.log"
