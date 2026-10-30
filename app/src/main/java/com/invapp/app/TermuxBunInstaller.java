@@ -2314,7 +2314,8 @@ public final class TermuxBunInstaller {
             "opencode-setup", "opencode-fix-net", "opencode", "bun-doctor",
             "td-resource", "td-resource-linux", "td-resource-python",
             "td-resource-qemu", "td-resource-bun", "td-resource-ai",
-            "cursor-agent-setup", "agent", "cursor-agent", "td-agent-worker", "td-upgrade"
+            "cursor-agent-setup", "agent", "cursor-agent", "td-agent-worker", "td-upgrade",
+            "ivx-configure", "ivx-doctor"
         };
         for (String name : names) {
             File f = new File(binDir, name);
@@ -2330,7 +2331,7 @@ public final class TermuxBunInstaller {
         }
     }
 
-    private static void writeExec(@NonNull File dest, @NonNull String contents) {
+    static boolean writeExec(@NonNull File dest, @NonNull String contents) {
         try {
             File tmp = new File(dest.getAbsolutePath() + ".new");
             try (FileOutputStream out = new FileOutputStream(tmp)) {
@@ -2350,9 +2351,12 @@ public final class TermuxBunInstaller {
                 Logger.logWarn(LOG_TAG, "Could not install " + dest);
                 //noinspection ResultOfMethodCallIgnored
                 tmp.delete();
+                return false;
             }
+            return true;
         } catch (Exception e) {
             Logger.logWarn(LOG_TAG, "Helper install failed for " + dest + ": " + e.getMessage());
+            return false;
         }
     }
 
@@ -2365,7 +2369,7 @@ public final class TermuxBunInstaller {
      * already-set package-specific PREFIX/HOME, so one file serves both runtimes.
      */
     @NonNull
-    private static String assetWithBashShebang(@NonNull Context context,
+    static String assetWithBashShebang(@NonNull Context context,
                                                  @NonNull String assetName,
                                                  @NonNull String bash) {
         try (InputStream in = context.getAssets().open(assetName);

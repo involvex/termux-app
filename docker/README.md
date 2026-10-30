@@ -99,6 +99,7 @@ WebView has no container equivalent. `td-dev` and `td-scaffold` already bind
 | `td-dev` `td-scaffold` `td-clone` | yes | `td-scaffold` adds `vite-plugin-pwa` for `pwa` / `pwa-react` |
 | `td-ai` `opencode-setup` `cursor-agent-setup` `td-upgrade` | yes | see below |
 | `bun-doctor`, `td-info` | yes | diagnostics |
+| `ivx-configure`, `ivx-doctor`, login banner | yes | Android-only checks report as notes (`INVAPP_ON_DEVICE=0`); completions/`profile.d` hook are shared with the APK |
 | `~/.termux/*`, completions, `~/.shortcuts` | yes | byte-identical colors asset |
 | `termux-api` CLIs | installed, non-functional | intents need Android |
 | `termux-screenshot`, `td-screen-ocr` | stubs | say why, and suggest X11/`tesseract` |

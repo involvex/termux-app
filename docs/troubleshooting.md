@@ -11,6 +11,16 @@
 | OpenCode `getifaddrs returned an error` | Non-fatal for `0.0.0.0` bind; V2 has no `--mdns`. Override `OPENCODE_HOST=127.0.0.1 td-ai` if needed. Preview uses `127.0.0.1:4096` / `/api/info` |
 | Preview blank / wrong port | OpenCode is `:4096` — there is no `/api` on `:5000`. Drawer **AI** opens Preview after health; tap Reload if early |
 | Tab completion missing for bun/pkg/npm | Open a **new** session after app update. Optional: `pkg install bash-completion`. Completers live under `$PREFIX/etc/bash_completion.d/` |
+| Banner missing on login | `ivx-configure status` — hook must exist and the shell must be interactive (`bash -lc` and `ssh host cmd` are silent by design). `IVX_FORCE`-free repro: `ivx-configure banner preview`. Reopen the app if the hook is missing |
+| Banner shows garbled blocks / wraps | Terminal too narrow for `pixelfont`; it falls back automatically. Pin it: `ivx-configure banner style mini` (or `plain`) |
+| Banner appears in scripts / widgets / ssh commands | It should not — the hook requires `-t 1` + interactive `$-`. Check `ivx-configure doctor` for a stray `banner.sh` edit, and use `INVAPP_NO_BANNER=1` |
+| `ivx-configure: PREFIX is not set` | Run it inside Termux (`PREFIX` is exported by the shell). `bash ~/…/ivx-configure` outside the app has no prefix |
+| `ivx-configure banner text` says figlet is missing | `pkg install figlet`, or pass `--font-file /path/to/font.flf`. Built-in styles need nothing |
+| Custom banner art did not take effect | Style must be `custom` and `${XDG_CONFIG_HOME:-~/.config}/invapp/art.txt` must be non-empty. `ivx-configure banner show` then `banner preview` |
+| Config edit broke the banner | The renderer ignores source errors; `ivx-configure doctor` names the file, `ivx-configure reset` restores defaults |
+| `ivx-configure completions all` skips tools | Generators only run for installed binaries — the table marks them `no`. Install the tool first, then re-run |
+| Doctor `FAIL` on a container | Android-only checks (redirector, `termux-api`) are informational when `INVAPP_ON_DEVICE=0`. `--strict` in CI should allow those |
+| `ivx-doctor` says the banner hook is missing | Reopen the app (it reseeds on start) or run `td-upgrade` on device. `ivx-configure` and `ivx-doctor` are re-written every launch |
 | Extra keys only show ESC/nav | Swipe the key bar **left** for workflow page (pull / bun i / …). **⋯ → Customize keys…** or swipe from the right edge for Tools |
 | Green-bar `ls` folders | Hacker theme ANSI clash — new session or replace `~/.termux/colors.properties` |
 | Phantom kill `[signal 9]` (Android 12+) | OS phantom/CPU killer — see upstream Termux issue [#2366](https://github.com/termux/termux-app/issues/2366) |

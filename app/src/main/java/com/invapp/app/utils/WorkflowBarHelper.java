@@ -31,12 +31,15 @@ public final class WorkflowBarHelper {
     public static final String ID_NEW = "new";
     public static final String ID_AI = "ai";
     public static final String ID_AI_STOP = "ai_stop";
+    /** First-run setup menu (ivx-configure); catalog-only, not in the default bar. */
+    public static final String ID_SETUP = "setup";
     /** Always last in the bar — opens overflow / customize. Not removable. */
     public static final String ID_MORE = "more";
 
     /** Catalog order used when filtering multi-choice results. */
     public static final String[] ALL_ACTION_IDS = {
-        ID_PULL, ID_BUN_I, ID_BUN_DEV, ID_REPOS, ID_RUN, ID_CLONE, ID_NEW, ID_AI, ID_AI_STOP
+        ID_PULL, ID_BUN_I, ID_BUN_DEV, ID_REPOS, ID_RUN, ID_CLONE, ID_NEW, ID_AI, ID_AI_STOP,
+        ID_SETUP
     };
 
     /** Roomier default: everyday git/bun + clone/new/AI. Run / Stop AI via More. */

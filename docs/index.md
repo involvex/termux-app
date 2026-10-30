@@ -34,6 +34,7 @@ td-dev
 ## What's different
 
 - Bundled **Android Bun** + path redirector for apt/SSH
+- **Login banner** + `ivx-configure` setup (completions, packages, `ivx-doctor`)
 - **Localhost Preview** with port chips and Copy LAN
 - Helpers: `td-scaffold`, `td-dev`, `td-clone`, `td-ai`
 - Hacker theme (matrix green on black)

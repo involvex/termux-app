@@ -1,0 +1,9 @@
+#!@BASH@
+# ivx-doctor -- thin wrapper around the unified read-only health report.
+# Matches the existing bun-doctor / jdk-doctor convention.
+#
+#   ivx-doctor              # PASS/WARN/FAIL report
+#   ivx-doctor --strict     # warnings become failures
+#   ivx-doctor --network    # also probe github.com
+
+exec "${PREFIX}/bin/ivx-configure" doctor "$@"

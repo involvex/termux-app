@@ -37,6 +37,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Install: install.md
+  - First-run setup: configure.md
   - Phone + PC workflow: workflow.md
   - AI helper: ai.md
   - Cursor Agent: cursor-agent.md

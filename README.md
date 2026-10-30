@@ -26,6 +26,8 @@ Package id: `com.involvex.termux_app` · Latest: **v0.203.0** · Docs:
 - **OpenCode helper** — `opencode-setup` then `td-ai` (web UI on `:4096`) → Preview
 - **Cursor Agent worker** — `cursor-agent-setup` then `td-agent-worker start` → Cursor cloud My Machines
 - **Workflow helpers** — `td-scaffold`, `td-dev`, `td-clone`, `td-upgrade`, customizable drawer quick bar
+- **First-run setup** — `ivx-configure`: login banner (pixelfont art), bash
+  completions, optional package groups, `ivx-doctor`. See [docs/configure.md](docs/configure.md)
 - **Widget scripts** — `~/.shortcuts` templates (clipboard / OCR / git / API helpers / `td-ai` / agent-worker); Settings + drawer picker
 - **Hacker theme** — matrix green on black (launcher + terminal)
 - **Docker / Podman container** — the same tooling as an image:
@@ -72,6 +74,14 @@ from other sources are a different app id / signature and will not share data
 with InVxTermux.
 
 ### After install
+
+Every interactive login shows the InVxTermux banner. Configure or turn it off
+with `ivx-configure` (also: drawer **Setup**):
+
+```bash
+ivx-configure            # banner / completions / packages / doctor
+ivx-doctor               # read-only health report
+```
 
 ```bash
 cd ~/repos

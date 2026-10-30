@@ -26,6 +26,8 @@ public final class WorkflowHelper {
     public static final String CMD_BUN_INSTALL = "bun install\n";
     public static final String CMD_BUN_RUN_DEV = "bun run dev\n";
     public static final String CMD_TD_AI = "td-ai\n";
+    /** First-run setup: banner / completions / packages / doctor (pure bash). */
+    public static final String CMD_IVX_CONFIGURE = "ivx-configure\n";
     /** OpenCode web/serve default ({@code http://127.0.0.1:4096/}). */
     public static final int AI_PREVIEW_PORT = 4096;
     /** OpenCode V2 API probe — see https://opencode.ai/v2/docs/api */

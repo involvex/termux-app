@@ -61,6 +61,7 @@ See `ROADMAP.md`.
 | Widget scripts | `~/.shortcuts` templates (defaults: `clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, `screen-ocr`, `tasks/td-ai`; optional catalog: camera/wifi/battery/torch/share/settings/vibrate/volume/location/telephony/`stop-ai`/`td-upgrade`/`stop-agent-worker`/`tasks/agent-worker`); Settings / right drawer; matching Widget APK + API/`pkg install termux-api`. `screen-ocr` → `td-screen-ocr`. **2-finger swipe down** (or Ctrl+Alt+T) opens Tools end drawer. Widget tap always shows **Running: name** toast |
 | Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize bar / Customize keys (writes quoted `extra-keys` in `~/.termux/termux.properties`). Extra-keys: 2-row nav page + swipe L/R for workflow page; end drawer = Tools (Preview/AI/Clone/New/Widget scripts). Long-press / Ctrl+Alt+M → actions bottom sheet. AI tap when ready opens Preview and may offer **Copy LAN** if `:4096` is wildcard-bound |
 | Completions | App installs `$PREFIX/etc/profile.d/invapp-completions.sh` + `bash_completion.d` for bun/pkg/npm/gh/git. Prefer `pkg install bash-completion` for richer git. **New session** after update. Never edit `~/.bashrc` |
+| Setup / banner | `ivx-configure` (pure bash: appearance, completions, package groups, doctor, AI hints, reset) + `ivx-doctor` wrapper + login banner. Art = pre-rendered pyfiglet **pixelfont** output for "InvolveX" in `$PREFIX/lib/invapp/banner.sh` (the GPL `.flf` font is **not** shipped); hook = `$PREFIX/etc/profile.d/invapp-banner.sh`; config user-owned in `${XDG_CONFIG_HOME:-~/.config}/invapp/` (`config`, `art.txt`); managed completions `$PREFIX/etc/bash_completion.d/ivx-<tool>.bash`. Guarded by `BASH_VERSION` + interactive `$-` + `[ -t 1 ]` + `TERM!=dumb` + empty `SSH_ORIGINAL_COMMAND`, so widgets/`ssh host cmd`/`bash -lc` stay silent. Reseeded every app start by `IvxConfigureInstaller` (+ after bootstrap in `TermuxInstaller`); drawer **Setup** + opt-in quick-bar catalog entry. Docs: `docs/configure.md` |
 | Container | `app/src/main/assets/invapp/` = container twin of the seeded env (bun, `td-*`, configs, `~/.shortcuts`, opencode/cursor installers). Built by the `involvex/termux-docker` fork: `INVAPP_SRC=../termux-app/app/src/main/assets/invapp ./generate.sh --invapp` → `ghcr.io/involvex/termux-docker:<arch>`. Dropped vs APK: path redirector, bun seccomp shim, OpenCode DNS shim. Kept: `--os=android` (prefix is bionic!) + Termux glibc wrappers. Details: `docker/README.md` |
 
 **Do NOT "fix" these with more wrappers:**
@@ -115,6 +116,32 @@ See `ROADMAP.md`.
 - `getifaddrs returned an error` — non-fatal for web bind on `0.0.0.0`;
   never use `--mdns`. Override with `OPENCODE_HOST=127.0.0.1 td-ai` if needed.
   Firewall/VPN may block LAN clients; Preview always uses loopback.
+- Banner missing / duplicated / in the wrong place — the hook is
+  `$PREFIX/etc/profile.d/invapp-banner.sh`, the renderer
+  `$PREFIX/lib/invapp/banner.sh`, and the art is **pre-rendered** (no figlet,
+  no python at login). It only prints for interactive bash on a tty with
+  `TERM != dumb` and no `SSH_ORIGINAL_COMMAND`, so `bash -lc`, `RUN_COMMAND`
+  widgets, scp and `ssh host cmd` are silent by design — do not "fix" that by
+  dropping the `[ -t 1 ]` / `$-` guards. `ivx-configure banner preview` (uses
+  `IVX_FORCE=1`) shows the banner even when disabled; `INVAPP_NO_BANNER=1`
+  opts out per session. Never source it from `~/.bashrc`.
+- `ivx-configure` / `ivx-doctor` missing after an update — they are reseeded by
+  `IvxConfigureInstaller` on every app start (and by `TermuxInstaller` after a
+  fresh bootstrap), so reopen the app or run `td-upgrade`. `PREFIX is not set`
+  means it was run outside a Termux shell — the script derives `$PREFIX` from
+  its own path only when the variable is absent.
+- Banner shows mojibake / wraps — the built-in block art is UTF-8 and falls
+  back on narrow terminals (`pixelfont` → `mini` → `plain`). Pin it with
+  `ivx-configure banner style mini|plain`, or `banner color none` /
+  `NO_COLOR=1` for no escapes at all (plain ASCII styles avoid the block glyphs
+  entirely on exotic fonts).
+- `ivx-configure banner text` wants `figlet` — custom art is the only path that
+  needs it (`pkg install figlet`, or `--font-file`). Never ship or load a `.flf`
+  font from the GPL font pack into the APK; only rendered output is embedded.
+- Broken `~/.config/invapp/config` — the renderer ignores source errors, so
+  login still prints. `ivx-configure doctor` names the syntax error and
+  `ivx-configure reset` removes the config + custom art. Do not add parsing or
+  a fallback config copy: user edits must win.
 - `screen-ocr` / screenshot OCR failing — needs Termux:API APK +
   `pkg install termux-api tesseract`, and usually `termux-setup-storage` for
   `--latest`. Eng lang pack ships with `tesseract`; other langs need
@@ -257,6 +284,8 @@ git clone <url> myapp && cd myapp
 bun install
 bun run dev          # or bun run android / build
 # Drawer → Preview → Scan → tap port (e.g. 3000)
+ivx-configure        # banner on/off + style, completions, package groups, doctor
+ivx-doctor           # read-only health report (--strict, --network)
 td-ai                # OpenCode on 0.0.0.0:4096 → Preview 127.0.0.1 / LAN Copy
 # GUI: proot-distro desktop over noVNC via Preview/LAN
 # td-nethunter-setup [distro]   # one-time: proot-distro + noVNC/websockify + distro VNC

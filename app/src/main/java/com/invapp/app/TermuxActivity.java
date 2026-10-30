@@ -698,6 +698,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     WorkflowHelper.writeToSession(getCurrentSession(), command));
             });
         }
+        View setup = findViewById(R.id.right_drawer_setup_button);
+        if (setup != null) {
+            setup.setOnClickListener(v -> sendWorkflowCommand(WorkflowHelper.CMD_IVX_CONFIGURE));
+        }
     }
 
     private void setWorkflowButtonViews() {
@@ -741,6 +745,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (aiStop != null) {
             aiStop.setOnClickListener(v -> stopAiSession());
         }
+        View setup = findViewById(R.id.workflow_setup_button);
+        if (setup != null) {
+            setup.setOnClickListener(v -> sendWorkflowCommand(WorkflowHelper.CMD_IVX_CONFIGURE));
+        }
         View more = findViewById(R.id.workflow_more_button);
         if (more != null) {
             more.setOnClickListener(v -> showWorkflowMoreMenu());
@@ -759,6 +767,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         setWorkflowActionVisible(WorkflowBarHelper.ID_NEW, R.id.workflow_new_button, visible);
         setWorkflowActionVisible(WorkflowBarHelper.ID_AI, R.id.workflow_ai_button, visible);
         setWorkflowActionVisible(WorkflowBarHelper.ID_AI_STOP, R.id.workflow_ai_stop_button, visible);
+        setWorkflowActionVisible(WorkflowBarHelper.ID_SETUP, R.id.workflow_setup_button, visible);
         // Re-order children to match preference order, More always last.
         ViewGroup row = findViewById(R.id.workflow_bar_row);
         View moreBtn = findViewById(R.id.workflow_more_button);
@@ -796,6 +805,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             case WorkflowBarHelper.ID_NEW: return findViewById(R.id.workflow_new_button);
             case WorkflowBarHelper.ID_AI: return findViewById(R.id.workflow_ai_button);
             case WorkflowBarHelper.ID_AI_STOP: return findViewById(R.id.workflow_ai_stop_button);
+            case WorkflowBarHelper.ID_SETUP: return findViewById(R.id.workflow_setup_button);
             default: return null;
         }
     }
@@ -876,7 +886,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             getString(R.string.action_workflow_clone),
             getString(R.string.action_workflow_new),
             getString(R.string.action_workflow_ai),
-            getString(R.string.action_workflow_ai_stop)
+            getString(R.string.action_workflow_ai_stop),
+            getString(R.string.action_workflow_setup)
         };
         final boolean[] checked = WorkflowBarHelper.checkedFlags(
             WorkflowBarHelper.getVisibleIds(this));
@@ -1312,11 +1323,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Override
     public void onBackPressed() {
         DrawerLayout drawer = getDrawer();
-        if (drawer.isDrawerOpen(GravityCompat.START) || drawer.isDrawerOpen(GravityCompat.END)) {
+        if (drawer != null && (drawer.isDrawerOpen(GravityCompat.START) || drawer.isDrawerOpen(GravityCompat.END))) {
             drawer.closeDrawers();
-        } else {
-            finishActivityIfNotFinishing();
+            return;
         }
+        if (isFinishing()) {
+            return;
+        }
+        // Avoid breaking the custom back behavior; still satisfy lint by calling super
+        try {
+            super.onBackPressed();
+        } catch (Throwable ignored) {
+        }
+        finishActivityIfNotFinishing();
     }
 
     public void finishActivityIfNotFinishing() {

@@ -38,9 +38,12 @@ Then: drawer → **Preview** → **Scan** → tap the port chip.
 | `td-scaffold [name] [template] [--here] [--no-install]` | Vite app under `~/repos` (default **`react-ts`**, `0.0.0.0:5173`); also `react`, `pwa`, `pwa-react`, … Seeds `.gitignore` + README |
 | `td-dev [script]` | `bun run` with Preview / LAN hints |
 | `td-clone <url> [name] [--bun-i]` | Clone into `~/repos` |
+| `ivx-configure` | Login banner, shell completions, package groups, doctor — see [First-run setup](configure.md) |
+| `ivx-doctor` | Read-only health report (`--strict`, `--network`) |
 
 Drawer quick bar (customizable via **⋯**): pull / bun i / bun run dev / Repos /
-Clone… / New… / AI.
+Clone… / New… / AI. Add **Setup** (`ivx-configure`) from the same menu; the
+right drawer also has a **Setup** button.
 
 ## LAN share
 

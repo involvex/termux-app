@@ -26,7 +26,7 @@ printf '  git          %s\n' "$(command -v git >/dev/null 2>&1 && git --version 
 
 hr
 echo "helpers"
-for h in td-dev td-scaffold td-clone td-ai td-ai-stop td-upgrade td-install-extras bun-doctor opencode-setup cursor-agent-setup; do
+for h in td-dev td-scaffold td-clone td-ai td-ai-stop td-upgrade td-install-extras bun-doctor ivx-configure ivx-doctor opencode-setup cursor-agent-setup; do
     if [ -x "$PREFIX/bin/$h" ]; then printf '  %-22s ok\n' "$h"; else printf '  %-22s MISSING\n' "$h"; fi
 done
 
@@ -48,6 +48,8 @@ cat <<'EOF'
   td-scaffold <name> [template]         vite project (pwa / pwa-react)
   td-dev                                bun run dev (binds 0.0.0.0)
   td-ai [port]                          OpenCode server (default :4096)
+  ivx-configure                         banner / completions / packages / doctor
+  ivx-doctor                            read-only health report
   td-upgrade                            refresh packages + AI CLIs
 EOF
 echo

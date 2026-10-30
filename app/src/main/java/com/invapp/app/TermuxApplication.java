@@ -77,6 +77,9 @@ public class TermuxApplication extends Application {
             // Seed $PREFIX/lib/invapp/commons.sh + bootstrap + profile.d hook.
             ShellLibraryInstaller.installIfNeeded(context);
 
+            // Seed ivx-configure / ivx-doctor + login banner hook + completions.
+            IvxConfigureInstaller.installIfNeeded(context);
+
             // Setup termux-am-socket server
             TermuxAmSocketServer.setupTermuxAmSocketServer(context);
         } else {

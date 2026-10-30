@@ -161,6 +161,15 @@
                             android:text="@string/action_workflow_ai_stop"
                             android:textAllCaps="false" />
                         <com.google.android.material.button.MaterialButton
+                            android:id="@+id/workflow_setup_button"
+                            style="?android:attr/buttonBarButtonStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="48dp"
+                            android:minWidth="72dp"
+                            android:layout_marginEnd="6dp"
+                            android:text="@string/action_workflow_setup"
+                            android:textAllCaps="false" />
+                        <com.google.android.material.button.MaterialButton
                             android:id="@+id/workflow_more_button"
                             style="?android:attr/buttonBarButtonStyle"
                             android:layout_width="wrap_content"
@@ -266,6 +275,14 @@
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
                     android:text="@string/title_widget_scripts"
+                    android:textAllCaps="false" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/right_drawer_setup_button"
+                    style="?android:attr/buttonBarButtonStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="@string/action_workflow_setup"
                     android:textAllCaps="false" />
             </LinearLayout>
 

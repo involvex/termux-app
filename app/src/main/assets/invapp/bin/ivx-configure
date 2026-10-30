@@ -1,0 +1,1108 @@
+#!@BASH@
+# ivx-configure -- InVxTermux first-run setup: login banner, shell completions,
+# basic packages, and a read-only doctor.
+#
+# Pure bash on purpose: no fzf/gum/ruby/python, works offline, and behaves the
+# same in the APK and in the termux-docker container. It never edits
+# ~/.bashrc / ~/.profile / ~/.zshrc -- profile.d and $PREFIX/etc/bash_completion.d
+# are the supported hooks.
+#
+# Config (sourced, user owned):  $XDG_CONFIG_HOME/invapp/config
+# Custom banner art:            $XDG_CONFIG_HOME/invapp/art.txt
+# Managed completions:          $PREFIX/etc/bash_completion.d/ivx-<tool>.bash
+#
+# See `ivx-configure help`.
+
+set -u
+
+IVX_VERSION=1.0.0
+
+# $PREFIX is exported by Termux and by the seeded wrappers. Fall back to the
+# script's own location ($PREFIX/bin/ivx-configure) so a bare `bash
+# .../ivx-configure` still works instead of hardcoding a package path.
+if [ -z "${PREFIX:-}" ]; then
+    PREFIX=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd -P) || PREFIX=''
+fi
+: "${PREFIX:?PREFIX is not set -- run ivx-configure inside Termux}"
+XDG_BASE="${XDG_CONFIG_HOME:-${HOME:-$PREFIX}/.config}"
+CONFIG_DIR="$XDG_BASE/invapp"
+CONFIG_FILE="$CONFIG_DIR/config"
+ART_FILE="$CONFIG_DIR/art.txt"
+COMPLETION_DIR="$PREFIX/etc/bash_completion.d"
+PROFILE_D="$PREFIX/etc/profile.d"
+LIB_DIR="${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}"
+BANNER_LIB="$LIB_DIR/banner.sh"
+
+# Shared env (INVAPP_ON_DEVICE, td_arch, CA paths). POSIX + idempotent.
+if [ -r "$LIB_DIR/env.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$LIB_DIR/env.sh" 2>/dev/null || true
+fi
+
+# Keep the path redirector when one is installed; never fabricate a preload for
+# a file that does not exist (a missing .so aborts every child process).
+if [ -f "$PREFIX/lib/libinvapp-redirector.so" ]; then
+    case ":${LD_PRELOAD:-}:" in
+        *":$PREFIX/lib/libinvapp-redirector.so:"*) : ;;
+        *) LD_PRELOAD="$PREFIX/lib/libinvapp-redirector.so${LD_PRELOAD:+:$LD_PRELOAD}" ;;
+    esac
+    export LD_PRELOAD
+fi
+
+# ---------------------------------------------------------------------------
+# options
+# ---------------------------------------------------------------------------
+OPT_YES=0
+OPT_DRY=0
+OPT_NO_COLOR=0
+_ivx_args=()
+for _ivx_a in "$@"; do
+    case "$_ivx_a" in
+        -y|--yes) OPT_YES=1 ;;
+        --dry-run) OPT_DRY=1 ;;
+        --no-color) OPT_NO_COLOR=1 ;;
+        *) _ivx_args+=("$_ivx_a") ;;
+    esac
+done
+set -- ${_ivx_args[@]+"${_ivx_args[@]}"}
+
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "$OPT_NO_COLOR" = 0 ]; then
+    C_RST=$'\033[0m'
+    C_B=$'\033[1m'
+    C_DIM=$'\033[2m'
+    C_G=$'\033[1;32m'
+    C_C=$'\033[1;36m'
+    C_Y=$'\033[1;33m'
+    C_R=$'\033[1;31m'
+else
+    C_RST='' C_B='' C_DIM='' C_G='' C_C='' C_Y='' C_R=''
+fi
+
+hr() { printf '%s\n' "────────────────────────────────────────────────────────────"; }
+info() { printf '  %s➜%s %s\n' "$C_C" "$C_RST" "$*"; }
+ok() { printf '  %s✔%s %s\n' "$C_G" "$C_RST" "$*"; }
+warn() { printf '  %s!%s %s\n' "$C_Y" "$C_RST" "$*" >&2; }
+err() { printf '  %s✘%s %s\n' "$C_R" "$C_RST" "$*" >&2; }
+dim() { printf '  %s%s%s\n' "$C_DIM" "$*" "$C_RST"; }
+
+pause() {
+    printf '%sPress Enter to continue…%s' "$C_DIM" "$C_RST"
+    IFS= read -r _ivx_pause || true
+}
+
+ask() {
+    printf '%s' "$1"
+    IVX_REPLY=''
+    IFS= read -r IVX_REPLY || return 1
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# config
+# ---------------------------------------------------------------------------
+cfg_load() {
+    if [ -r "$CONFIG_FILE" ]; then
+        # shellcheck source=/dev/null
+        . "$CONFIG_FILE" 2>/dev/null || true
+    fi
+    : "${IVX_BANNER:=1}"
+    : "${IVX_STYLE:=pixelfont}"
+    : "${IVX_COLOR:=green}"
+    : "${IVX_TIPS:=1}"
+    : "${IVX_STATUS:=1}"
+    : "${IVX_FONT:=pixelfont}"
+}
+
+# cfg_set KEY VALUE -- replace the key, keep every unrelated line.
+cfg_set() {
+    _ivx_key=$1
+    _ivx_val=$2
+    if ! mkdir -p "$CONFIG_DIR" 2>/dev/null; then
+        err "cannot create $CONFIG_DIR"
+        return 1
+    fi
+    _ivx_tmp="$CONFIG_FILE.tmp.$$"
+    if [ -f "$CONFIG_FILE" ]; then
+        grep -v -E "^[[:space:]]*(export[[:space:]]+)?${_ivx_key}=" \
+            "$CONFIG_FILE" > "$_ivx_tmp" 2>/dev/null || true
+    else
+        : > "$_ivx_tmp"
+    fi
+    printf '%s=%s\n' "$_ivx_key" "$_ivx_val" >> "$_ivx_tmp"
+    if [ "$OPT_DRY" = 1 ]; then
+        info "would set ${_ivx_key}=${_ivx_val} in $CONFIG_FILE"
+        rm -f "$_ivx_tmp"
+        return 0
+    fi
+    mv -f "$_ivx_tmp" "$CONFIG_FILE" || { err "cannot write $CONFIG_FILE"; return 1; }
+    chmod 644 "$CONFIG_FILE" 2>/dev/null || true
+    return 0
+}
+
+cfg_show() {
+    cfg_load
+    printf '  %-12s %s\n' "banner" "$IVX_BANNER"
+    printf '  %-12s %s\n' "style" "$IVX_STYLE"
+    printf '  %-12s %s\n' "color" "$IVX_COLOR"
+    printf '  %-12s %s\n' "tips" "$IVX_TIPS"
+    printf '  %-12s %s\n' "status" "$IVX_STATUS"
+    printf '  %-12s %s\n' "figlet font" "$IVX_FONT"
+    if [ -r "$ART_FILE" ]; then
+        printf '  %-12s %s\n' "custom art" "$ART_FILE"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# banner
+# ---------------------------------------------------------------------------
+banner_preview() {
+    if [ ! -r "$BANNER_LIB" ]; then
+        err "banner library missing: $BANNER_LIB"
+        return 1
+    fi
+    (
+        # shellcheck source=/dev/null
+        . "$BANNER_LIB"
+        # shellcheck disable=SC2034  # consumed by the sourced banner library
+        IVX_FORCE=1
+        ivx_banner_print
+    )
+}
+
+banner_set_style() {
+    case "$1" in
+        pixelfont|small|mini|plain|auto|custom) ;;
+        *) err "unknown style: $1 (pixelfont|small|mini|plain|auto)"; return 1 ;;
+    esac
+    cfg_set IVX_STYLE "$1" && ok "banner style: $1"
+}
+
+banner_set_color() {
+    case "$1" in
+        green|cyan|magenta|white|rainbow|none) ;;
+        *) err "unknown color: $1 (green|cyan|magenta|white|rainbow|none)"; return 1 ;;
+    esac
+    cfg_set IVX_COLOR "$1" && ok "banner color: $1"
+}
+
+gen_figlet_art() {
+    _ivx_text=$1
+    shift
+    _ivx_font=''
+    _ivx_fontfile=''
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --font)
+                _ivx_font=${2:-}
+                shift 2 || return 1
+                ;;
+            --font-file)
+                _ivx_fontfile=${2:-}
+                shift 2 || return 1
+                ;;
+            *) shift ;;
+        esac
+    done
+
+    if [ -z "$_ivx_text" ]; then
+        err 'usage: ivx-configure banner text "TEXT" [--font NAME] [--font-file PATH]'
+        return 1
+    fi
+    case "$_ivx_text" in
+        -*) err "banner text must not start with '-'"; return 1 ;;
+    esac
+
+    if ! command -v figlet >/dev/null 2>&1; then
+        warn "figlet is not installed (needed to render custom text)"
+        info "install it with: pkg install figlet"
+        if [ "$OPT_YES" = 1 ] && [ "$OPT_DRY" = 0 ] && command -v pkg >/dev/null 2>&1; then
+            pkg install -y figlet || { err "pkg install figlet failed"; return 1; }
+        else
+            return 1
+        fi
+    fi
+
+    cfg_load
+    if [ -z "$_ivx_font" ]; then
+        _ivx_font=$IVX_FONT
+    fi
+
+    _ivx_tmpdir=$(mktemp -d "${TMPDIR:-$PREFIX/tmp}/ivxfig.XXXXXX" 2>/dev/null || mktemp -d) || {
+        err "cannot create a temp dir"
+        return 1
+    }
+
+    _ivx_art=''
+    if [ -n "$_ivx_fontfile" ]; then
+        if [ ! -r "$_ivx_fontfile" ]; then
+            err "font file not readable: $_ivx_fontfile"
+            rm -rf "$_ivx_tmpdir"
+            return 1
+        fi
+        cp -f "$_ivx_fontfile" "$_ivx_tmpdir/custom.flf" || {
+            err "cannot stage font file"
+            rm -rf "$_ivx_tmpdir"
+            return 1
+        }
+        _ivx_art=$(figlet -d "$_ivx_tmpdir" -f custom "$_ivx_text" 2>/dev/null) || _ivx_art=''
+    else
+        _ivx_art=$(figlet -f "$_ivx_font" "$_ivx_text" 2>/dev/null) || _ivx_art=''
+        if [ -z "$_ivx_art" ] && [ "$_ivx_font" != standard ]; then
+            warn "font '$_ivx_font' unavailable -- falling back to standard"
+            _ivx_art=$(figlet -f standard "$_ivx_text" 2>/dev/null) || _ivx_art=''
+        fi
+    fi
+    rm -rf "$_ivx_tmpdir"
+
+    if [ -z "$_ivx_art" ] || [ -z "$(printf '%s' "$_ivx_art" | tr -d '[:space:]')" ]; then
+        err "figlet produced no art for '$_ivx_text'"
+        return 1
+    fi
+
+    if [ "$OPT_DRY" = 1 ]; then
+        printf '%s\n' "$_ivx_art"
+        info "would write $ART_FILE"
+        return 0
+    fi
+
+    mkdir -p "$CONFIG_DIR" || { err "cannot create $CONFIG_DIR"; return 1; }
+    _ivx_tmp="$ART_FILE.tmp.$$"
+    printf '%s\n' "$_ivx_art" > "$_ivx_tmp" || { err "cannot write $_ivx_tmp"; rm -f "$_ivx_tmp"; return 1; }
+    mv -f "$_ivx_tmp" "$ART_FILE" || { err "cannot write $ART_FILE"; return 1; }
+    chmod 644 "$ART_FILE" 2>/dev/null || true
+    cfg_set IVX_STYLE custom >/dev/null
+    ok "custom banner art saved: $ART_FILE (style=custom)"
+    info "preview with: ivx-configure banner preview"
+    return 0
+}
+
+cmd_banner() {
+    _ivx_sub=${1:-preview}
+    [ $# -gt 0 ] && shift
+    case "$_ivx_sub" in
+        on)
+            cfg_set IVX_BANNER 1 && ok "login banner enabled (open a new session)"
+            ;;
+        off)
+            cfg_set IVX_BANNER 0 && ok "login banner disabled (open a new session)"
+            ;;
+        preview)
+            banner_preview
+            ;;
+        reset)
+            rm -f "$ART_FILE" 2>/dev/null || true
+            cfg_set IVX_BANNER 1
+            cfg_set IVX_STYLE pixelfont
+            cfg_set IVX_COLOR green
+            cfg_set IVX_TIPS 1
+            cfg_set IVX_STATUS 1
+            ok "banner reset to defaults"
+            ;;
+        style)
+            banner_set_style "${1:-}"
+            ;;
+        color|colour)
+            banner_set_color "${1:-}"
+            ;;
+        text)
+            gen_figlet_art "$@"
+            ;;
+        show|status)
+            cfg_show
+            ;;
+        *)
+            err "usage: ivx-configure banner on|off|preview|reset|style COLOR|color COLOR|text TEXT"
+            return 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# completions
+# ---------------------------------------------------------------------------
+comp_tools() {
+    printf '%s\n' git gh npm pnpm docker kubectl helm terraform deno tailscale \
+        cargo rustup just uv bun
+}
+
+# comp_body TOOL -- print a completion script on stdout, non-zero if unavailable.
+comp_body() {
+    case "$1" in
+        git)
+            for _ivx_f in "$PREFIX/share/bash-completion/completions/git" \
+                          "$PREFIX/etc/bash_completion.d/git"; do
+                if [ -r "$_ivx_f" ]; then
+                    cat "$_ivx_f"
+                    return 0
+                fi
+            done
+            return 1
+            ;;
+        gh) command -v gh >/dev/null 2>&1 && gh completion -s bash 2>/dev/null ;;
+        npm) command -v npm >/dev/null 2>&1 && npm completion 2>/dev/null ;;
+        pnpm) command -v pnpm >/dev/null 2>&1 && pnpm completion bash 2>/dev/null ;;
+        docker) command -v docker >/dev/null 2>&1 && docker completion bash 2>/dev/null ;;
+        kubectl) command -v kubectl >/dev/null 2>&1 && kubectl completion bash 2>/dev/null ;;
+        helm) command -v helm >/dev/null 2>&1 && helm completion bash 2>/dev/null ;;
+        terraform)
+            if command -v terraform >/dev/null 2>&1; then
+                printf 'complete -o nospace -C %s terraform\n' "$(command -v terraform)"
+            else
+                return 1
+            fi
+            ;;
+        deno) command -v deno >/dev/null 2>&1 && deno completions bash 2>/dev/null ;;
+        tailscale) command -v tailscale >/dev/null 2>&1 && tailscale completion bash 2>/dev/null ;;
+        cargo) command -v rustup >/dev/null 2>&1 && rustup completions bash cargo 2>/dev/null ;;
+        rustup) command -v rustup >/dev/null 2>&1 && rustup completions bash 2>/dev/null ;;
+        just) command -v just >/dev/null 2>&1 && just --completions bash 2>/dev/null ;;
+        uv) command -v uv >/dev/null 2>&1 && uv generate-shell-completion bash 2>/dev/null ;;
+        bun) command -v bun >/dev/null 2>&1 && bun completions bash 2>/dev/null ;;
+        *) return 1 ;;
+    esac
+}
+
+comp_available() {
+    case "$1" in
+        git)
+            [ -r "$PREFIX/share/bash-completion/completions/git" ] \
+                || [ -r "$PREFIX/etc/bash_completion.d/git" ]
+            ;;
+        terraform) command -v terraform >/dev/null 2>&1 ;;
+        cargo) command -v rustup >/dev/null 2>&1 ;;
+        *) command -v "$1" >/dev/null 2>&1 ;;
+    esac
+}
+
+comp_installed() {
+    [ -f "$COMPLETION_DIR/ivx-$1.bash" ]
+}
+
+comp_install() {
+    _ivx_tool=$1
+    if comp_installed "$_ivx_tool"; then
+        info "$_ivx_tool: already managed"
+        return 0
+    fi
+    if ! comp_available "$_ivx_tool"; then
+        warn "$_ivx_tool: not installed (pkg install $_ivx_tool)"
+        return 1
+    fi
+    _ivx_body=$(comp_body "$_ivx_tool") || _ivx_body=''
+    if [ -z "$_ivx_body" ]; then
+        warn "$_ivx_tool: generator produced no output"
+        return 1
+    fi
+    if [ "$OPT_DRY" = 1 ]; then
+        info "would write $COMPLETION_DIR/ivx-$_ivx_tool.bash"
+        return 0
+    fi
+    mkdir -p "$COMPLETION_DIR" || { err "cannot create $COMPLETION_DIR"; return 1; }
+    _ivx_tmp="$COMPLETION_DIR/ivx-$_ivx_tool.bash.tmp.$$"
+    printf '%s\n' "$_ivx_body" > "$_ivx_tmp" || {
+        err "$_ivx_tool: cannot write temp file"
+        rm -f "$_ivx_tmp"
+        return 1
+    }
+    if ! bash -n "$_ivx_tmp" 2>/dev/null; then
+        warn "$_ivx_tool: generated script failed bash -n -- kept out"
+        rm -f "$_ivx_tmp"
+        return 1
+    fi
+    mv -f "$_ivx_tmp" "$COMPLETION_DIR/ivx-$_ivx_tool.bash" || {
+        err "$_ivx_tool: cannot install"
+        rm -f "$_ivx_tmp"
+        return 1
+    }
+    chmod 644 "$COMPLETION_DIR/ivx-$_ivx_tool.bash" 2>/dev/null || true
+    ok "$_ivx_tool: $COMPLETION_DIR/ivx-$_ivx_tool.bash"
+    return 0
+}
+
+completions_list() {
+    printf '  %-12s %-8s %-8s %s\n' TOOL TOOL_CMD MANAGED GENERATOR
+    for _ivx_tool in $(comp_tools); do
+        if comp_available "$_ivx_tool"; then _ivx_avail=yes; else _ivx_avail=no; fi
+        if comp_installed "$_ivx_tool"; then _ivx_managed=yes; else _ivx_managed=no; fi
+        printf '  %-12s %-8s %-8s %s\n' "$_ivx_tool" "$_ivx_avail" "$_ivx_managed" "$_ivx_tool"
+    done
+    printf '\n'
+    dim "managed files: $COMPLETION_DIR/ivx-*.bash"
+    dim "loaded by $PROFILE_D/invapp-completions.sh (device) or bash-completion (container)"
+    dim "open a new session after installing"
+}
+
+completions_clean() {
+    if [ ! -d "$COMPLETION_DIR" ]; then
+        info "no completion dir yet: $COMPLETION_DIR"
+        return 0
+    fi
+    _ivx_n=0
+    for _ivx_f in "$COMPLETION_DIR"/ivx-*.bash; do
+        [ -f "$_ivx_f" ] || continue
+        if [ "$OPT_DRY" = 1 ]; then
+            info "would remove $_ivx_f"
+        else
+            rm -f "$_ivx_f" && _ivx_n=$((_ivx_n + 1))
+        fi
+    done
+    [ "$OPT_DRY" = 1 ] || ok "removed $_ivx_n managed completion file(s)"
+    return 0
+}
+
+cmd_completions() {
+    _ivx_sub=${1:-list}
+    [ $# -gt 0 ] && shift
+    case "$_ivx_sub" in
+        list|ls) completions_list ;;
+        all)
+            _ivx_fail=0
+            for _ivx_tool in $(comp_tools); do
+                comp_install "$_ivx_tool" || _ivx_fail=$((_ivx_fail + 1))
+            done
+            info "reopen the session (or run: exec bash -l) to load completions"
+            [ "$_ivx_fail" -eq 0 ] || dim "$_ivx_fail tool(s) skipped -- install them first"
+            ;;
+        clean|reset) completions_clean ;;
+        tool)
+            comp_install "${1:-}"
+            ;;
+        *)
+            for _ivx_tool in $(comp_tools); do
+                [ "$_ivx_tool" = "$_ivx_sub" ] || continue
+                comp_install "$_ivx_sub"
+                return $?
+            done
+            err "unknown tool: $_ivx_sub (see: ivx-configure completions list)"
+            return 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# packages
+# ---------------------------------------------------------------------------
+pkg_group() {
+    case "$1" in
+        essentials)
+            printf '%s' 'bash-completion git curl wget openssh jq nano vim less unzip tar xz-utils procps ca-certificates'
+            ;;
+        quality)
+            printf '%s' 'fzf ripgrep fd bat eza tree htop ncdu figlet'
+            ;;
+        build)
+            printf '%s' 'clang make pkg-config cmake ninja python nodejs-lts'
+            ;;
+        network)
+            printf '%s' 'dnsutils inetutils nmap proot-distro termux-api'
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+pkg_groups() {
+    printf '%s\n' essentials quality build network
+}
+
+pkg_installed() {
+    command -v dpkg >/dev/null 2>&1 || return 1
+    dpkg -s "$1" 2>/dev/null | grep -q '^Status: install ok installed'
+}
+
+packages_list() {
+    for _ivx_g in $(pkg_groups); do
+        printf '\n  %s%s%s\n' "$C_B" "$_ivx_g" "$C_RST"
+        for _ivx_p in $(pkg_group "$_ivx_g"); do
+            if pkg_installed "$_ivx_p"; then
+                printf '    %s✔%s %s\n' "$C_G" "$C_RST" "$_ivx_p"
+            else
+                printf '    %s·%s %s\n' "$C_DIM" "$C_RST" "$_ivx_p"
+            fi
+        done
+    done
+    printf '\n'
+    dim "no implicit pkg update; groups install exactly the packages listed"
+}
+
+install_group() {
+    _ivx_g=$1
+    _ivx_pkgs=$(pkg_group "$_ivx_g") || { err "unknown group: $_ivx_g"; return 1; }
+    info "group: $_ivx_g"
+    _ivx_want=''
+    for _ivx_p in $_ivx_pkgs; do # shellcheck disable=SC2086
+        if pkg_installed "$_ivx_p"; then
+            ok "$_ivx_p (already installed)"
+        else
+            _ivx_want="$_ivx_want $_ivx_p"
+        fi
+    done
+    if [ -z "$_ivx_want" ]; then
+        ok "nothing to install"
+        return 0
+    fi
+    if [ "$OPT_DRY" = 1 ]; then
+        info "would run: pkg install -y$_ivx_want"
+        return 0
+    fi
+    if ! command -v pkg >/dev/null 2>&1; then
+        err "pkg not available -- not a Termux prefix?"
+        return 1
+    fi
+    # shellcheck disable=SC2086
+    if pkg install -y $_ivx_want; then
+        ok "installed:$_ivx_want"
+        return 0
+    fi
+    warn "bulk install failed -- retrying one package at a time"
+    _ivx_failed=0
+    for _ivx_p in $_ivx_want; do # shellcheck disable=SC2086
+        pkg install -y "$_ivx_p" || { warn "failed: $_ivx_p"; _ivx_failed=$((_ivx_failed + 1)); }
+    done
+    [ "$_ivx_failed" -eq 0 ] && ok "installed:$_ivx_want"
+    return 0
+}
+
+cmd_packages() {
+    _ivx_sub=${1:-list}
+    [ $# -gt 0 ] && shift
+    case "$_ivx_sub" in
+        list|ls) packages_list ;;
+        all)
+            for _ivx_g in $(pkg_groups); do
+                install_group "$_ivx_g"
+            done
+            ;;
+        *)
+            if ! pkg_group "$_ivx_sub" >/dev/null; then
+                err "unknown group: $_ivx_sub (essentials|quality|build|network|all)"
+                return 1
+            fi
+            install_group "$_ivx_sub"
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# doctor
+# ---------------------------------------------------------------------------
+DOC_PASS=0
+DOC_WARN=0
+DOC_FAIL=0
+DOC_STRICT=0
+
+pass() { DOC_PASS=$((DOC_PASS + 1)); printf '  %sPASS%s %s\n' "$C_G" "$C_RST" "$*"; }
+docwarn() { DOC_WARN=$((DOC_WARN + 1)); printf '  %sWARN%s %s\n' "$C_Y" "$C_RST" "$*"; }
+fail() { DOC_FAIL=$((DOC_FAIL + 1)); printf '  %sFAIL%s %s\n' "$C_R" "$C_RST" "$*"; }
+
+doc_prefix() {
+    if [ -d "$PREFIX" ]; then pass "PREFIX: $PREFIX"; else fail "PREFIX missing: $PREFIX"; fi
+    if [ -d "${HOME:-}" ]; then pass "HOME: $HOME"; else docwarn "HOME unset or missing"; fi
+    case ":${PATH:-}:" in
+        *":$PREFIX/bin:"*) pass "PATH contains \$PREFIX/bin" ;;
+        *) docwarn "PATH is missing \$PREFIX/bin" ;;
+    esac
+    if [ -d "$PREFIX/bin" ] && [ -w "$PREFIX/bin" ]; then
+        pass "\$PREFIX/bin is writable"
+    else
+        docwarn "\$PREFIX/bin is not writable (check ownership)"
+    fi
+    if [ -n "${TMPDIR:-}" ] && [ -d "$TMPDIR" ] && [ -w "$TMPDIR" ]; then
+        pass "TMPDIR writable: $TMPDIR"
+    elif [ -d "$PREFIX/tmp" ] && [ -w "$PREFIX/tmp" ]; then
+        pass "TMPDIR unset; \$PREFIX/tmp writable"
+    else
+        docwarn "no writable temp dir (TMPDIR / \$PREFIX/tmp)"
+    fi
+}
+
+doc_disk() {
+    _ivx_free=$(df -Pk "$PREFIX" 2>/dev/null | awk 'NR==2 {print $4}')
+    case "${_ivx_free:-}" in
+        ''|*[!0-9]*) docwarn "free space: unknown" ;;
+        *)
+            _ivx_mb=$((_ivx_free / 1024))
+            if [ "$_ivx_free" -lt 204800 ]; then
+                docwarn "free space on \$PREFIX: ${_ivx_mb} MiB (pkg install may fail)"
+            else
+                pass "free space on \$PREFIX: ${_ivx_mb} MiB"
+            fi
+            ;;
+    esac
+}
+
+doc_redirector() {
+    if [ "${INVAPP_ON_DEVICE:-1}" != 1 ]; then
+        pass "redirector: not needed in a container"
+        return 0
+    fi
+    if [ ! -f "$PREFIX/lib/libinvapp-redirector.so" ]; then
+        fail "redirector missing: $PREFIX/lib/libinvapp-redirector.so"
+        return 0
+    fi
+    case ":${LD_PRELOAD:-}:" in
+        *":$PREFIX/lib/libinvapp-redirector.so:"*) pass "redirector preloaded" ;;
+        *) docwarn "redirector present but not in LD_PRELOAD (apt/ssh may look at com.termux)" ;;
+    esac
+}
+
+doc_bun() {
+    if [ -x "$PREFIX/libexec/bun" ]; then
+        pass "bun binary: $PREFIX/libexec/bun"
+    else
+        case "$(uname -m 2>/dev/null)" in
+            aarch64|arm64|x86_64|amd64)
+                fail "bun binary missing (reopen the app or run: td-upgrade)" ;;
+            *) docwarn "bun binary missing (ARMv7/i686: unsupported, node fallback)" ;;
+        esac
+    fi
+    if [ -x "$PREFIX/bin/bun" ]; then
+        pass "bun wrapper: $PREFIX/bin/bun"
+    else
+        docwarn "bun wrapper missing"
+    fi
+    _ivx_stamp=$(cat "$PREFIX/var/lib/invapp/bun.version" 2>/dev/null || true)
+    case "${_ivx_stamp:-}" in
+        '') docwarn "bun version stamp missing (bun.version)" ;;
+        unsupported) dim "bun: not supported on this ABI (node fallback)" ;;
+        *) pass "bun stamp: $_ivx_stamp" ;;
+    esac
+}
+
+doc_node_git_curl() {
+    if command -v node >/dev/null 2>&1; then
+        _ivx_nv=$(node --version 2>/dev/null || true)
+        if [ -n "$_ivx_nv" ]; then pass "node: $_ivx_nv"; else docwarn "node present but not runnable"; fi
+    else
+        docwarn "node missing (pkg install nodejs-lts; bun shim only when absent)"
+    fi
+    if command -v git >/dev/null 2>&1; then pass "git: $(git --version 2>/dev/null)"; else docwarn "git missing (pkg install git)"; fi
+    if command -v curl >/dev/null 2>&1; then pass "curl present"; else docwarn "curl missing (pkg install curl)"; fi
+}
+
+doc_completions() {
+    if [ -r "$PREFIX/share/bash-completion/bash_completion" ] \
+        || [ -r "$PREFIX/etc/bash_completion" ]; then
+        pass "bash-completion runtime present"
+    else
+        docwarn "bash-completion not installed (pkg install bash-completion)"
+    fi
+    if [ -f "$PROFILE_D/invapp-completions.sh" ]; then
+        pass "completion loader: $PROFILE_D/invapp-completions.sh"
+    else
+        docwarn "completion loader missing (reopen the app)"
+    fi
+    if [ -d "$COMPLETION_DIR" ]; then
+        _ivx_count=$(find "$COMPLETION_DIR" -maxdepth 1 -name 'ivx-*.bash' 2>/dev/null | wc -l | tr -d ' ')
+        case "${_ivx_count:-0}" in
+            0) dim "managed completions: none yet (ivx-configure completions all)" ;;
+            *) pass "managed completions: $_ivx_count" ;;
+        esac
+    else
+        docwarn "completion dir missing: $COMPLETION_DIR"
+    fi
+}
+
+doc_banner() {
+    if [ -f "$PROFILE_D/invapp-banner.sh" ]; then
+        pass "banner hook: $PROFILE_D/invapp-banner.sh"
+    else
+        fail "banner hook missing (reopen the app, or td-upgrade on device)"
+    fi
+    if [ -r "$BANNER_LIB" ]; then
+        pass "banner library: $BANNER_LIB"
+    else
+        fail "banner library missing: $BANNER_LIB"
+    fi
+    if [ -f "$CONFIG_FILE" ]; then
+        if bash -n "$CONFIG_FILE" 2>/dev/null; then
+            pass "config parses: $CONFIG_FILE"
+        else
+            fail "config has a syntax error: $CONFIG_FILE (ivx-configure reset)"
+        fi
+    else
+        dim "config: defaults (no $CONFIG_FILE)"
+    fi
+    if command -v figlet >/dev/null 2>&1; then
+        dim "figlet: installed (custom banner text available)"
+    else
+        dim "figlet: optional (pkg install figlet for custom banner text)"
+    fi
+}
+
+doc_tooling() {
+    if [ "${INVAPP_ON_DEVICE:-1}" = 1 ]; then
+        if command -v termux-clipboard-set >/dev/null 2>&1; then
+            pass "termux-api CLI present"
+        else
+            docwarn "termux-api CLI missing (pkg install termux-api + Termux:API APK)"
+        fi
+    fi
+    if command -v opencode >/dev/null 2>&1; then
+        pass "opencode installed"
+    else
+        dim "opencode: not installed (opencode-setup)"
+    fi
+    if command -v agent >/dev/null 2>&1; then
+        pass "cursor agent installed"
+    else
+        dim "cursor agent: not installed (cursor-agent-setup)"
+    fi
+    if command -v java >/dev/null 2>&1; then
+        pass "java: $(java -version 2>&1 | head -1)"
+    elif [ -n "${JAVA_HOME:-}" ]; then
+        docwarn "JAVA_HOME set but java is not on PATH ($JAVA_HOME)"
+    else
+        dim "java: not installed (td-jdk-setup / docs/openjdk.md)"
+    fi
+}
+
+doc_network() {
+    if ! command -v curl >/dev/null 2>&1; then
+        docwarn "network check skipped: curl missing"
+        return 0
+    fi
+    if curl -fsS --max-time 6 -o /dev/null https://github.com 2>/dev/null; then
+        pass "network: github.com reachable"
+    else
+        docwarn "network: github.com not reachable (offline, DNS, or VPN)"
+    fi
+}
+
+cmd_doctor() {
+    DOC_PASS=0 DOC_WARN=0 DOC_FAIL=0 DOC_STRICT=0
+    for _ivx_a in "$@"; do
+        case "$_ivx_a" in
+            --strict) DOC_STRICT=1 ;;
+            --network) : ;;
+        esac
+    done
+    printf '\n  %sInVxTermux doctor%s  (ivx %s)\n' "$C_B" "$C_RST" "$IVX_VERSION"
+    hr
+    doc_prefix
+    doc_disk
+    doc_redirector
+    doc_bun
+    doc_node_git_curl
+    doc_completions
+    doc_banner
+    doc_tooling
+    case " $* " in
+        *" --network "*) doc_network ;;
+    esac
+    hr
+    printf '  %sPASS %d%s   %sWARN %d%s   %sFAIL %d%s\n' \
+        "$C_G" "$DOC_PASS" "$C_RST" "$C_Y" "$DOC_WARN" "$C_RST" "$C_R" "$DOC_FAIL" "$C_RST"
+    printf '  %s\n' "deeper reports: bun-doctor · jdk-doctor · td-info · td-resource-ai"
+    if [ "$DOC_FAIL" -gt 0 ]; then
+        return 1
+    fi
+    if [ "$DOC_STRICT" = 1 ] && [ "$DOC_WARN" -gt 0 ]; then
+        return 1
+    fi
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# ai
+# ---------------------------------------------------------------------------
+cmd_ai() {
+    _ivx_sub=${1:-status}
+    case "$_ivx_sub" in
+        status)
+            if command -v opencode >/dev/null 2>&1; then
+                ok "opencode installed -- start with: td-ai"
+            else
+                dim "opencode not installed -- run: opencode-setup"
+            fi
+            if command -v agent >/dev/null 2>&1; then
+                ok "cursor agent installed -- start with: td-agent-worker start"
+            else
+                dim "cursor agent not installed -- run: cursor-agent-setup"
+            fi
+            if [ -r "$PREFIX/lib/libinvapp-opencode-shim.so" ]; then
+                pass "opencode DNS shim present"
+            else
+                docwarn "opencode DNS shim missing (opencode-setup installs it on arm64)"
+            fi
+            if command -v curl >/dev/null 2>&1; then
+                if curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:4096/global/health 2>/dev/null; then
+                    ok "OpenCode API responding on :4096"
+                else
+                    dim "OpenCode API not answering on :4096"
+                fi
+            fi
+            ;;
+        opencode)
+            if command -v opencode >/dev/null 2>&1; then
+                ok "opencode: $(command -v opencode)"
+            else
+                info "install: opencode-setup   then: td-ai"
+            fi
+            ;;
+        agent)
+            if command -v agent >/dev/null 2>&1; then
+                ok "agent: $(command -v agent)"
+            else
+                info "install: cursor-agent-setup   then: agent login"
+            fi
+            ;;
+        *)
+            err "usage: ivx-configure ai [status|opencode|agent]"
+            return 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# status / reset / help
+# ---------------------------------------------------------------------------
+cmd_status() {
+    cfg_load
+    printf '\n  %sInVxTermux setup%s  v%s\n' "$C_B" "$C_RST" "$IVX_VERSION"
+    hr
+    printf '  %-14s %s\n' "prefix" "$PREFIX"
+    printf '  %-14s %s\n' "config" "$CONFIG_FILE"
+    if [ -f "$CONFIG_FILE" ]; then
+        printf '  %-14s %s\n' "banner" "on=$IVX_BANNER · style=$IVX_STYLE · color=$IVX_COLOR"
+    else
+        printf '  %-14s %s\n' "banner" "defaults (no config yet)"
+    fi
+    if [ -f "$PROFILE_D/invapp-banner.sh" ]; then
+        printf '  %-14s %s\n' "login hook" "installed"
+    else
+        printf '  %-14s %s\n' "login hook" "MISSING (reopen the app)"
+    fi
+    _ivx_count=0
+    if [ -d "$COMPLETION_DIR" ]; then
+        _ivx_count=$(find "$COMPLETION_DIR" -maxdepth 1 -name 'ivx-*.bash' 2>/dev/null | wc -l | tr -d ' ')
+    fi
+    printf '  %-14s %s\n' "completions" "${_ivx_count:-0} managed in $COMPLETION_DIR"
+    if [ -r "$ART_FILE" ]; then
+        printf '  %-14s %s\n' "custom art" "$ART_FILE"
+    fi
+    printf '  %-14s %s\n' "bun" "$(cat "$PREFIX/var/lib/invapp/bun.version" 2>/dev/null || echo 'unknown')"
+    printf '\n'
+}
+
+cmd_reset() {
+    if [ "$OPT_DRY" = 1 ]; then
+        info "would remove $CONFIG_FILE and $ART_FILE"
+        return 0
+    fi
+    rm -f "$CONFIG_FILE" "$ART_FILE" 2>/dev/null || true
+    ok "removed user config and custom art (defaults restored)"
+}
+
+usage() {
+    cat <<'EOF'
+ivx-configure -- InVxTermux setup
+
+USAGE
+  ivx-configure [--yes] [--dry-run] [--no-color] [COMMAND]
+
+COMMANDS
+  (none)                         interactive menu
+  status                         what is installed / enabled
+  banner on|off|preview|reset     login banner
+  banner style STYLE             pixelfont | small | mini | plain | auto
+  banner color COLOR             green | cyan | magenta | white | rainbow | none
+  banner text "TEXT" [--font NAME] [--font-file PATH]
+                                 render custom art with figlet -> art.txt
+  completions [list|all|clean|TOOL...]
+  packages [list|essentials|quality|build|network|all]
+  doctor [--strict] [--network]  read-only health report
+  ai [status|opencode|agent]     OpenCode / Cursor Agent hints
+  reset                          remove user config + custom art
+  help                           this text
+
+FILES
+  $XDG_CONFIG_HOME/invapp/config      banner settings (sourced)
+  $XDG_CONFIG_HOME/invapp/art.txt     custom banner art
+  $PREFIX/etc/bash_completion.d/ivx-*.bash
+
+NOTES
+  * never edits ~/.bashrc / ~/.profile / ~/.zshrc
+  * no implicit `pkg update`; installs only what you pick
+  * open a new session after changing the banner or completions
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# menu
+# ---------------------------------------------------------------------------
+appearance_menu() {
+    while :; do
+        cfg_load
+        printf '\n  %sAppearance%s\n' "$C_B" "$C_RST"
+        hr
+        printf '   banner   %s\n' "$IVX_BANNER"
+        printf '   style    %s\n' "$IVX_STYLE"
+        printf '   color    %s\n' "$IVX_COLOR"
+        printf '   art      %s\n' "$([ -r "$ART_FILE" ] && echo "$ART_FILE" || echo 'built-in')"
+        hr
+        printf '   1) banner on\n   2) banner off\n   3) style…\n   4) color…\n'
+        printf '   5) custom text (figlet)…\n   6) preview\n   7) reset appearance\n'
+        printf '   b) back\n'
+        ask '> '
+        case "${IVX_REPLY:-}" in
+            1) cmd_banner on ;;
+            2) cmd_banner off ;;
+            3) ask 'style (pixelfont/small/mini/plain/auto): '; banner_set_style "${IVX_REPLY:-}" ;;
+            4) ask 'color (green/cyan/magenta/white/rainbow/none): '; banner_set_color "${IVX_REPLY:-}" ;;
+            5)
+                ask 'banner text: '
+                _ivx_text_in=${IVX_REPLY:-}
+                if [ -n "$_ivx_text_in" ]; then
+                    ask 'figlet font [pixelfont]: '
+                    if [ -n "${IVX_REPLY:-}" ]; then
+                        gen_figlet_art "$_ivx_text_in" --font "$IVX_REPLY"
+                    else
+                        gen_figlet_art "$_ivx_text_in"
+                    fi
+                fi
+                ;;
+            6) banner_preview ;;
+            7) cmd_banner reset ;;
+            b|B|back|q) return 0 ;;
+            '') : ;;
+            *) warn "unknown choice: $IVX_REPLY" ;;
+        esac
+        [ "${IVX_REPLY:-}" = b ] || pause
+    done
+}
+
+completions_menu() {
+    while :; do
+        printf '\n  %sShell completions%s\n' "$C_B" "$C_RST"
+        hr
+        completions_list
+        printf '   1) install all available\n   2) install one…\n   3) clean managed files\n'
+        printf '   b) back\n'
+        ask '> '
+        case "${IVX_REPLY:-}" in
+            1) cmd_completions all ;;
+            2) ask 'tool: '; comp_install "${IVX_REPLY:-}" ;;
+            3) completions_clean ;;
+            b|B|back|q) return 0 ;;
+            '') : ;;
+            *) warn "unknown choice: $IVX_REPLY" ;;
+        esac
+        [ "${IVX_REPLY:-}" = b ] || pause
+    done
+}
+
+packages_menu() {
+    while :; do
+        printf '\n  %sBasic packages%s\n' "$C_B" "$C_RST"
+        hr
+        printf '   1) essentials   %s\n' "$(pkg_group essentials)"
+        printf '   2) quality      %s\n' "$(pkg_group quality)"
+        printf '   3) build        %s\n' "$(pkg_group build)"
+        printf '   4) network      %s\n' "$(pkg_group network)"
+        printf '   5) list installed / missing\n   6) all groups\n   b) back\n'
+        ask '> '
+        case "${IVX_REPLY:-}" in
+            1) install_group essentials ;;
+            2) install_group quality ;;
+            3) install_group build ;;
+            4) install_group network ;;
+            5) packages_list ;;
+            6) cmd_packages all ;;
+            b|B|back|q) return 0 ;;
+            '') : ;;
+            *) warn "unknown choice: $IVX_REPLY" ;;
+        esac
+        [ "${IVX_REPLY:-}" = b ] || pause
+    done
+}
+
+ai_menu() {
+    while :; do
+        printf '\n  %sAI tools%s\n' "$C_B" "$C_RST"
+        hr
+        cmd_ai status
+        printf '\n   1) re-check   2) install hints   b) back\n'
+        ask '> '
+        case "${IVX_REPLY:-}" in
+            1) cmd_ai status; pause ;;
+            2)
+                info "OpenCode: opencode-setup   then: td-ai"
+                info "Cursor:   cursor-agent-setup   then: agent login"
+                pause
+                ;;
+            b|B|back|q) return 0 ;;
+            '') : ;;
+            *) warn "unknown choice: $IVX_REPLY" ;;
+        esac
+    done
+}
+
+menu_main() {
+    while :; do
+        cfg_load
+        printf '\n'
+        if [ -r "$BANNER_LIB" ]; then
+            ( # shellcheck source=/dev/null
+              . "$BANNER_LIB"; IVX_TIPS=0; IVX_STATUS=0; ivx_banner_print )
+        fi
+        printf '  %sInVxTermux setup%s  v%s\n' "$C_B" "$C_RST" "$IVX_VERSION"
+        hr
+        _ivx_count=0
+        if [ -d "$COMPLETION_DIR" ]; then
+            _ivx_count=$(find "$COMPLETION_DIR" -maxdepth 1 -name 'ivx-*.bash' 2>/dev/null | wc -l | tr -d ' ')
+        fi
+        printf '   1) Appearance        banner %s · %s · %s\n' "$IVX_BANNER" "$IVX_STYLE" "$IVX_COLOR"
+        printf '   2) Shell completions %s managed\n' "${_ivx_count:-0}"
+        printf '   3) Basic packages    essentials / quality / build / network\n'
+        printf '   4) Doctor            read-only health report\n'
+        printf '   5) AI tools          opencode / cursor agent\n'
+        printf '   6) Preview banner\n'
+        printf '   7) Status\n'
+        printf '   a) Advanced          reset config\n'
+        printf '   q) Quit\n'
+        ask '> '
+        case "${IVX_REPLY:-}" in
+            1) appearance_menu ;;
+            2) completions_menu ;;
+            3) packages_menu ;;
+            4) cmd_doctor; pause ;;
+            5) ai_menu ;;
+            6) banner_preview; pause ;;
+            7) cmd_status; pause ;;
+            a|A)
+                ask 'Remove user config and custom art? [y/N] '
+                case "${IVX_REPLY:-}" in
+                    y|Y|yes) cmd_reset; pause ;;
+                    *) info "cancelled" ;;
+                esac
+                ;;
+            q|Q|quit|exit) printf '\n'; return 0 ;;
+            '') : ;;
+            *) warn "unknown choice: $IVX_REPLY" ;;
+        esac
+    done
+}
+
+# ---------------------------------------------------------------------------
+# dispatch
+# ---------------------------------------------------------------------------
+_ivx_cmd=${1:-menu}
+[ $# -gt 0 ] && shift
+
+case "$_ivx_cmd" in
+    menu) menu_main ;;
+    status) cmd_status ;;
+    banner) cmd_banner "$@" ;;
+    completions|completion) cmd_completions "$@" ;;
+    packages|pkg) cmd_packages "$@" ;;
+    doctor) cmd_doctor "$@" ;;
+    ai) cmd_ai "$@" ;;
+    reset) cmd_reset ;;
+    help|-h|--help) usage ;;
+    version|-v|--version) printf 'ivx-configure %s\n' "$IVX_VERSION" ;;
+    *)
+        err "unknown command: $_ivx_cmd"
+        usage >&2
+        exit 2
+        ;;
+esac

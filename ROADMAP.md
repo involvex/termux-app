@@ -174,6 +174,30 @@ https://github.com/involvex/termux-app
 - Follow-up: move the helpers into `app/src/main/assets/invapp/` so the app and
   `seed.sh` install the same files instead of two copies
 
+### 16. First-run setup + login banner (done)
+
+- `ivx-configure` — pure-bash TUI: appearance (banner style/colour/custom
+  figlet art), shell completions (`git gh npm pnpm docker kubectl helm
+  terraform deno tailscale cargo rustup just uv bun`), package groups
+  (essentials / quality / build / network, no implicit `pkg update`), doctor,
+  AI hints, reset. Flags: `--yes` / `--dry-run` / `--no-color`
+- `ivx-doctor` — thin wrapper over `ivx-configure doctor [--strict] [--network]`,
+  matching the `bun-doctor` / `jdk-doctor` convention
+- Login banner — pre-rendered **pixelfont** art (pyfiglet output for
+  “InvolveX”; the GPL `.flf` font is not shipped) rendered by
+  `$PREFIX/lib/invapp/banner.sh` from `$PREFIX/etc/profile.d/`, with `plain` /
+  `mini` / `small` fallbacks on narrow terminals and `NO_COLOR` support
+- Hook guards keep automation byte-clean: `BASH_VERSION` + interactive `$-` +
+  `[ -t 1 ]` + `TERM!=dumb` + no `SSH_ORIGINAL_COMMAND`; opt out per session
+  (`INVAPP_NO_BANNER=1`) or permanently (`banner off`). Never edits
+  `~/.bashrc` / `~/.profile`; zsh is documented-only
+- User config stays user-owned in `${XDG_CONFIG_HOME:-~/.config}/invapp/`
+  (`config`, `art.txt`); a broken config cannot break login
+- Wired into the drawer: quick-bar catalog entry (`Setup`, opt-in) plus
+  right-drawer **Setup**; `IvxConfigureInstaller` reseeds on every app start
+  and after a fresh bootstrap; container `seed.sh` copies the same files
+- Docs: [docs/configure.md](docs/configure.md)
+
 ## Non-goals (for now)
 
 - Full in-app IDE / multi-tab browser

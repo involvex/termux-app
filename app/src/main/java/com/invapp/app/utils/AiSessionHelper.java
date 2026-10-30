@@ -439,10 +439,19 @@ public final class AiSessionHelper {
             pb.environment().put("LD_LIBRARY_PATH", TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH);
             pb.redirectErrorStream(true);
             Process p = pb.start();
-            boolean finished = p.waitFor(3, TimeUnit.SECONDS);
-            if (!finished) {
-                p.destroy();
-                return 0;
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                boolean finished = p.waitFor(3, TimeUnit.SECONDS);
+                if (!finished) {
+                    p.destroy();
+                    return 0;
+                }
+            } else {
+                // Fallback for API < 26
+                try {
+                    // wait briefly
+                    Thread.sleep(1500);
+                } catch (InterruptedException ignored) {
+                }
             }
             return 1;
         } catch (Exception e) {

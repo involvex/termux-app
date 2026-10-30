@@ -245,6 +245,13 @@ final class TermuxInstaller {
                     // Ship official Android Bun into $PREFIX/bin after a fresh prefix.
                     TermuxBunInstaller.installIfNeeded(activity);
 
+                    // Also seed the setup helpers now: TermuxApplication seeds them
+                    // on app start, but a first bootstrap can finish after that, which
+                    // would leave the first session without the banner/ivx-configure.
+                    ResourceScriptsInstaller.installIfNeeded(activity);
+                    ShellLibraryInstaller.installIfNeeded(activity);
+                    IvxConfigureInstaller.installIfNeeded(activity);
+
                     // Recreate env file since termux prefix was wiped earlier
                     TermuxShellEnvironment.writeEnvironmentToFile(activity);
 

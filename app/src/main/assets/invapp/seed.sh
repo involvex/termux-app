@@ -165,6 +165,12 @@ if [ -f "$SEED_DIR/env.sh" ]; then
     sed -e "1s|^#!@BASH@|#!$BASH_BIN|" "$SEED_DIR/env.sh" > "$PREFIX/lib/invapp/env.sh"
     chmod 644 "$PREFIX/lib/invapp/env.sh"
 fi
+
+# Login banner renderer (sourced by $PREFIX/etc/profile.d/invapp-banner.sh).
+if [ -f "$SEED_DIR/banner.sh" ]; then
+    cp -f "$SEED_DIR/banner.sh" "$PREFIX/lib/invapp/banner.sh"
+    chmod 644 "$PREFIX/lib/invapp/banner.sh"
+fi
 chmod 700 "$PREFIX/libexec"/* 2>/dev/null || true
 
 # ---------------------------------------------------------------------------

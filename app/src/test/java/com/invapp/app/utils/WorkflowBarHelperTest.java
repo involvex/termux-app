@@ -18,7 +18,26 @@ public class WorkflowBarHelperTest {
         assertTrue(def.contains(WorkflowBarHelper.ID_AI));
         assertFalse(def.contains(WorkflowBarHelper.ID_RUN));
         assertFalse(def.contains(WorkflowBarHelper.ID_AI_STOP));
+        assertFalse(def.contains(WorkflowBarHelper.ID_SETUP));
         assertFalse(def.contains(WorkflowBarHelper.ID_MORE));
+    }
+
+    @Test
+    public void setup_isKnownCatalogOnly() {
+        assertTrue(WorkflowBarHelper.isKnownAction(WorkflowBarHelper.ID_SETUP));
+        String[] all = WorkflowBarHelper.ALL_ACTION_IDS;
+        assertEquals(WorkflowBarHelper.ID_SETUP, all[all.length - 1]);
+        assertEquals(WorkflowBarHelper.ID_AI_STOP, all[all.length - 2]);
+    }
+
+    @Test
+    public void setup_roundTripsThroughCatalogOrder() {
+        boolean[] checked = new boolean[WorkflowBarHelper.ALL_ACTION_IDS.length];
+        checked[checked.length - 1] = true; // setup
+        List<String> out = WorkflowBarHelper.filterToCatalogOrder(checked);
+        assertEquals(Arrays.asList(WorkflowBarHelper.ID_SETUP), out);
+        assertEquals(out, WorkflowBarHelper.filterToCatalogOrder(
+            WorkflowBarHelper.checkedFlags(out)));
     }
 
     @Test
