@@ -1,58 +1,96 @@
 # Kali NetHunter (udocker + VNC)
 
-Optional, **device-only** desktop: Termux [`udocker`](https://indigo-dc.github.io/udocker) pulls `kalilinux/kali-rolling`, then TigerVNC serves a guest desktop on **`127.0.0.1:5901`**. Connect with **AVNC**, RealVNC Viewer, or NetHunter KeX — not Preview/noVNC.
+Optional, **device-only** desktop. Connect with **AVNC**, RealVNC Viewer, or NetHunter KeX to **`127.0.0.1:5901`** — not Preview/noVNC.
 
-This replaced the old proot-distro + noVNC bridge (guest login often failed on this fork).
+## Recommended setup (kali.download rootfs)
 
-## Setup (once)
-
-```bash
-# Pull/create container `kali` (large download — free space under $PREFIX)
-td-udocker-setup
-# or full NetHunter profile (udocker + apt VNC/desktop + vncpasswd):
-td-nethunter-setup
-```
-
-Defaults: image `kalilinux/kali-rolling`, name `kali`. Override image:
+Docker Hub pulls of `kalilinux/kali-rolling` often fail on Termux/Android (`manifest not found or not authorized`) even with `--platform=linux/arm64`. Use the same official NetHunter rootfs tarballs as [KeX / install-nethunter-termux](https://gitlab.com/kalilinux/nethunter/build-scripts/kali-nethunter-rootless):
 
 ```bash
-td-udocker-setup debian:bookworm          # smaller test image → name `debian`
-TD_UDOCKER_NAME_OVERRIDE=mykali td-nethunter-setup kalilinux/kali-rolling
+td-nethunter-setup                 # downloads nano (~170 MiB) + VNC stack
+# or smaller / larger:
+td-nethunter-setup --variant minimal   # ~120 MiB
+td-nethunter-setup --variant full      # ~1.7 GiB
 ```
 
-## Daily use
+Then:
 
 ```bash
-td-udocker                 # interactive root shell (alias: td-guest)
-td-udocker apt update      # one-shot command
-td-nethunter               # start VNC on 127.0.0.1:5901
-td-nethunter --stop        # kill VNC in the guest
-td-nethunter-debug         # paste-back self-test
+td-udocker            # interactive root shell
+td-nethunter          # start VNC on 127.0.0.1:5901
+td-nethunter --stop
+td-nethunter-debug
 ```
 
-Open a VNC client → host `127.0.0.1`, port `5901` (display `:1`). Change display with `TD_NETHUNTER_DISPLAY=2 td-nethunter` → `:5902`.
+## PC transfer (when you want the Docker image)
 
-## What gets installed
+Hub must be pulled on a machine that can talk to Docker Hub; **match the phone ABI** (`linux/arm64` on most phones):
 
-| Where | What |
-|-------|------|
-| Termux | `pkg install udocker` (deps: proot, python, resolv-conf) on first setup |
-| Guest | TigerVNC / tightvnc, openbox/xfce, dbus; optional `nethunter-utils` on Kali |
-| State | `$PREFIX/var/td-udocker/` ready markers + logs; `~/.udocker/` |
+```bash
+# On the PC
+docker pull --platform linux/arm64 kalilinux/kali-rolling:arm64
+docker save -o kali-arm64.tar kalilinux/kali-rolling:arm64
+# copy kali-arm64.tar to the phone (USB / ~/storage/downloads), then:
+td-udocker-setup --from-docker-save ~/storage/downloads/kali-arm64.tar
+td-nethunter-setup --from-docker-save ~/storage/downloads/kali-arm64.tar
+```
 
-`~/.udocker/udocker.conf` sets `proot_killonexit = False` so Xvnc keeps running after `udocker run` returns, and `proot_noseccomp = True`.
+`docker save` (layers + metadata) → `udocker load`. Do **not** confuse with `docker export` / a raw proot backup.
+
+## Importing a rootfs tarball
+
+```bash
+td-udocker-setup --from-tar /path/to/rootfs.tar.xz
+```
+
+The archive must have `bin/sh` (or `usr/bin/bash`) at the **filesystem root**, or a single top-level dir such as `kali-arm64/` (official NetHunter layout). Setup flattens that nesting into `$PREFIX/var/td-udocker/rootfs/<name>` and runs it with **direct `proot`** (same idea as KeX).
+
+### Why not `udocker import` for kali.download
+
+On this fork, `udocker import` re-extracts layers with host proot/tar and fails (`Error: while extracting image layer` / guest `bash` with no execute bit) even after a good first extract. NetHunter / `--from-tar` therefore **skip import**: install the tree once, stamp `backend=rootfs`, and `td-udocker` / `td-nethunter` call fork-safe `proot` (`env -u LD_PRELOAD` + `PROOT_LOADER` + `PROOT_TMP_DIR`). Hub / `--from-docker-save` still use udocker.
+
+### Why extract showed `Cannot mknod` / `Cannot hard link`
+
+Android apps cannot create device nodes or many hardlinks. Plain `tar -xJf` therefore exits non‑zero on the NetHunter rootfs. Setup extracts with **`proot --link2symlink tar …`** (same as official KeX), but on this fork that requires **`env -u LD_PRELOAD` + `PROOT_LOADER` + `PROOT_TMP_DIR`** — otherwise proot dies with `execve(…/bin/tar): No such file or directory` or warnings about `/data/data/com.termux/.../tmp`. mknod/hardlink errors stay non‑fatal; success is “`bin/sh` exists”. Plain `tar` is the fallback. Runtime `/dev` comes from host binds.
+
+### Why a proot backup had “missing /bin/sh”
+
+| What you did | Result |
+|--------------|--------|
+| Tar of `…/kali-arm64/` **directory** without flattening | Guest root = empty / wrong tree → no `/bin/sh` |
+| `udocker load` / `import` on a **flat rootfs** | Wrong verb — use `--from-tar` (rootfs) |
+| Incomplete extract / wrong path | Only stubs, no shell |
+
+Use `--from-tar` (rootfs/export) or `--from-docker-save` (`docker save`), not the wrong verb for the file type.
+
+## Optional Hub pull
+
+```bash
+td-udocker-setup kalilinux/kali-rolling:arm64   # often fails on-device
+td-nethunter-setup --docker                     # same, then VNC apt
+```
+
+## Env knobs
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `TD_NETHUNTER_VARIANT` | `nano` | `nano` / `minimal` / `full` |
+| `TD_NETHUNTER_ROOTFS_BASE` | `https://kali.download/nethunter-images/current/rootfs` | Mirror |
+| `TD_UDOCKER_NAME` | `kali` | Container name |
+| `TD_UDOCKER_PLATFORM` | auto from `uname -m` | e.g. `linux/arm64` |
+| `TD_NETHUNTER_DISPLAY` | `1` | VNC display → port `5900+N` |
 
 ## Troubleshooting
 
-1. Run `td-nethunter-debug` and keep the full output.
-2. **`LD_PRELOAD` must stay set** for the host `udocker` process — Termux’s package hardcodes `/data/data/com.termux/.../bin/proot`; this fork’s path redirector rewrites it. Open a **new** session after an app update.
-3. Rogue pip `proot` shim → `pip uninstall proot && pkg install -y -f proot`.
-4. VNC not listening → `td-udocker cat /root/.td-nethunter-vnc.log` and re-run `td-nethunter-setup`.
-5. Old proot-distro trees under `$PREFIX/var/lib/proot-distro/` are unused; delete if you need space.
+1. `td-nethunter-debug` — paste full output.
+2. Hub errors → ignore Hub; run plain `td-nethunter-setup` (kali.download).
+3. `Error: while extracting image layer` / `bash` no execute bit after import → reopen the app (reseeds helpers), remove any half-broken guest (`rm -rf $PREFIX/var/td-udocker/rootfs/kali`), re-run `td-nethunter-setup` (rootfs path, not `udocker import`).
+4. Keep **`LD_PRELOAD`** set for host `udocker` (path redirector). Direct-proot NetHunter clears it only inside the guest `proot` call.
+5. Rogue pip `proot` → `pip uninstall proot && pkg install -y -f proot`.
+6. VNC quiet → `td-udocker kali cat /root/.td-nethunter-vnc.log`.
 
 ## Not in this stack
 
-- Preview WebView / noVNC / websockify
-- Official NetHunter-Store KeX rootfs installer (`install-nethunter-termux`)
-- Termux:X11 (needs a matching signed X11 APK for this `sharedUserId` — future plugin)
-- Container twin (`termux-docker`) — helpers are device-only
+- Preview WebView / noVNC
+- Termux:X11 (needs a matching signed X11 APK)
+- Container twin (`termux-docker`)

@@ -1,36 +1,103 @@
 #!@BASH@
-# InVxTermux — NetHunter profile on udocker (device-only).
-# Ensures kalilinux/kali-rolling (or [image]) via td-udocker-setup, then installs
-# TigerVNC + a minimal desktop inside the guest. After this:
-#   td-nethunter          # start VNC on 127.0.0.1:5901
-#   td-udocker            # interactive Kali shell
-# Connect with AVNC / RealVNC / NetHunter KeX — no Preview/noVNC.
-# Usage: td-nethunter-setup [image]
-# rev: 2026.10.30-1
+# InVxTermux — NetHunter on udocker (device-only).
+# Default: download the official Kali NetHunter rootfs from kali.download
+# (same images as KeX / install-nethunter-termux), install rootfs+proot, then
+# install TigerVNC + a minimal desktop. Docker Hub pulls are optional/fallback
+# because they often fail on Android ("manifest not found or not authorized").
+#
+# Usage:
+#   td-nethunter-setup                         # nano rootfs + VNC stack
+#   td-nethunter-setup --variant minimal|full
+#   td-nethunter-setup --from-tar FILE
+#   td-nethunter-setup --from-docker-save FILE
+#   td-nethunter-setup --docker [image]        # try Hub (usually broken)
+#
+# After: td-nethunter → AVNC/KeX to 127.0.0.1:5901 ; td-udocker for a shell
+# rev: 2026.11.03-1
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 
-IMAGE="${1:-${TD_UDOCKER_IMAGE:-kalilinux/kali-rolling}}"
-NAME="${TD_UDOCKER_NAME_OVERRIDE:-$(td_udocker_name_from_image "$IMAGE")}"
+MODE="nethunter"
+VARIANT="${TD_NETHUNTER_VARIANT:-nano}"
+FROM_FILE=""
+IMAGE="${TD_UDOCKER_IMAGE:-kalilinux/kali-rolling}"
+NAME="${TD_UDOCKER_NAME_OVERRIDE:-${TD_UDOCKER_NAME:-kali}}"
 STATE_DIR="${TD_UDOCKER_STATE:-$PREFIX/var/td-udocker}"
+SETUP="$PREFIX/bin/td-udocker-setup"
 
 log() { printf 'td-nethunter-setup: %s\n' "$*"; }
 die() { printf 'td-nethunter-setup: ERROR: %s\n' "$*" >&2; exit 1; }
 
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help)
+      echo "Usage: td-nethunter-setup [--variant nano|minimal|full]"
+      echo "       td-nethunter-setup --from-tar FILE"
+      echo "       td-nethunter-setup --from-docker-save FILE"
+      echo "       td-nethunter-setup --docker [image]"
+      exit 0
+      ;;
+    --variant|-v)
+      shift
+      [ $# -gt 0 ] || die "--variant needs nano|minimal|full"
+      VARIANT="$1"; shift
+      MODE="nethunter"
+      ;;
+    --from-tar)
+      MODE="from-tar"
+      shift
+      [ $# -gt 0 ] || die "--from-tar needs a file"
+      FROM_FILE="$1"; shift
+      ;;
+    --from-docker-save)
+      MODE="from-docker-save"
+      shift
+      [ $# -gt 0 ] || die "--from-docker-save needs a file"
+      FROM_FILE="$1"; shift
+      ;;
+    --docker|--hub)
+      MODE="docker"
+      shift
+      [ $# -gt 0 ] && { IMAGE="$1"; shift; }
+      ;;
+    nano|minimal|full)
+      VARIANT="$1"; MODE="nethunter"; shift
+      ;;
+    *)
+      die "unknown arg: $1 (try --help)"
+      ;;
+  esac
+done
+
 if [ "${INVAPP_ON_DEVICE:-0}" != 1 ]; then
   log "device-only helper"
-  echo "  Reopen InVxTermux on the phone and run: td-nethunter-setup [image]" >&2
+  echo "  Reopen InVxTermux on the phone and run: td-nethunter-setup" >&2
   exit 1
 fi
 
-log "rev 2026.10.30-1 (udocker NetHunter → $NAME)"
-
-# Ensure container (pull/create) via the shared setup script.
-SETUP="$PREFIX/bin/td-udocker-setup"
+log "rev 2026.11.03-1 (mode=$MODE → $NAME)"
 [ -x "$SETUP" ] || die "td-udocker-setup missing — reopen the app to reseed helpers"
-TD_UDOCKER_NAME_OVERRIDE="$NAME" "$SETUP" "$IMAGE" \
-  || die "td-udocker-setup failed"
-td_udocker_ready "$NAME" || die "container '$NAME' not ready after udocker setup"
 
+case "$MODE" in
+  nethunter)
+    TD_UDOCKER_NAME_OVERRIDE="$NAME" "$SETUP" --nethunter "$VARIANT" \
+      || die "td-udocker-setup --nethunter failed"
+    ;;
+  from-tar)
+    TD_UDOCKER_NAME_OVERRIDE="$NAME" "$SETUP" --from-tar "$FROM_FILE" \
+      || die "td-udocker-setup --from-tar failed"
+    ;;
+  from-docker-save)
+    TD_UDOCKER_NAME_OVERRIDE="$NAME" "$SETUP" --from-docker-save "$FROM_FILE" \
+      || die "td-udocker-setup --from-docker-save failed"
+    ;;
+  docker)
+    log "trying Docker Hub (often fails on Android — prefer default --nethunter)"
+    TD_UDOCKER_NAME_OVERRIDE="$NAME" "$SETUP" "$IMAGE" \
+      || die "Hub pull failed — run: td-nethunter-setup   # uses kali.download"
+    ;;
+esac
+
+td_udocker_ready "$NAME" || die "container '$NAME' not ready after udocker setup"
 mkdir -p "$STATE_DIR"
 APT_LOG="$STATE_DIR/$NAME.apt-install.log"
 
@@ -69,7 +136,6 @@ case "$NAME" in
 esac
 
 log "writing ~/.vnc/xstartup"
-# Pass the heredoc as stdin to a guest shell that writes xstartup.
 td_udocker_run "$NAME" /bin/sh -c 'mkdir -p /root/.vnc && cat > /root/.vnc/xstartup && chmod +x /root/.vnc/xstartup' <<'XSTARTUP'
 #!/bin/sh
 unset SESSION_MANAGER
@@ -90,7 +156,6 @@ else
 fi
 XSTARTUP
 
-# VNC password: prompt once if missing (TigerVNC / tightvnc).
 HAS_PASS=0
 if td_udocker_run "$NAME" /bin/sh -c \
   'test -f /root/.vnc/passwd -o -f /root/.vnc/passwd.vnc' >/dev/null 2>&1; then

@@ -6,7 +6,7 @@
 # Starts Xvnc/vncserver on 127.0.0.1:$((5900+display)). Connect with AVNC /
 # RealVNC / NetHunter KeX — Preview/noVNC is not used.
 # Requires: td-nethunter-setup
-# rev: 2026.10.30-1
+# rev: 2026.11.03-1
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 
 NAME="${TD_UDOCKER_NAME:-kali}"
@@ -63,7 +63,7 @@ if [ "${INVAPP_ON_DEVICE:-0}" != 1 ]; then
   exit 1
 fi
 
-log "rev 2026.10.30-1 (udocker VNC → $NAME :$DISPLAY_NUM)"
+log "rev 2026.11.03-1 (VNC → $NAME :$DISPLAY_NUM)"
 
 td_udocker_nethunter_ready "$NAME" || {
   log "$NAME NetHunter stack missing — run: td-nethunter-setup" >&2
@@ -76,7 +76,8 @@ if vnc_listening "$VNCPORT"; then
   log "VNC already listening on 127.0.0.1:$VNCPORT"
 else
   log "starting VNC on $NAME :$DISPLAY_NUM → 127.0.0.1:$VNCPORT"
-  # proot_killonexit=False (udocker.conf) lets the Xvnc daemon outlive this run.
+  # rootfs backend: drop --kill-on-exit so Xvnc outlives this launcher.
+  # udocker backend: proot_killonexit=False in udocker.conf does the same.
   _vnc_cmd="
     chmod +x /root/.vnc/xstartup 2>/dev/null || true
     mkdir -p /root/.vnc
@@ -98,7 +99,8 @@ else
     fi
     sleep 2
   "
-  td_udocker_run "$NAME" /bin/sh -c "$_vnc_cmd" >"$VNCLOG" 2>&1 || true
+  TD_PROOT_KEEP_ALIVE=1 td_udocker_run "$NAME" /bin/sh -c "$_vnc_cmd" \
+    >"$VNCLOG" 2>&1 || true
   _i=0
   while [ "$_i" -lt 25 ] && ! vnc_listening "$VNCPORT"; do
     sleep 1

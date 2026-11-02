@@ -1,7 +1,7 @@
 #!@BASH@
-# InVxTermux — udocker NetHunter self-test (device-only).
+# InVxTermux — NetHunter self-test (device-only; rootfs or udocker backend).
 # Paste the whole output on failure. Usage: td-nethunter-debug [name]
-# rev: 2026.10.30-1
+# rev: 2026.11.03-1
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 
 NAME="${1:-${TD_UDOCKER_NAME:-kali}}"
@@ -58,22 +58,40 @@ else
   bad "no $UDIR/udocker.conf — td_udocker_conf_init not run yet"
 fi
 
-h "udocker images"
-udocker images 2>&1 | head -30 || true
-
-h "udocker ps"
-udocker ps 2>&1 | head -30 || true
-
-h "inspect $NAME"
-if udocker inspect "$NAME" >/dev/null 2>&1; then
-  ok "container $NAME exists"
-  udocker inspect "$NAME" 2>&1 | head -40
+h "backend $NAME"
+_be="$(td_udocker_backend "$NAME" 2>/dev/null || true)"
+echo "backend=${_be:-none}"
+_rfs="$(td_udocker_rootfs_dir "$NAME")"
+if [ -d "$_rfs" ]; then
+  ok "rootfs dir $_rfs"
+  ls -la "$_rfs/bin/sh" "$_rfs/bin/bash" 2>&1 | head -5 || true
 else
-  bad "container $NAME missing — run: td-udocker-setup / td-nethunter-setup"
+  echo "(no $_rfs — expected for udocker-only guests)"
+fi
+
+h "udocker images / ps (optional)"
+if command -v udocker >/dev/null 2>&1; then
+  udocker images 2>&1 | head -20 || true
+  udocker ps 2>&1 | head -20 || true
+  if udocker inspect "$NAME" >/dev/null 2>&1; then
+    ok "udocker container $NAME exists"
+    udocker inspect "$NAME" 2>&1 | head -40
+  else
+    echo "(no udocker container named $NAME)"
+  fi
+else
+  echo "udocker not installed (ok for kali.download rootfs path)"
+fi
+
+h "guest exists?"
+if td_udocker_container_exists "$NAME" 2>/dev/null; then
+  ok "guest $NAME present (backend=${_be:-?})"
+else
+  bad "guest $NAME missing — run: td-nethunter-setup"
 fi
 
 h "ready markers"
-for f in "$STATE_DIR/$NAME.ready" "$STATE_DIR/$NAME.nethunter.ready" "$STATE_DIR/$NAME.image"; do
+for f in "$STATE_DIR/$NAME.ready" "$STATE_DIR/$NAME.nethunter.ready" "$STATE_DIR/$NAME.image" "$STATE_DIR/$NAME.backend"; do
   if [ -e "$f" ]; then ok "$f"; [ -f "$f" ] && head -1 "$f"; else bad "missing $f"; fi
 done
 
@@ -90,7 +108,7 @@ _fork_proot="$PREFIX/bin/proot"
 echo "stock path (redirect target): $_stock_proot"
 echo "fork proot: $_fork_proot ($( [ -x "$_fork_proot" ] && echo present || echo MISSING ))"
 
-h "one-shot udocker run $NAME /bin/true"
+h "one-shot run $NAME /bin/true"
 export PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}"
 if td_udocker_run "$NAME" /bin/true; then
   ok "run /bin/true"
