@@ -1,0 +1,37 @@
+#!@BASH@
+# InVxTermux — interactive shell / one-shot command inside a udocker container.
+# Usage: td-udocker [name] [cmd...]
+#   name  container name (default: kali). If the first arg is not an existing
+#         container, it is treated as the start of cmd against the default.
+#   cmd   default: /bin/bash -l
+# Examples:
+#   td-udocker                         # root shell in kali
+#   td-udocker kali apt update
+#   td-udocker debian                  # shell in debian (if created)
+#   td-udocker bash -lc 'uname -a'     # cmd against default kali
+# Requires: td-udocker-setup (or td-nethunter-setup).
+# rev: 2026.10.30-1
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+NAME="${TD_UDOCKER_NAME:-kali}"
+if [ $# -gt 0 ] && td_udocker_container_exists "$1" 2>/dev/null; then
+  NAME="$1"
+  shift
+fi
+
+if ! td_udocker_container_exists "$NAME" 2>/dev/null; then
+  echo "td-udocker: no container '$NAME' — install first:" >&2
+  echo "  td-udocker-setup [image]     # e.g. kalilinux/kali-rolling" >&2
+  echo "  td-nethunter-setup           # Kali + TigerVNC desktop" >&2
+  if command -v udocker >/dev/null 2>&1; then
+    echo "  existing:" >&2
+    udocker ps 2>/dev/null | head -20 >&2 || true
+  fi
+  exit 1
+fi
+
+if [ $# -eq 0 ]; then
+  td_udocker_run "$NAME" /bin/bash -l
+else
+  td_udocker_run "$NAME" "$@"
+fi

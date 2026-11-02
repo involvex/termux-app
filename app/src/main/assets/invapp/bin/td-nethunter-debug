@@ -1,238 +1,123 @@
 #!@BASH@
-# InVxTermux — nethunter guest environment self-test (device-only, no root).
-# Prints every layer proot-distro needs: environment, proot temp handling, the
-# guest rootfs contents (incl. ELF interpreter sniff), and DIRECT proot exec
-# attempts (bypassing proot-distro so its shell-wrapping can't mask results).
-# Paste the whole output back on failure. Usage: td-nethunter-debug [distro]
-#   (default kali-rolling)
-# rev: 2026.10.27-1
+# InVxTermux — udocker NetHunter self-test (device-only).
+# Paste the whole output on failure. Usage: td-nethunter-debug [name]
+# rev: 2026.10.30-1
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 
-DISTRO="${1:-kali-rolling}"
-# proot-distro 5.x layout (legacy fallback: installed-rootfs/<name>).
-RFS="$PREFIX/var/lib/proot-distro/containers/$DISTRO/rootfs"
-if [ -d "$RFS" ]; then
-  RFS_LAYOUT="containers/$DISTRO/rootfs (5.x)"
-else
-  RFS="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO"
-  RFS_LAYOUT="installed-rootfs/$DISTRO (legacy)"
-fi
-DTMP="$PREFIX/var/td-nethunter/debug-proot-tmp"
+NAME="${1:-${TD_UDOCKER_NAME:-kali}}"
+STATE_DIR="${TD_UDOCKER_STATE:-$PREFIX/var/td-udocker}"
+DISPLAY_NUM="${TD_NETHUNTER_DISPLAY:-1}"
+VNCPORT=$((5900 + DISPLAY_NUM))
+UDIR="${UDOCKER_DIR:-${HOME:-$PREFIX/../home}/.udocker}"
 
 h() { printf '\n== %s\n' "$*"; }
-# clean <cmd...>: run with proot's preload namespace cleared. The path
-# redirector + termux-exec rewrite absolute paths at exec time; a guest argv
-# must reach proot untouched (proot-distro pops LD_PRELOAD for proot too).
-# PROOT_LOADER compensates: proot's compiled-in loader path is com.termux,
-# which only resolves through the redirector on this fork — td_proot_exec sets
-# it the same way, so these layers mirror the production invocation.
-PLOADER="$(td_proot_loader 2>/dev/null)" || PLOADER=""
-clean() {
-  if [ -n "$PLOADER" ]; then
-    env -u LD_PRELOAD PROOT_LOADER="$PLOADER" "$@"
-  else
-    env -u LD_PRELOAD "$@"
-  fi
-}
-# run_h <cmd...>: head the output, then report the *command's* status (a bare
-# `cmd | head; echo $?` would report head's).
-run_h() {
-  "$@" 2>&1 | head -16
-  printf 'rc=%s\n' "${PIPESTATUS[0]}"
-}
+ok() { printf 'OK: %s\n' "$*"; }
+bad() { printf 'FAIL: %s\n' "$*"; }
 
 h "environment"
 echo "PREFIX=$PREFIX"
-echo "TMPDIR=${TMPDIR-<unset>}"
+echo "HOME=${HOME-<unset>}"
 echo "LD_PRELOAD=${LD_PRELOAD-<unset>}"
-echo "PROOT_TMP_DIR=${PROOT_TMP_DIR-<unset>}"
+echo "PROOT_NO_SECCOMP=${PROOT_NO_SECCOMP-<unset>}"
+echo "INVAPP_ON_DEVICE=${INVAPP_ON_DEVICE-<unset>}"
+echo "TD_UDOCKER_IMAGE=${TD_UDOCKER_IMAGE-<unset>}"
+echo "TD_UDOCKER_NAME=${TD_UDOCKER_NAME-<unset>}"
+echo "UDOCKER_DIR=$UDIR"
 echo "uname=$(uname -a)"
 
 h "tools"
-for t in proot proot-distro python3 bash readelf ldd; do
+for t in udocker proot python python3 bash curl; do
   printf '%-14s %s\n' "$t" "$(command -v "$t" 2>/dev/null || echo MISSING)"
 done
 
-h "proot --version"
-proot --version 2>&1 | head -3 || true
-ls -l "$PREFIX/bin/proot" 2>&1
-echo "proot loader: ${PLOADER:-MISSING (only reachable via the path redirector)}"
-echo "proot loader dir:"
-ls -l "$PREFIX/libexec/proot" 2>&1 | head -5
-
-h "default tmp: $PREFIX/tmp"
-if [ -d "$PREFIX/tmp" ]; then
-  ls -ld "$PREFIX/tmp"
-  t="$PREFIX/tmp/.invdbg.$$"
-  if touch "$t" 2>/dev/null; then
-    echo "write: ok"
-    if chmod 700 "$t" 2>/dev/null; then echo "chmod: ok"; else echo "chmod: FAILED"; fi
-    rm -f "$t"
+h "proot ELF check"
+if [ -f "$PREFIX/bin/proot" ]; then
+  ls -l "$PREFIX/bin/proot"
+  if head -c 4 "$PREFIX/bin/proot" 2>/dev/null | od -An -tx1 | grep -q '7f 45 4c 46'; then
+    ok "proot is ELF"
+    proot --version 2>&1 | head -3 || true
   else
-    echo "write: FAILED (perms/full disk/noexec?)"
+    bad "proot is NOT an ELF (pip shim?) — pkg reinstall proot"
   fi
 else
-  echo "MISSING — creating (proot's default temp location)"
-  mkdir -p "$PREFIX/tmp" && echo "created ok"
+  bad "proot missing"
 fi
-echo "leftover proot temp dirs: $(ls -d "$PREFIX/tmp"/proot-* 2>/dev/null | head -5 | tr '\n' ' ')"
 
-h "private proot temp: $DTMP"
-mkdir -p "$DTMP"
-t="$DTMP/.invdbg.$$"
-if touch "$t" 2>/dev/null && chmod 700 "$t" 2>/dev/null && rm -f "$t"; then
-  echo "write+chmod: ok"
+h "udocker --version"
+if command -v udocker >/dev/null 2>&1; then
+  udocker --version 2>&1 | head -5 || true
+  ok "udocker present"
 else
-  echo "write+chmod: FAILED"
+  bad "udocker missing — run: td-udocker-setup"
 fi
-mkd="$DTMP/pd.$$"
-if mkdir "$mkd" 2>/dev/null && chmod 700 "$mkd" 2>/dev/null && rmdir "$mkd"; then
-  echo "mkdtemp-style: ok"
+
+h "udocker.conf (killonexit should be False)"
+if [ -f "$UDIR/udocker.conf" ]; then
+  cat "$UDIR/udocker.conf"
 else
-  echo "mkdtemp-style: FAILED"
+  bad "no $UDIR/udocker.conf — td_udocker_conf_init not run yet"
 fi
 
-# Layer 1: proot itself, no rootfs at all. A failure here is a broken proot
-# (missing loader, ptrace/seccomp, temp dir), not a rootfs problem.
-h "layer 1: proot with the HOST shell (no -r)"
-run_h clean PROOT_TMP_DIR="$DTMP" proot -0 "$PREFIX/bin/sh" -c 'echo HOST-PROOT-OK'
+h "udocker images"
+udocker images 2>&1 | head -30 || true
 
-h "layer 1b: same with PROOT_NO_SECCOMP=1"
-run_h clean PROOT_NO_SECCOMP=1 PROOT_TMP_DIR="$DTMP" \
-  proot -0 "$PREFIX/bin/sh" -c 'echo HOST-PROOT-OK'
+h "udocker ps"
+udocker ps 2>&1 | head -30 || true
 
-h "guest rootfs ($DISTRO) — $RFS_LAYOUT"
-if [ ! -d "$RFS" ]; then
-  echo "NOT INSTALLED — run td-nethunter-setup first"
-  echo
-  echo "Paste the entire output back if anything failed."
-  exit 0
+h "inspect $NAME"
+if udocker inspect "$NAME" >/dev/null 2>&1; then
+  ok "container $NAME exists"
+  udocker inspect "$NAME" 2>&1 | head -40
+else
+  bad "container $NAME missing — run: td-udocker-setup / td-nethunter-setup"
 fi
-ls -ld "$RFS/bin" "$RFS/usr/bin" 2>&1
-for f in /usr/bin/bash /bin/bash /bin/sh /usr/bin/env /usr/bin/dash; do
-  if [ -L "$RFS$f" ]; then
-    printf '%-16s symlink -> %s\n' "$f" "$(readlink "$RFS$f")"
-  elif [ -e "$RFS$f" ]; then
-    printf '%-16s present  first bytes: %s  mode: %s\n' "$f" \
-      "$(head -c 8 "$RFS$f" 2>/dev/null | od -An -tx1 | tr -s ' ' | head -1)" \
-      "$(ls -l "$RFS$f" | awk '{print $1}')"
-  else
-    printf '%-16s MISSING\n' "$f"
-  fi
-done
-grep '^root:' "$RFS/etc/passwd" 2>/dev/null || echo "no root: line in passwd"
-df -h "$PREFIX" 2>/dev/null | tail -2
 
-# proot relies on the guest loader existing for *every* exec'd binary. A missing
-# /lib/ld-linux-aarch64.so.1 (or its usr-merge target) produces exactly
-# "execve(...): No such file or directory" even though the shell file itself is
-# present and is a valid ELF: execve(2) answers ENOENT when PT_INTERP does not
-# resolve. That is the single most likely cause of the reported failure.
-echo "-- ELF interpreter sniff + presence --"
-for f in /bin/sh /usr/bin/bash; do
-  interp=""
-  if [ -e "$RFS$f" ]; then
-    interp="$(grep -aoE '(/lib|/usr/lib|/lib64|/usr/lib64)[^ ]*ld(-[^ ]*)?\.so\.[0-9]+' "$RFS$f" 2>/dev/null | head -1)"
-    printf '  %-12s PT_INTERP: %-38s' "$f" "${interp:-<none-found>}"
-    if [ -n "$interp" ] && [ -e "$RFS$interp" ]; then
-      echo "present"
-    elif [ -n "$interp" ]; then
-      echo "MISSING in rootfs  <-- likely root cause"
-    else
-      echo "static or sniff failed"
-    fi
-  fi
-done
-echo "-- rootfs interpreter dirs --"
-ls -ld "$RFS/lib" "$RFS/lib64" "$RFS/usr/lib" "$RFS/usr/lib/aarch64-linux-gnu" 2>&1
-ls -l "$RFS/usr/lib/ld-linux-aarch64.so.1" "$RFS/lib/ld-linux-aarch64.so.1" \
-      "$RFS/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1" 2>&1
-
-echo "-- library deps (host side) --"
-if command -v readelf >/dev/null 2>&1; then
-  readelf -l "$RFS/bin/sh" 2>&1 | grep -A1 "Requesting program interpreter"
-  readelf -h "$RFS/bin/sh" 2>&1 | grep -E 'Class|Machine|Type'
-fi
-if command -v ldd >/dev/null 2>&1; then
-  echo "--- ldd of sh (guest libs are NOT in the host loader path: errors expected) ---"
-  ldd "$RFS/bin/sh" 2>&1 | head -10
-fi
-for lib in libc.so.6 libdl.so.2 libpthread.so.0 libm.so.6; do
-  p=$(find "$RFS/usr/lib" "$RFS/lib" -name "$lib" 2>/dev/null | head -1)
-  echo "  $lib: ${p:-MISSING}"
+h "ready markers"
+for f in "$STATE_DIR/$NAME.ready" "$STATE_DIR/$NAME.nethunter.ready" "$STATE_DIR/$NAME.image"; do
+  if [ -e "$f" ]; then ok "$f"; [ -f "$f" ] && head -1 "$f"; else bad "missing $f"; fi
 done
 
-# Layer 2: the guest loader itself, run by the HOST. No proot involved: if this
-# prints GUEST-OK the rootfs + dynamic loader are healthy and the fault is in
-# proot's exec translation. If it fails, proot is not what broke.
-h "layer 2: guest loader run directly on the host (no proot)"
-if [ -e "$RFS/lib/ld-linux-aarch64.so.1" ] && [ -e "$RFS/bin/sh" ]; then
-  run_h clean "$RFS/lib/ld-linux-aarch64.so.1" \
-    --library-path "$RFS/usr/lib/aarch64-linux-gnu:$RFS/lib/aarch64-linux-gnu:$RFS/usr/lib" \
-    "$RFS/bin/sh" -c 'echo GUEST-OK; uname -m'
+h "redirector (com.termux path rewrite)"
+if [ -n "${LD_PRELOAD:-}" ]; then
+  ok "LD_PRELOAD set (needed for Termux udocker hardcoded com.termux proot path)"
+  echo "LD_PRELOAD=$LD_PRELOAD"
 else
-  echo "cannot test — loader or /bin/sh missing"
+  bad "LD_PRELOAD empty — path redirector may be inactive; reopen app / new session"
+fi
+# Termux udocker patches often hardcode stock prefix; redirector maps it.
+_stock_proot="/data/data/com.termux/files/usr/bin/proot"
+_fork_proot="$PREFIX/bin/proot"
+echo "stock path (redirect target): $_stock_proot"
+echo "fork proot: $_fork_proot ($( [ -x "$_fork_proot" ] && echo present || echo MISSING ))"
+
+h "one-shot udocker run $NAME /bin/true"
+export PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}"
+if td_udocker_run "$NAME" /bin/true; then
+  ok "run /bin/true"
+elif td_udocker_run "$NAME" /bin/sh -c true; then
+  ok "run /bin/sh -c true"
+else
+  bad "guest not runnable"
 fi
 
-# Layer 3: proot with the real rootfs. -R adds the standard binds; the bind list
-# matches what proot-distro passes (/dev, /proc, /sys are mandatory).
-h "layer 3: proot -R, private temp, LD_PRELOAD cleared"
-run_h clean PROOT_TMP_DIR="$DTMP" \
-  proot -0 -R "$RFS" -w / -b /dev -b /proc -b /sys -b "$PREFIX:/termux" \
-  /bin/sh -c 'echo GUEST-EXEC-OK; uname -m; ls -l /bin/sh'
+h "os-release (guest)"
+td_udocker_run "$NAME" /bin/sh -c 'cat /etc/os-release 2>/dev/null | head -8' 2>&1 | head -12 || true
 
-h "layer 3b: proot -R with PROOT_NO_SECCOMP=1"
-run_h clean PROOT_NO_SECCOMP=1 PROOT_TMP_DIR="$DTMP" \
-  proot -0 -R "$RFS" -w / -b /dev -b /proc -b /sys -b "$PREFIX:/termux" \
-  /bin/sh -c 'echo GUEST-EXEC-OK'
+h "VNC binaries (guest)"
+td_udocker_run "$NAME" /bin/sh -c '
+  for c in Xtigervnc Xvnc vncserver vncpasswd; do
+    printf "%-12s %s\n" "$c" "$(command -v $c 2>/dev/null || echo MISSING)"
+  done
+  ls -l /root/.vnc/xstartup 2>/dev/null || echo "no xstartup"
+' 2>&1 | head -20 || true
 
-h "layer 3c: proot -R, LD_PRELOAD left as injected"
-run_h env PROOT_TMP_DIR="$DTMP" \
-  proot -0 -R "$RFS" -w / -b /dev -b /proc -b /sys -b "$PREFIX:/termux" \
-  /bin/sh -c 'echo GUEST-EXEC-OK'
-
-h "layer 3d: proot -R, default temp dir"
-run_h clean env -u PROOT_TMP_DIR \
-  proot -0 -R "$RFS" -w / -b /dev -b /proc -b /sys -b "$PREFIX:/termux" \
-  /bin/sh -c 'echo GUEST-EXEC-OK'
-
-# Layer 3e/3f: the production invocation (td_proot_exec) execs the *login*
-# shell, which on Kali is /usr/bin/bash — not /bin/sh. bash and dash differ
-# enough (size, libtinfo, brk behaviour) that a dash-only pass proves nothing.
-# 3e is exactly what td_guest_login runs; 3f is the same with dash as control.
-h "layer 3e: production argv, /usr/bin/bash (what td_guest_login runs)"
-run_h clean PROOT_TMP_DIR="$DTMP" PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
-  proot -0 --kill-on-exit --link2symlink -r "$RFS" -w /root \
-  -b /dev -b /proc -b /sys -b /dev/urandom:/dev/random -b "$PREFIX:/termux" \
-  /usr/bin/env -i HOME=/root TERM=xterm-256color \
-  PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-  /usr/bin/bash -c 'echo BASH-OK; uname -m'
-
-h "layer 3f: same, /usr/bin/dash (control)"
-run_h clean PROOT_TMP_DIR="$DTMP" PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
-  proot -0 --kill-on-exit --link2symlink -r "$RFS" -w /root \
-  -b /dev -b /proc -b /sys -b /dev/urandom:/dev/random -b "$PREFIX:/termux" \
-  /usr/bin/env -i HOME=/root TERM=xterm-256color \
-  PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-  /usr/bin/dash -c 'echo DASH-OK'
-
-# Layer 4: what proot-distro itself would run. This is NOT the path the helpers
-# take any more (they exec proot directly); it stays in the report because
-# `proot-distro login` is what users type, and its failure mode is the reason
-# td_guest_login exists.
-h "layer 4: proot-distro login (diagnostic — helpers no longer use it first)"
-if command -v proot-distro >/dev/null 2>&1; then
-  run_h clean PROOT_TMP_DIR="$DTMP" proot-distro login "$DISTRO" -- true
-  echo "-- proot-distro --get-proot-cmd --"
-  run_h clean PROOT_TMP_DIR="$DTMP" proot-distro login "$DISTRO" --get-proot-cmd
+h "listen 127.0.0.1:$VNCPORT"
+if (exec 3<>/dev/tcp/127.0.0.1/"$VNCPORT") 2>/dev/null; then
+  ok "VNC port open — connect AVNC to 127.0.0.1:$VNCPORT"
 else
-  echo "proot-distro MISSING"
+  bad "nothing on :$VNCPORT — run: td-nethunter"
 fi
-
-h "layer 5: verbosity (first 40 lines of PROOT_VERBOSE=-1)"
-clean PROOT_VERBOSE=-1 PROOT_TMP_DIR="$DTMP" \
-  proot -0 -R "$RFS" -w / -b /dev -b /proc -b /sys \
-  /bin/sh -c 'echo GUEST-EXEC-OK' 2>&1 | head -40
 
 h "done"
-echo "Paste the entire output back if anything failed."
+echo "If pull/create fails with SSL/grp errors on python 3.13, see Termux udocker issues;"
+echo "path errors mentioning com.termux need LD_PRELOAD=libinvapp-redirector.so."

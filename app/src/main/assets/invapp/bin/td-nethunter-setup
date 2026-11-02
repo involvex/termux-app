@@ -1,218 +1,42 @@
 #!@BASH@
-# InVxTermux — proot-distro GUI bridge: one-time setup (device-side).
-# Installs proot-distro (+ python3, unzip), fetches + verifies a noVNC client
-# and a pip-free websockify bridge, then a distro and a VNC server + openbox
-# session inside it. After this, run:  td-nethunter [distro] [port]
-#
-# Distro names are OCI refs for the Docker-Hub-backed proot-distro (5.x).
-# Default is Kali NetHunter (kalilinux/kali-rolling); also supported:
-#   ubuntu:22.04  ubuntu:24.04  debian:12
-# `install` takes the image ref and derives the container name from it
-# (e.g. ubuntu:22.04 -> ubuntu, kalilinux/kali-rolling -> kali-rolling);
-# `login`/`list` use that name.
-# Container twin is deferred (device-only): the container ships a rootfs, so
-# run this on the phone. Mirrors td-dev: sources env.sh, branches on
-# INVAPP_ON_DEVICE, and reuses the bun/opencode curl+sha256 verify pattern.
+# InVxTermux — NetHunter profile on udocker (device-only).
+# Ensures kalilinux/kali-rolling (or [image]) via td-udocker-setup, then installs
+# TigerVNC + a minimal desktop inside the guest. After this:
+#   td-nethunter          # start VNC on 127.0.0.1:5901
+#   td-udocker            # interactive Kali shell
+# Connect with AVNC / RealVNC / NetHunter KeX — no Preview/noVNC.
+# Usage: td-nethunter-setup [image]
+# rev: 2026.10.30-1
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 
-DISTRO_IMAGE="${1:-kalilinux/kali-rolling}"
-# Container name proot-distro derives from the image ref (tag + path stripped).
-DISTRO_NAME="${DISTRO_IMAGE##*/}"
-DISTRO_NAME="${DISTRO_NAME%%:*}"
-
-STATE_DIR="$PREFIX/var/td-nethunter"
-NOVNC_DIR="$STATE_DIR/novnc"
-WS_DIR="$STATE_DIR/websockify"   # zip extracts to $WS_DIR/websockify-master/
-# proot's loader extracts into its temp dir; $PREFIX/tmp is shared with other
-# proot sessions (opencode container etc.) — loader files can vanish mid-run
-# ("can't chmod proot-XXXX ... loader doesn't work"). Decouple it.
-PROOT_TMP_DIR="$STATE_DIR/proot-tmp"
-mkdir -p "$PROOT_TMP_DIR"
-export PROOT_TMP_DIR
-
-NOVNC_TAG="v1.4.0"
-NOVNC_SHA256="89b0354c94ad0b0c88092ec7a08e28086d3ed572f13660bac28d5470faaae9c1"
-WEBSOCKIFY_URL="https://github.com/novnc/websockify/archive/refs/heads/master.zip"
-WEBSOCKIFY_SHA256="a24c2fcb0bbb29b0ff68b355dcd4ba3324b629928b2fcbd426e46c70ebbe3cee"
+IMAGE="${1:-${TD_UDOCKER_IMAGE:-kalilinux/kali-rolling}}"
+NAME="${TD_UDOCKER_NAME_OVERRIDE:-$(td_udocker_name_from_image "$IMAGE")}"
+STATE_DIR="${TD_UDOCKER_STATE:-$PREFIX/var/td-udocker}"
 
 log() { printf 'td-nethunter-setup: %s\n' "$*"; }
 die() { printf 'td-nethunter-setup: ERROR: %s\n' "$*" >&2; exit 1; }
-REV="2026.10.27-2 (fresh-install rootfs re-resolution)"
 
 if [ "${INVAPP_ON_DEVICE:-0}" != 1 ]; then
   log "device-only helper"
-  echo "  Reopen InVxTermux on the phone and run: td-nethunter-setup [distro]" >&2
-  echo "  (the container ships a rootfs — device-only; see docker/README.md)" >&2
+  echo "  Reopen InVxTermux on the phone and run: td-nethunter-setup [image]" >&2
   exit 1
 fi
 
-require() { command -v "$1" >/dev/null 2>&1 || die "need $1 — run: pkg install $1"; }
-require curl
+log "rev 2026.10.30-1 (udocker NetHunter → $NAME)"
 
-# Termux-side deps: proot-distro (distro runner) + python3 (runs websockify,
-# pip-free) + unzip. All fetched on demand so they don't bloat every install.
-command -v proot-distro >/dev/null 2>&1 || {
-  log "installing proot-distro + python3 + unzip"
-  pkg install -y --no-install-recommends proot-distro python unzip \
-    || die "pkg install failed"
-}
-require proot-distro
-require unzip
-command -v python3 >/dev/null 2>&1 || die "python3 missing — run: pkg install python"
-log "rev $REV"
+# Ensure container (pull/create) via the shared setup script.
+SETUP="$PREFIX/bin/td-udocker-setup"
+[ -x "$SETUP" ] || die "td-udocker-setup missing — reopen the app to reseed helpers"
+TD_UDOCKER_NAME_OVERRIDE="$NAME" "$SETUP" "$IMAGE" \
+  || die "td-udocker-setup failed"
+td_udocker_ready "$NAME" || die "container '$NAME' not ready after udocker setup"
 
-# A pip-installed 'proot' console script can shadow Termux's ELF proot at
-# $PREFIX/bin (login then dies with "No 'pyproject.toml' file found" — seen
-# on device). Detect a non-ELF / missing proot and repair it.
-ensure_real_proot() {
-  p="$PREFIX/bin/proot"
-  if [ ! -f "$p" ]; then
-    log "installing proot (missing)"
-    pkg install -y proot || die "pkg install proot failed"
-  elif ! head -c 4 "$p" 2>/dev/null | od -An -tx1 | grep -q '7f 45 4c 46'; then
-    log "rogue 'proot' shim at $p (not an ELF binary) — reinstalling proot"
-    pkg reinstall -y proot 2>/dev/null \
-      || apt-get install -y --reinstall proot \
-      || { rm -f "$p"; pkg install -y proot; } \
-      || die "proot repair failed"
-  fi
-  "$p" --version >/dev/null 2>&1 \
-    || die "proot at $p still unusable — try: pip uninstall proot && pkg install -y -f proot"
-  log "proot: $(command -v proot)"
-}
-ensure_real_proot
+mkdir -p "$STATE_DIR"
+APT_LOG="$STATE_DIR/$NAME.apt-install.log"
 
-mkdir -p "$STATE_DIR" "$NOVNC_DIR" "$WS_DIR"
-
-# Fetch + verify noVNC client and websockify bridge (sha256-pinned).
-fetch_verify() { # fetch_verify <url> <sha256> <dest>
-  url=$1
-  sha=$2
-  dest=$3
-  tmp="$TMPDIR/$(basename "$url")"
-  log "fetching $(basename "$url")"
-  curl -fsSL --retry 3 --retry-delay 2 -o "$tmp" "$url" || die "download failed: $url"
-  printf '%s  %s\n' "$sha" "$tmp" | sha256sum -c - >/dev/null 2>&1 \
-    || die "checksum mismatch: $url (want $sha)"
-  rm -rf "$dest"
-  mkdir -p "$dest"
-  case "$tmp" in
-    *.tar.gz) tar -xzf "$tmp" -C "$dest" --strip-components=1 ;;
-    *.zip)    unzip -qo "$tmp" -d "$dest" ;;
-  esac
-  rm -f "$tmp"
-}
-
-[ -f "$NOVNC_DIR/vnc.html" ] || fetch_verify \
-  "https://github.com/novnc/noVNC/archive/refs/tags/$NOVNC_TAG.tar.gz" \
-  "$NOVNC_SHA256" "$NOVNC_DIR"
-# websockify zip extracts to $WS_DIR/websockify-master/; the python package is at
-# .../websockify-master/websockify/ (has __main__.py). We keep the repo root on
-# PYTHONPATH so `python3 -m websockify` resolves the package.
-[ -f "$WS_DIR/websockify-master/websockify/__main__.py" ] || fetch_verify \
-  "$WEBSOCKIFY_URL" "$WEBSOCKIFY_SHA256" "$WS_DIR"
-
-log "noVNC     -> $NOVNC_DIR               (served by websockify --web)"
-log "websockify -> $WS_DIR/websockify-master (python3 -m websockify)"
-
-# proot-distro: usability probe helper — captures login output so failures
-# are diagnosable (the discarded-output check caused a mystery death), and
-# retries without proot's seccomp filters, which some Android devices reject.
-LOGIN_LOG="$STATE_DIR/login-check.log"
-# proot-distro 5.x stores rootfs under containers/<name>/rootfs; older builds
-# used installed-rootfs/<name>. Resolved by the shared helper so the setup, the
-# run script and the self-test cannot disagree about which path they mean.
-ROOTFS_DIR="$(td_proot_rootfs "$DISTRO_NAME")"
-# proot's default temp dir must exist (its loader + exit-cleanup live there).
-mkdir -p "$PREFIX/tmp"
-
-# proot-distro 5.x routes EVERY login — even `login NAME -- CMD` — through the
-# guest's root shell from the rootfs /etc/passwd. If that shell (e.g. kali's
-# /usr/bin/bash) is missing in the extracted rootfs, proot dies with
-# `execve("/usr/bin/bash"): No such file or directory` and nothing can log in.
-# Rewrite root's shell to the first guest shell binary that actually exists.
-repair_guest_shell() {
-  [ -d "$ROOTFS_DIR" ] || return 1
-  if [ -e "$ROOTFS_DIR/usr/bin/bash" ]; then gs=/usr/bin/bash
-  elif [ -e "$ROOTFS_DIR/bin/bash" ]; then gs=/bin/bash
-  else gs=/bin/sh
-  fi
-  cur=$(awk -F: '$1=="root"{print $7}' "$ROOTFS_DIR/etc/passwd" 2>/dev/null)
-  [ -z "$cur" ] || [ -e "$ROOTFS_DIR$cur" ] && return 0
-  log "guest root shell '$cur' does not resolve in rootfs → rewriting to $gs"
-  sed -i "s|^\(root:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:\).*|\1$gs|" \
-    "$ROOTFS_DIR/etc/passwd"
-}
-
-# Human-readable state of the guest rootfs + proot environment, printed on
-# login failure so a device run is self-describing.
-rootfs_report() {
-  echo "--- proot-distro list:" >&2
-  proot-distro list 2>&1 | head -20 >&2
-  echo "--- rootfs paths probed for $DISTRO_NAME:" >&2
-  td_proot_rootfs_candidates "$DISTRO_NAME" | while read -r p; do
-    if [ -d "$p" ]; then echo "  present: $p" >&2
-    else echo "  missing: $p" >&2; fi
-  done
-  echo "--- resolved rootfs: $ROOTFS_DIR" >&2
-  if [ -d "$ROOTFS_DIR" ]; then
-    ls -ld "$ROOTFS_DIR/bin" "$ROOTFS_DIR/usr/bin" 2>&1 | head -2 >&2
-    for f in /usr/bin/bash /bin/bash /bin/sh /usr/bin/env; do
-      [ -e "$ROOTFS_DIR$f" ] && echo "  rootfs$f: present" \
-        || echo "  rootfs$f: MISSING" >&2
-    done
-    echo "  root shell: $(awk -F: '$1=="root"{print $7}' "$ROOTFS_DIR/etc/passwd" 2>/dev/null)" >&2
-    echo "  free space: $(df -h "$PREFIX" 2>/dev/null | tail -1)" >&2
-  fi
-  echo "LD_PRELOAD=${LD_PRELOAD-<unset>}" >&2
-  echo "PROOT_TMP_DIR=$PROOT_TMP_DIR ($(ls "$PROOT_TMP_DIR" 2>/dev/null | head -3 | tr '\n' ' '))" >&2
-}
-
-pd_usable() { # pd_usable <container>
-  # Re-resolve on every call. A first install moves the rootfs from "nowhere"
-  # to containers/<name>/rootfs; caching the path once before the install made
-  # a perfectly good container look broken right after a fresh install
-  # ("rootfs dir MISSING: …/installed-rootfs/<name>").
-  ROOTFS_DIR="$(td_proot_rootfs "$1")"
-  rm -f "$LOGIN_LOG"
-  [ -d "$ROOTFS_DIR" ] || return 1
-  # td_guest_login runs a direct proot exec first, proot-distro login second.
-  if td_guest_login "$1" true >>"$LOGIN_LOG" 2>&1; then return 0; fi
-  # explicit /bin/sh bypasses guest passwd-shell resolution; if this works
-  # while `true` failed, the root shell itself was the problem.
-  echo "--- probe: explicit /bin/sh" >>"$LOGIN_LOG"
-  td_guest_login "$1" /bin/sh -c true >>"$LOGIN_LOG" 2>&1
-}
-pd_fail() { # pd_fail <message>
-  if [ -s "$LOGIN_LOG" ]; then
-    echo "td-nethunter-setup: login log tail ($LOGIN_LOG):" >&2
-    tail -15 "$LOGIN_LOG" >&2
-  fi
-  rootfs_report >&2
-  die "$1"
-}
-
-# proot-distro: install the distro rootfs once (OCI/Docker-Hub ref).
-if ! pd_usable "$DISTRO_NAME"; then
-  log "installing $DISTRO_IMAGE rootfs (first run; size varies)…"
-  # A re-run on an existing container makes install exit non-zero; the probe
-  # below decides, so this is not fatal on its own.
-  proot-distro install "$DISTRO_IMAGE" \
-    || log "proot-distro install returned non-zero — probing for an existing container"
-  ROOTFS_DIR="$(td_proot_rootfs "$DISTRO_NAME")"
-  repair_guest_shell
-fi
-if ! pd_usable "$DISTRO_NAME"; then
-  repair_guest_shell
-  pd_usable "$DISTRO_NAME" || pd_fail "$DISTRO_NAME container not usable after install"
-fi
-
-# Inside the distro: VNC server + a minimal desktop (openbox + xterm). Package
-# names differ by distro; tolerate the common variants. Output is captured so
-# a failed apt run shows its tail instead of a bare die.
-log "installing VNC stack inside $DISTRO_NAME (apt)…"
-APT_LOG="$STATE_DIR/apt-install.log"
-if ! td_guest_login "$DISTRO_NAME" sh -c '
+log "installing VNC stack inside $NAME (apt; first run can take a while)…"
+if ! td_udocker_run "$NAME" /bin/sh -c '
+  export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
   apt-get install -y --no-install-recommends \
       tigervnc-standalone-server tigervnc-tools tigervnc-common \
@@ -224,34 +48,35 @@ if ! td_guest_login "$DISTRO_NAME" sh -c '
       tightvncserver openbox xterm 2>/dev/null \
     || apt-get install -y tigervnc-standalone-server tigervnc openbox xterm
 ' >"$APT_LOG" 2>&1; then
-  if [ -s "$APT_LOG" ]; then echo "td-nethunter-setup: apt log tail:" >&2; tail -15 "$APT_LOG" >&2; fi
-  die "VNC stack install failed inside $DISTRO_NAME"
+  if [ -s "$APT_LOG" ]; then
+    echo "td-nethunter-setup: apt log tail:" >&2
+    tail -20 "$APT_LOG" >&2
+  fi
+  die "VNC stack install failed inside $NAME"
 fi
 
-# Kali only: pull in the small NetHunter CLI helpers (best effort — skip
-# gracefully if the meta package is unavailable in kali-rolling).
-case "$DISTRO_NAME" in
+case "$NAME" in
   kali*)
     log "installing NetHunter helpers (nethunter-utils, best effort)…"
-    if td_guest_login "$DISTRO_NAME" \
+    if td_udocker_run "$NAME" \
         apt-get install -y --no-install-recommends nethunter-utils \
         >>"$APT_LOG" 2>&1; then
       log "NetHunter CLI helpers installed"
     else
       log "nethunter-utils not available — kali base desktop only"
-    fi ;;
+    fi
+    ;;
 esac
 
-# xstartup: a minimal openbox session (idempotent rewrite).
-log "writing xstartup"
-td_guest_login "$DISTRO_NAME" sh -c "mkdir -p ~/.vnc && cat > ~/.vnc/xstartup && chmod +x ~/.vnc/xstartup" <<'XSTARTUP'
+log "writing ~/.vnc/xstartup"
+# Pass the heredoc as stdin to a guest shell that writes xstartup.
+td_udocker_run "$NAME" /bin/sh -c 'mkdir -p /root/.vnc && cat > /root/.vnc/xstartup && chmod +x /root/.vnc/xstartup' <<'XSTARTUP'
 #!/bin/sh
 unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
 export XKL_XMODMAP_DISABLE=1
-[ -r $HOME/.Xresources ] && xrdb $HOME/.Xresources
+[ -r "$HOME/.Xresources" ] && xrdb "$HOME/.Xresources"
 xsetroot -solid grey &
-# try to start a window manager/session
 if command -v startxfce4 >/dev/null 2>&1; then
   exec startxfce4
 elif command -v xfce4-session >/dev/null 2>&1; then
@@ -265,6 +90,29 @@ else
 fi
 XSTARTUP
 
-touch "$STATE_DIR/$DISTRO_NAME.ready"
-log "$DISTRO_NAME ready — run: td-nethunter $DISTRO_IMAGE [port]"
-log "other distros: ubuntu:22.04  ubuntu:24.04  debian:12"
+# VNC password: prompt once if missing (TigerVNC / tightvnc).
+HAS_PASS=0
+if td_udocker_run "$NAME" /bin/sh -c \
+  'test -f /root/.vnc/passwd -o -f /root/.vnc/passwd.vnc' >/dev/null 2>&1; then
+  HAS_PASS=1
+fi
+if [ "$HAS_PASS" != 1 ]; then
+  log "set a VNC password (required by most viewers; do not leave blank)"
+  if [ -t 0 ]; then
+    td_udocker_run "$NAME" /bin/sh -c '
+      if command -v vncpasswd >/dev/null 2>&1; then
+        vncpasswd
+      else
+        echo "vncpasswd missing — install tigervnc-tools and re-run setup" >&2
+        exit 1
+      fi
+    ' || log "vncpasswd skipped/failed — run later: td-udocker vncpasswd"
+  else
+    log "no TTY — set password later: td-udocker vncpasswd"
+  fi
+fi
+
+touch "$STATE_DIR/$NAME.nethunter.ready"
+log "$NAME ready — start desktop: td-nethunter"
+log "connect with AVNC / RealVNC / KeX to 127.0.0.1:5901 (after td-nethunter)"
+log "shell: td-udocker"

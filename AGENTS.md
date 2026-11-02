@@ -57,6 +57,7 @@ See `ROADMAP.md`.
 | Dev server | `td-dev [script]` → `bun run` with Preview/LAN hints |
 | Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`); `pwa` / `pwa-react` add `vite-plugin-pwa` |
 | Clone | `td-clone <url> [name] [--bun-i]` → git clone into `~/repos`; drawer **Clone…** |
+| NetHunter | Optional device-only: `td-udocker-setup` / `td-nethunter-setup` → Termux `udocker` + `kalilinux/kali-rolling` (`kali`); `td-nethunter` → TigerVNC on **`127.0.0.1:5901`** (AVNC/KeX); `td-udocker` / `td-guest` shell. No Preview/noVNC. Docs: `docs/nethunter.md` |
 | File share → Edit | Seeds `~/bin/termux-file-editor` (nvim→vim→nano→less) for FileReceiver |
 | Widget scripts | `~/.shortcuts` templates (defaults: `clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, `screen-ocr`, `tasks/td-ai`; optional catalog: camera/wifi/battery/torch/share/settings/vibrate/volume/location/telephony/`stop-ai`/`td-upgrade`/`stop-agent-worker`/`tasks/agent-worker`); Settings / right drawer; matching Widget APK + API/`pkg install termux-api`. `screen-ocr` → `td-screen-ocr`. **2-finger swipe down** (or Ctrl+Alt+T) opens Tools end drawer. Widget tap always shows **Running: name** toast |
 | Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize bar / Customize keys (writes quoted `extra-keys` in `~/.termux/termux.properties`). Extra-keys: 2-row nav page + swipe L/R for workflow page; end drawer = Tools (Preview/AI/Clone/New/Widget scripts). Long-press / Ctrl+Alt+M → actions bottom sheet. AI tap when ready opens Preview and may offer **Copy LAN** if `:4096` is wildcard-bound |
@@ -185,29 +186,19 @@ See `ROADMAP.md`.
   wheels are stripped from the Termux package, and a failing ensurepip aborts
   venv creation *before* `--system-site-packages` is written, so the flag would
   silently stay false. pip itself comes from `pkg install python-pip`.
-- `proot-distro login` → `execve("/usr/bin/sh"): No such file or directory`
-  while the guest shell is verifiably present — either the guest loader
-  (`PT_INTERP`) is missing in the rootfs, or proot's own exec path breaks on
-  the device. `td-nethunter-debug` prints each layer (host proot, guest loader
-  run directly, `proot -R`, the production `bash`/`dash` argv,
-  `proot-distro --get-proot-cmd`, `PROOT_VERBOSE`). `td_guest_login`
-  (`$PREFIX/lib/invapp/env.sh`) runs a direct `proot` exec **first** and only
-  falls back to `proot-distro login`; the direct path drops `LD_PRELOAD`
-  (termux-exec/redirector rewrite a guest argv such as `/usr/bin/sh`) and sets
-  `PROOT_NO_SECCOMP=1`, plus `PROOT_LOADER` (proot's compiled-in
-  `.../com.termux/.../libexec/proot/loader` only resolves through the redirector
-  on this fork, so dropping the preload without it breaks proot itself). Use
-  `td-guest [distro] [cmd...]` for an interactive root shell or a one-off
-  command. Never drop `LD_PRELOAD` for `proot-distro` itself: it is Termux
-  Python and needs the redirector to find its own stdlib.
-- `td-nethunter-setup` → "container not usable after install" on a **first**
-  run while `td-guest <distro>` works — the setup used to resolve the rootfs
-  path once *before* `proot-distro install`, so it cached the legacy
-  `installed-rootfs/<name>` path and then reported it missing while the real
-  rootfs sat in `containers/<name>/rootfs` (proot-distro 5.x). `pd_usable`
-  now re-resolves on every call and `td_proot_rootfs` prefers the existing
-  directory, defaulting to the 5.x path when neither exists. Failure reports
-  print both candidates plus `proot-distro list`.
+- Kali NetHunter / desktop — uses **udocker** (not proot-distro). On demand:
+  `td-udocker-setup` / `td-nethunter-setup` pulls `kalilinux/kali-rolling`,
+  creates container `kali`, installs TigerVNC + XFCE/openbox. `td-nethunter`
+  starts VNC on **`127.0.0.1:5901`**; connect with **AVNC / RealVNC / KeX**
+  (Preview/noVNC was removed — it never got a live backend when the guest
+  failed). Shell: `td-udocker` (alias `td-guest`). Debug: `td-nethunter-debug`.
+  Keep **`LD_PRELOAD`** set for the host `udocker` process — Termux's package
+  hardcodes `/data/data/com.termux/.../bin/proot` and the path redirector must
+  rewrite it. `PROOT_NO_SECCOMP=1` + `~/.udocker/udocker.conf`
+  `proot_killonexit = False` so Xvnc survives after `udocker run` returns.
+  Orphan `$PREFIX/var/lib/proot-distro/` trees from the old stack are safe to
+  delete. Termux:X11 is out of scope until a matching signed X11 APK exists
+  for this `sharedUserId`. Docs: `docs/nethunter.md`.
 
 ## 2. Useful Commands
 
@@ -287,11 +278,12 @@ bun run dev          # or bun run android / build
 ivx-configure        # banner on/off + style, completions, package groups, doctor
 ivx-doctor           # read-only health report (--strict, --network)
 td-ai                # OpenCode on 0.0.0.0:4096 → Preview 127.0.0.1 / LAN Copy
-# GUI: proot-distro desktop over noVNC via Preview/LAN
-# td-nethunter-setup [distro]   # one-time: proot-distro + noVNC/websockify + distro VNC
-# td-nethunter [distro] [port]  # VNC in distro + websockify 0.0.0.0:port -> Preview /vnc.html
-# td-guest [distro] [cmd...]    # root shell / one-off command in the container (direct proot)
-# distros: kalilinux/kali-rolling (default — Kali NetHunter) ubuntu:22.04 ubuntu:24.04 debian:12
+# Kali NetHunter (optional, device-only): udocker + TigerVNC → AVNC on :5901
+# td-udocker-setup [image]      # pkg install udocker; pull/create (default kalilinux/kali-rolling → kali)
+# td-nethunter-setup            # + TigerVNC/xfce inside guest; set vncpasswd
+# td-nethunter                  # start VNC on 127.0.0.1:5901; --stop to kill
+# td-udocker / td-guest         # interactive root shell (or one-shot cmd)
+# td-nethunter-debug            # paste-back self-test
 # Cursor cloud My Machines (optional):
 # cursor-agent-setup && agent login && td-agent-worker start
 # td-upgrade           # pkg + opencode + agent rewrap + Bun stamp

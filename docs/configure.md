@@ -103,7 +103,7 @@ ivx-configure packages all         # every group
 | `essentials` | `bash-completion git curl wget openssh jq nano vim less unzip tar xz-utils procps ca-certificates` |
 | `quality` | `fzf ripgrep fd bat eza tree htop ncdu figlet` |
 | `build` | `clang make pkg-config cmake ninja python nodejs-lts` |
-| `network` | `dnsutils inetutils nmap proot-distro termux-api` |
+| `network` | `dnsutils inetutils nmap udocker termux-api` |
 
 Already-installed packages are skipped. There is **no implicit `pkg update`**:
 groups install exactly the packages listed. If a bulk install fails, each

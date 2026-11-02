@@ -494,7 +494,7 @@ pkg_group() {
             printf '%s' 'clang make pkg-config cmake ninja python nodejs-lts'
             ;;
         network)
-            printf '%s' 'dnsutils inetutils nmap proot-distro termux-api'
+            printf '%s' 'dnsutils inetutils nmap udocker termux-api'
             ;;
         *) return 1 ;;
     esac

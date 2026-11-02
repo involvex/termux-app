@@ -1,143 +1,104 @@
 #!@BASH@
-# InVxTermux — run a proot-distro desktop and bridge it to a noVNC client on
-# Preview/LAN.  Usage:  td-nethunter [distro] [port]   |   td-nethunter --stop
-#   distro  OCI ref for proot-distro (default: Kali NetHunter kali-rolling);
-#           also: ubuntu:22.04  ubuntu:24.04  debian:12
-#   port    host TCP port for the noVNC bridge (default 6080)
-# The VNC server is display :1 (127.0.0.1:5901) in the shared netns (proot-distro
-# does not isolate the network). websockify bridges WS<->VNC and also serves the
-# noVNC client, so the Preview/LAN URL is <host>:<port>/vnc.html.
+# InVxTermux — start TigerVNC inside the udocker Kali (NetHunter) container.
+# Usage: td-nethunter [name] [display]   |   td-nethunter --stop [name]
+#   name     container (default: kali)
+#   display  VNC display number (default: TD_NETHUNTER_DISPLAY or 1 → :5901)
+# Starts Xvnc/vncserver on 127.0.0.1:$((5900+display)). Connect with AVNC /
+# RealVNC / NetHunter KeX — Preview/noVNC is not used.
+# Requires: td-nethunter-setup
+# rev: 2026.10.30-1
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 
-DISTRO_IMAGE="$1"
-PORT="${2:-6080}"
-STATE_DIR="$PREFIX/var/td-nethunter"
-NOVNC_DIR="$STATE_DIR/novnc"
-WS_DIR="$STATE_DIR/websockify"
-# Decouple proot's loader temp from the shared $PREFIX/tmp (loader vanish race).
-PROOT_TMP_DIR="$STATE_DIR/proot-tmp"
-mkdir -p "$PROOT_TMP_DIR"
-export PROOT_TMP_DIR
-mkdir -p "$PREFIX/tmp"   # proot's default temp dir must exist (loader + cleanup)
-WS_REPO="$WS_DIR/websockify-master"   # repo root (contains the websockify/ package)
+NAME="${TD_UDOCKER_NAME:-kali}"
 DISPLAY_NUM="${TD_NETHUNTER_DISPLAY:-1}"
-VNCPORT=$((5900 + DISPLAY_NUM))
-PIDFILE="$STATE_DIR/websockify.pid"
+STATE_DIR="${TD_UDOCKER_STATE:-$PREFIX/var/td-udocker}"
+STOP=0
 
 log() { printf 'td-nethunter: %s\n' "$*"; }
 die() { printf 'td-nethunter: ERROR: %s\n' "$*" >&2; exit 1; }
-log "rev 2026.10.27-1 (direct-proot fallback + shared rootfs/TMP resolution)"
 
-# proot-distro login execs $PREFIX/bin/proot; a pip shim can shadow it.
-ensure_real_proot() {
-  p="$PREFIX/bin/proot"
-  if [ ! -f "$p" ]; then
-    log "installing proot (missing)"
-    pkg install -y proot || die "pkg install proot failed"
-  elif ! head -c 4 "$p" 2>/dev/null | od -An -tx1 | grep -q '7f 45 4c 46'; then
-    log "rogue 'proot' shim at $p (not an ELF binary) — reinstalling proot"
-    pkg reinstall -y proot 2>/dev/null \
-      || apt-get install -y --reinstall proot \
-      || { rm -f "$p"; pkg install -y proot; } \
-      || die "proot repair failed"
-  fi
-  "$p" --version >/dev/null 2>&1 \
-    || die "proot at $p still unusable — try: pip uninstall proot && pkg install -y -f proot"
-}
+# Parse: --stop [name]  |  [name] [display]
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --stop|-s) STOP=1; shift ;;
+    -*) die "unknown option: $1" ;;
+    *) break ;;
+  esac
+done
+if [ $# -gt 0 ]; then
+  NAME="$1"
+  shift
+fi
+if [ $# -gt 0 ]; then
+  DISPLAY_NUM="$1"
+  shift
+fi
+VNCPORT=$((5900 + DISPLAY_NUM))
+PIDFILE="$STATE_DIR/$NAME.vnc.pid"
+VNCLOG="$STATE_DIR/$NAME.vnc-start.log"
 
-# --- --stop: kill the noVNC bridge (pidfile). Distro VNC is left alone;
-# tear it with `proot-distro destroy <name>`.
-if [ "$DISTRO_IMAGE" = "--stop" ] || [ "$DISTRO_IMAGE" = "-s" ]; then
+vnc_listening() { (exec 3<>/dev/tcp/127.0.0.1/"$1") 2>/dev/null; }
+
+if [ "$STOP" = 1 ]; then
   if [ -f "$PIDFILE" ]; then
     pid=$(cat "$PIDFILE" 2>/dev/null || true)
-    if [ -n "$pid" ]; then kill "$pid" 2>/dev/null && log "stopped noVNC bridge (pid $pid)"; fi
+    if [ -n "$pid" ]; then
+      kill "$pid" 2>/dev/null && log "stopped keep-alive (pid $pid)" || true
+    fi
     rm -f "$PIDFILE"
-  else
-    log "nothing to stop (no pidfile)"
   fi
-  log "distro VNC still on 127.0.0.1:$VNCPORT — run: proot-distro destroy"
+  if td_udocker_container_exists "$NAME" 2>/dev/null; then
+    td_udocker_run "$NAME" /bin/sh -c "
+      vncserver -kill :$DISPLAY_NUM >/dev/null 2>&1 || true
+      pkill -f 'Xtigervnc.*:$DISPLAY_NUM' 2>/dev/null || true
+      pkill -f 'Xvnc.*:$DISPLAY_NUM' 2>/dev/null || true
+    " >/dev/null 2>&1 || true
+  fi
+  log "VNC stop requested for $NAME :$DISPLAY_NUM (was 127.0.0.1:$VNCPORT)"
   exit 0
 fi
 
-# --- device-only (container twin deferred) ---
 if [ "${INVAPP_ON_DEVICE:-0}" != 1 ]; then
-  log "device-only — Reopen InVxTermux on the phone: td-nethunter ${1:-kalilinux/kali-rolling} ${PORT}" >&2
+  log "device-only — reopen InVxTermux: td-nethunter" >&2
   exit 1
 fi
 
-DISTRO_IMAGE="${DISTRO_IMAGE:-kalilinux/kali-rolling}"
-# Container name proot-distro derives from the image ref (tag + path stripped).
-DISTRO_NAME="${DISTRO_IMAGE##*/}"
-DISTRO_NAME="${DISTRO_NAME%%:*}"
+log "rev 2026.10.30-1 (udocker VNC → $NAME :$DISPLAY_NUM)"
 
-# Sanity gates before launching.
-[ -f "$STATE_DIR/$DISTRO_NAME.ready" ] || {
-  log "$DISTRO_NAME not set up — run: td-nethunter-setup $DISTRO_IMAGE" >&2
+td_udocker_nethunter_ready "$NAME" || {
+  log "$NAME NetHunter stack missing — run: td-nethunter-setup" >&2
   exit 1
 }
-command -v python3 >/dev/null 2>&1 || {
-  log "python3 missing — run: pkg install python" >&2
-  exit 1
-}
-[ -d "$WS_REPO/websockify" ] || {
-  log "websockify missing — run: td-nethunter-setup $DISTRO_IMAGE" >&2
-  exit 1
-}
-[ -f "$NOVNC_DIR/vnc.html" ] || {
-  log "noVNC missing — run: td-nethunter-setup $DISTRO_IMAGE" >&2
-  exit 1
-}
+td_udocker_ensure_proot || die "proot repair failed"
+mkdir -p "$STATE_DIR"
 
-# Start the distro VNC server unless something is already on 127.0.0.1:$VNCPORT.
-# proot-distro shares the netns, so the port is reachable from Termux itself.
-vnc_listening() { (exec 3<>/dev/tcp/127.0.0.1/"$1") 2>/dev/null; }
-ensure_real_proot
-
-# Rootfs path: proot-distro 5.x uses containers/<name>/rootfs (legacy:
-# installed-rootfs/<name>); repair a guest root shell proot can't exec —
-# EVERY login (including `-- Xtigervnc …`) runs through it.
-_rfs="$(td_proot_rootfs "$DISTRO_NAME")"
-if [ -d "$_rfs" ]; then
-  if [ -e "$_rfs/usr/bin/bash" ]; then gs=/usr/bin/bash
-  elif [ -e "$_rfs/bin/bash" ]; then gs=/bin/bash
-  else gs=/bin/sh
-  fi
-  cur=$(awk -F: '$1=="root"{print $7}' "$_rfs/etc/passwd" 2>/dev/null)
-  if [ -n "$cur" ] && [ ! -e "$_rfs$cur" ]; then
-    log "guest root shell '$cur' unusable in rootfs → rewriting to $gs"
-    sed -i "s|^\(root:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:\).*|\1$gs|" \
-      "$_rfs/etc/passwd" || log "passwd rewrite failed"
-  fi
-  # ensure xstartup is executable
-  chmod +x "$_rfs/root/.vnc/xstartup" 2>/dev/null || true
-fi
-if ! vnc_listening "$VNCPORT"; then
-  log "starting VNC on $DISTRO_NAME :$DISPLAY_NUM -> 127.0.0.1:$VNCPORT"
-  # Try multiple approaches: Xtigervnc directly, or vncserver wrapper
-  _vnc_cmd='
+if vnc_listening "$VNCPORT"; then
+  log "VNC already listening on 127.0.0.1:$VNCPORT"
+else
+  log "starting VNC on $NAME :$DISPLAY_NUM → 127.0.0.1:$VNCPORT"
+  # proot_killonexit=False (udocker.conf) lets the Xvnc daemon outlive this run.
+  _vnc_cmd="
     chmod +x /root/.vnc/xstartup 2>/dev/null || true
+    mkdir -p /root/.vnc
     if command -v Xtigervnc >/dev/null 2>&1; then
-      nohup Xtigervnc :'$DISPLAY_NUM' -localhost -SecurityTypes None \
-        -geometry 1280x720 -depth 24 -desktop td-nethunter \
-        -xstartup /root/.vnc/xstartup \
+      Xtigervnc :$DISPLAY_NUM -localhost yes -geometry 1280x720 -depth 24 \
+        -desktop td-nethunter -xstartup /root/.vnc/xstartup \
         >/root/.td-nethunter-vnc.log 2>&1 &
     elif command -v Xvnc >/dev/null 2>&1; then
-      nohup Xvnc :'$DISPLAY_NUM' -localhost -SecurityTypes None \
-        -geometry 1280x720 -depth 24 -desktop td-nethunter \
-        -xstartup /root/.vnc/xstartup \
+      Xvnc :$DISPLAY_NUM -localhost yes -geometry 1280x720 -depth 24 \
+        -desktop td-nethunter -xstartup /root/.vnc/xstartup \
         >/root/.td-nethunter-vnc.log 2>&1 &
     elif command -v vncserver >/dev/null 2>&1; then
-      vncserver -kill :'$DISPLAY_NUM' >/dev/null 2>&1 || true
-      nohup vncserver :'$DISPLAY_NUM' -geometry 1280x720 -depth 24 -localhost yes \
-        -xstartup /root/.vnc/xstartup >/root/.td-nethunter-vnc.log 2>&1 &
+      vncserver -kill :$DISPLAY_NUM >/dev/null 2>&1 || true
+      vncserver :$DISPLAY_NUM -geometry 1280x720 -depth 24 -localhost yes \
+        -xstartup /root/.vnc/xstartup >/root/.td-nethunter-vnc.log 2>&1
     else
-      echo "NO_VNC_SERVER_FOUND" >> /root/.td-nethunter-vnc.log
+      echo NO_VNC_SERVER_FOUND >>/root/.td-nethunter-vnc.log
       exit 1
     fi
-  '
-  TD_PROOT_KEEP_ALIVE=1 td_guest_login "$DISTRO_NAME" /bin/sh -c "$_vnc_cmd" \
-    >"$STATE_DIR/vnc-start.log" 2>&1
-  # VNC needs a moment before the port answers.
+    sleep 2
+  "
+  td_udocker_run "$NAME" /bin/sh -c "$_vnc_cmd" >"$VNCLOG" 2>&1 || true
   _i=0
   while [ "$_i" -lt 25 ] && ! vnc_listening "$VNCPORT"; do
     sleep 1
@@ -146,29 +107,20 @@ if ! vnc_listening "$VNCPORT"; then
   if vnc_listening "$VNCPORT"; then
     log "VNC listening on 127.0.0.1:$VNCPORT"
   else
-    log "VNC did not come up (VNC server missing in $DISTRO_NAME?) — launcher log:"
-    [ -s "$STATE_DIR/vnc-start.log" ] && tail -15 "$STATE_DIR/vnc-start.log" >&2
-    log "  guest log: td-guest $DISTRO_NAME cat /root/.td-nethunter-vnc.log"
+    log "VNC did not come up — launcher log:"
+    [ -s "$VNCLOG" ] && tail -20 "$VNCLOG" >&2
+    log "  guest log: td-udocker $NAME cat /root/.td-nethunter-vnc.log"
+    log "  debug:     td-nethunter-debug $NAME"
+    exit 1
   fi
-else
-  log "VNC already listening on 127.0.0.1:$VNCPORT"
 fi
 
-log "noVNC bridge -> 0.0.0.0:$PORT  (VNC 127.0.0.1:$VNCPORT)"
-echo "  When the port appears: drawer -> Preview -> Scan"
-echo "  open /vnc.html   (or Copy LAN: http://<wifi-ip>:$PORT/vnc.html)"
+# Record a marker pidfile (host has no long-lived bridge process anymore).
+echo "vnc:$VNCPORT" >"$PIDFILE"
 
-# Verify websockify can import
-if ! PYTHONPATH="$WS_REPO${PYTHONPATH:+:$PYTHONPATH}" python3 -c "import websockify" >/dev/null 2>&1; then
-  log "websockify module not importable from $WS_REPO — check PYTHONPATH"
-  PYTHONPATH="$WS_REPO${PYTHONPATH:+:$PYTHONPATH}" python3 -c "import websockify; print(websockify.__file__)" 2>&1 | head -2 >&2
-fi
-
-# websockify bridges WS<->VNC and serves the noVNC client: the listen address
-# and VNC target are POSITIONAL ([source_addr:]source_port target_addr:target_port);
-# there is no --listen flag. PYTHONPATH=WS_REPO so `python3 -m websockify` finds
-# the unpacked package dir.
-echo $$ > "$PIDFILE"
-exec env PYTHONPATH="$WS_REPO${PYTHONPATH:+:$PYTHONPATH}" \
-  python3 -m websockify \
-    --web "$NOVNC_DIR" "0.0.0.0:$PORT" "127.0.0.1:$VNCPORT" 2>&1 | tee -a "$STATE_DIR/websockify.log"
+log "connect with a VNC client:"
+echo "  address: 127.0.0.1"
+echo "  port:    $VNCPORT"
+echo "  apps:    AVNC, RealVNC Viewer, or NetHunter KeX"
+echo "  stop:    td-nethunter --stop $NAME"
+echo "  shell:   td-udocker $NAME"

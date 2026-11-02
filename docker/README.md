@@ -104,7 +104,7 @@ WebView has no container equivalent. `td-dev` and `td-scaffold` already bind
 | `termux-api` CLIs | installed, non-functional | intents need Android |
 | `termux-screenshot`, `td-screen-ocr` | stubs | say why, and suggest X11/`tesseract` |
 | `td-resource-linux` (proot) | dropped | the container already is a Linux rootfs |
-| `td-nethunter`, `td-nethunter-setup` (GUI) | dropped (device-only) | VNC desktop over proot-distro needs Android Preview + proot netns; installed on-device only |
+| `td-udocker*`, `td-nethunter*` (GUI) | dropped (device-only) | udocker + TigerVNC on phone; connect with AVNC/KeX to `127.0.0.1:5901` — not in the container twin |
 | `td-jdk-setup`, `jdk-doctor` | `pkg install openjdk-17` | no SIGSYS/`libandroid-shmem` dance needed in a container |
 
 ### What changes inside a container, and why

@@ -107,140 +107,136 @@ td_require_git() {
     fi
 }
 
-# --- proot guest execution (td-nethunter*) -----------------------------------
-# The GUI helpers need THREE things proot-distro does not give us on this fork:
-# a rootfs path that resolves across proot-distro layouts, proot's temp dir
-# decoupled from the shared $PREFIX/tmp, and an exec that a fallback can take
-# over when `proot-distro login` fails. All three live here so the scripts,
-# the self-test and the container twin agree.
-
-# td_proot_rootfs <container-name> — print the container's rootfs path.
-# proot-distro 5.x keeps containers under containers/<name>/rootfs; older
-# builds used installed-rootfs/<name>. An existing directory always wins. If
-# neither exists, print the 5.x path: that is where an install will put it, so
-# a probe run just before `proot-distro install` reports the real destination
-# instead of the legacy one (printing the legacy path made a fresh install look
-# broken and sent every re-run to the wrong directory).
-td_proot_rootfs() {
-    _new="$PREFIX/var/lib/proot-distro/containers/$1/rootfs"
-    _old="$PREFIX/var/lib/proot-distro/installed-rootfs/$1"
-    if [ -d "$_new" ]; then
-        printf '%s\n' "$_new"
-    elif [ -d "$_old" ]; then
-        printf '%s\n' "$_old"
-    else
-        printf '%s\n' "$_new"
-    fi
-}
-
-# td_proot_rootfs_candidates <container-name> — print both known layouts, one
-# per line, so a diagnostic can show exactly what was probed.
-td_proot_rootfs_candidates() {
-    printf '%s\n' \
-        "$PREFIX/var/lib/proot-distro/containers/$1/rootfs" \
-        "$PREFIX/var/lib/proot-distro/installed-rootfs/$1"
-}
-
-# td_proot_loader — print the proot loader path, or nothing.
-# Termux proot has "$PREFIX/libexec/proot/loader" compiled in, and $PREFIX is
-# the *fork* prefix here, not com.termux. Pointing PROOT_LOADER at the real
-# file is what lets the helpers run proot with a clean LD_PRELOAD (see below);
-# without it proot only finds its loader through the path redirector.
-td_proot_loader() {
-    for _l in "$PREFIX/libexec/proot/loader" "$PREFIX/lib/proot/loader"; do
-        if [ -x "$_l" ]; then
-            printf '%s\n' "$_l"
-            return 0
-        fi
-    done
-    return 1
-}
-
-# td_proot_exec <container-name> <cmd...>
-# Runs <cmd> as root inside the guest, with the binds a desktop needs.
+# --- udocker guest execution (td-nethunter* / td-udocker*) -------------------
+# Replaces the old proot-distro NetHunter path. Termux's `udocker` package
+# (P1/proot engine) pulls OCI images and runs them without root. Leftover trees
+# under $PREFIX/var/lib/proot-distro/ are orphaned — remove with
+# `proot-distro remove <name>` or `rm -rf` if you no longer need them.
 #
-# LD_PRELOAD is dropped, not left alone: the path redirector and termux-exec
-# rewrite absolute paths (/bin, /usr/bin, /data/data/com.termux) at exec time,
-# and a guest argv must reach proot untouched — proot-distro pops it for proot
-# for the same reason. PROOT_LOADER is set explicitly to compensate: proot's
-# compiled-in loader path points at com.termux, which only resolves through the
-# redirector on this fork. PROOT_TMP_DIR is private so a concurrent proot
-# session cannot wipe the loader proot extracts there.
-# PROOT_NO_SECCOMP defaults to 1: Android's seccomp filter rejects the ptrace
-# setup proot uses on several devices, and the cost is only speed.
-td_proot_exec() {
-    _name="$1"
-    shift
-    _rfs="$(td_proot_rootfs "$_name")"
-    if [ ! -d "$_rfs" ]; then
-        echo "td_proot_exec: no rootfs for '$_name' (looked in $_rfs)" >&2
+# LD_PRELOAD stays set for the host `udocker` Python process: Termux's package
+# patches hardcode /data/data/com.termux/.../bin/proot, and the path redirector
+# must rewrite those opens on this fork. Do not `env -u LD_PRELOAD udocker …`.
+# PROOT_NO_SECCOMP defaults to 1 (Android seccomp vs proot ptrace).
+
+: "${TD_UDOCKER_IMAGE:=kalilinux/kali-rolling}"
+: "${TD_UDOCKER_NAME:=kali}"
+TD_UDOCKER_STATE="${TD_UDOCKER_STATE:-$PREFIX/var/td-udocker}"
+export TD_UDOCKER_IMAGE TD_UDOCKER_NAME TD_UDOCKER_STATE
+
+# td_udocker_name_from_image <oci-ref> — container name for an image.
+# kalilinux/kali-rolling → kali (NetHunter default); otherwise last path
+# segment with any tag stripped (ubuntu:22.04 → ubuntu).
+td_udocker_name_from_image() {
+    _img="${1:-$TD_UDOCKER_IMAGE}"
+    case "$_img" in
+        kalilinux/kali-rolling|kalilinux/kali-rolling:*|kali-rolling|kali)
+            printf '%s\n' "kali"
+            return 0
+            ;;
+    esac
+    _n="${_img##*/}"
+    _n="${_n%%:*}"
+    printf '%s\n' "$_n"
+}
+
+# td_udocker_ensure — require the udocker binary; export PROOT_NO_SECCOMP.
+td_udocker_ensure() {
+    if ! command -v udocker >/dev/null 2>&1; then
+        echo "td_udocker_ensure: udocker missing — run: td-udocker-setup" >&2
         return 1
     fi
-    _tmp="${TD_NETHUNTER_STATE:-$PREFIX/var/td-nethunter}/proot-tmp"
-    mkdir -p "$_tmp" "$PREFIX/tmp" 2>/dev/null || true
-    # --kill-on-exit reaps tracees when proot exits, which also kills a daemon
-    # started inside the guest (the VNC server td-nethunter launches). Callers
-    # that need the guest to outlive the session set TD_PROOT_KEEP_ALIVE=1 —
-    # proot-distro itself never kills on exit, which is how its logins leave a
-    # desktop running.
-    _koe="--kill-on-exit"
-    [ "${TD_PROOT_KEEP_ALIVE:-0}" = 1 ] && _koe=""
-    # Keep LD_LIBRARY_PATH: proot's own libraries still come from $PREFIX/lib.
-    _ldr="$(td_proot_loader)" || _ldr=""
-    if [ -n "$_ldr" ]; then
-        env -u LD_PRELOAD \
-            PROOT_LOADER="$_ldr" \
-            PROOT_TMP_DIR="$_tmp" \
-            PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
-            proot -0 $_koe --link2symlink -r "$_rfs" -w /root \
-            -b /dev -b /proc -b /sys \
-            -b /dev/urandom:/dev/random \
-            -b "$PREFIX:/termux" \
-            /usr/bin/env -i \
-            HOME=/root \
-            TERM="${TERM:-xterm-256color}" \
-            PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-            "$@"
+    export PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}"
+    return 0
+}
+
+# td_udocker_ensure_proot — Termux ELF proot must win over a pip "proot" shim.
+td_udocker_ensure_proot() {
+    _p="$PREFIX/bin/proot"
+    if [ ! -f "$_p" ]; then
+        echo "td_udocker_ensure_proot: installing proot" >&2
+        pkg install -y proot || return 1
+    elif ! head -c 4 "$_p" 2>/dev/null | od -An -tx1 | grep -q '7f 45 4c 46'; then
+        echo "td_udocker_ensure_proot: rogue non-ELF proot shim — reinstalling" >&2
+        pkg reinstall -y proot 2>/dev/null \
+            || apt-get install -y --reinstall proot \
+            || { rm -f "$_p"; pkg install -y proot; } \
+            || return 1
+    fi
+    "$_p" --version >/dev/null 2>&1 || {
+        echo "td_udocker_ensure_proot: proot unusable — try: pip uninstall proot && pkg install -y -f proot" >&2
+        return 1
+    }
+    return 0
+}
+
+# td_udocker_container_exists <name>
+td_udocker_container_exists() {
+    td_udocker_ensure || return 1
+    udocker inspect "$1" >/dev/null 2>&1
+}
+
+# td_udocker_ready <name> — container exists and setup left a ready marker.
+td_udocker_ready() {
+    [ -f "$TD_UDOCKER_STATE/$1.ready" ] || return 1
+    td_udocker_container_exists "$1"
+}
+
+# td_udocker_nethunter_ready <name> — VNC/desktop stack installed.
+td_udocker_nethunter_ready() {
+    [ -f "$TD_UDOCKER_STATE/$1.nethunter.ready" ] || return 1
+    td_udocker_ready "$1"
+}
+
+# td_udocker_conf_init — ensure ~/.udocker/udocker.conf so guest daemons
+# (TigerVNC) survive after `udocker run` returns, and seccomp stays off.
+td_udocker_conf_init() {
+    _home="${HOME:-$PREFIX/../home}"
+    _dir="${UDOCKER_DIR:-$_home/.udocker}"
+    mkdir -p "$_dir"
+    _cfg="$_dir/udocker.conf"
+    if [ ! -f "$_cfg" ]; then
+        cat >"$_cfg" <<'EOF'
+[DEFAULT]
+# Leave VNC (and other guest daemons) alive after udocker run exits.
+proot_killonexit = False
+proot_noseccomp = True
+proot_link2symlink = True
+EOF
+        return 0
+    fi
+    # Existing file (user or older setup): force the keys VNC needs.
+    if ! grep -q '^[[:space:]]*proot_killonexit[[:space:]]*=' "$_cfg" 2>/dev/null; then
+        printf '\nproot_killonexit = False\n' >>"$_cfg"
     else
-        env -u LD_PRELOAD \
-            PROOT_TMP_DIR="$_tmp" \
-            PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
-            proot -0 $_koe --link2symlink -r "$_rfs" -w /root \
-            -b /dev -b /proc -b /sys \
-            -b /dev/urandom:/dev/random \
-            -b "$PREFIX:/termux" \
-            /usr/bin/env -i \
-            HOME=/root \
-            TERM="${TERM:-xterm-256color}" \
-            PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-            "$@"
+        sed -i 's/^[[:space:]]*proot_killonexit[[:space:]]*=.*/proot_killonexit = False/' "$_cfg" 2>/dev/null || true
+    fi
+    if ! grep -q '^[[:space:]]*proot_noseccomp[[:space:]]*=' "$_cfg" 2>/dev/null; then
+        printf 'proot_noseccomp = True\n' >>"$_cfg"
     fi
 }
 
-# td_guest_login <container-name> <cmd...>
-# A direct proot exec first, `proot-distro login` only as a second opinion.
-#
-# The order matters: on this fork `proot-distro login` dies with
-#   proot error: execve("/usr/bin/bash"): No such file or directory
-# even though the guest shell and its ELF interpreter are both present, while
-# the same guest runs fine under `proot -R` with the loader pinned (layer 3 of
-# td-nethunter-debug). proot-distro also launches proot with a scrubbed
-# environment, so proot's compiled-in com.termux RUNPATH/lib paths are gone and
-# proot itself can fail to link (libtalloc.so.2). The direct exec avoids both.
-#
-# LD_PRELOAD is left in place for proot-distro itself: it is a Termux Python
-# program that needs the redirector to find its own stdlib.
+# td_udocker_run <name> [cmd...]
+# Runs a command (default: /bin/bash -l) inside the named container.
+# Keeps LD_PRELOAD for the path redirector. Shared host netns (udocker P1
+# default) so guest :5901 is reachable from Android VNC clients.
+# Interactive TTY: udocker attaches when stdin is a terminal (no docker-style -i).
+td_udocker_run() {
+    _name="${1:-}"
+    [ -n "$_name" ] || { echo "td_udocker_run: need container name" >&2; return 2; }
+    shift
+    [ $# -gt 0 ] || set -- /bin/bash -l
+    td_udocker_ensure || return 1
+    td_udocker_ensure_proot || return 1
+    td_udocker_conf_init
+    # Intentional: do not unset LD_PRELOAD (redirector for com.termux paths).
+    PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
+        udocker run "$_name" "$@"
+}
+
+# td_guest_login <name> <cmd...> — compatibility alias used by older call sites.
 td_guest_login() {
     _name="$1"
     shift
-    [ $# -gt 0 ] || set -- /usr/bin/bash -l
-    if td_proot_exec "$_name" "$@"; then
-        return 0
-    fi
-    if command -v proot-distro >/dev/null 2>&1; then
-        echo "td_guest_login: direct proot failed — retrying via proot-distro login" >&2
-        PROOT_TMP_DIR="${TD_NETHUNTER_STATE:-$PREFIX/var/td-nethunter}/proot-tmp" \
-            proot-distro login "$_name" -- "$@" && return 0
-    fi
-    return 1
+    [ $# -gt 0 ] || set -- /bin/bash -l
+    td_udocker_run "$_name" "$@"
 }

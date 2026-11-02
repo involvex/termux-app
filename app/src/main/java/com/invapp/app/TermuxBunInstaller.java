@@ -1571,17 +1571,20 @@ public final class TermuxBunInstaller {
         writeExec(new File(binDir, "td-dev"),
                 assetWithBashShebang(context, "invapp/bin/td-dev", bash));
 
-        // GUI bridge: a proot-distro desktop served over noVNC on Preview/LAN.
-        // Device-only; `td-nethunter-setup` installs proot-distro + noVNC/websockify
-        // + a distro VNC stack on first run, `td-nethunter` starts the bridge.
+        // Optional Kali NetHunter via Termux udocker + TigerVNC (device-only).
+        // `td-udocker-setup` pulls/creates; `td-nethunter-setup` adds the desktop;
+        // `td-nethunter` starts VNC on 127.0.0.1:5901 for AVNC/KeX (no noVNC).
+        writeExec(new File(binDir, "td-udocker-setup"),
+                assetWithBashShebang(context, "invapp/bin/td-udocker-setup", bash));
+        writeExec(new File(binDir, "td-udocker"),
+                assetWithBashShebang(context, "invapp/bin/td-udocker", bash));
         writeExec(new File(binDir, "td-nethunter-setup"),
                 assetWithBashShebang(context, "invapp/bin/td-nethunter-setup", bash));
         writeExec(new File(binDir, "td-nethunter"),
                 assetWithBashShebang(context, "invapp/bin/td-nethunter", bash));
         writeExec(new File(binDir, "td-nethunter-debug"),
                 assetWithBashShebang(context, "invapp/bin/td-nethunter-debug", bash));
-        // Guest shell/command runner: direct proot exec, because
-        // `proot-distro login` cannot exec the guest shell on this fork.
+        // Alias → td-udocker (kept for muscle memory after proot-distro → udocker).
         writeExec(new File(binDir, "td-guest"),
                 assetWithBashShebang(context, "invapp/bin/td-guest", bash));
 
@@ -2309,7 +2312,11 @@ public final class TermuxBunInstaller {
         }
         String[] names = {
             "am.termuxam", "ksu", "am", "login", "apt", "apt-get", "dpkg",
-            "bun", "bunx", "node", "td-ai", "td-dev", "td-nethunter-setup", "td-nethunter", "td-nethunter-debug", "td-scaffold", "td-clone",
+            "bun", "bunx", "node", "td-ai", "td-dev",
+            "td-udocker-setup", "td-udocker", "td-guest",
+            "td-nethunter-setup", "td-nethunter", "td-nethunter-debug",
+            "td-scaffold", "td-clone",
+
             "td-screen-ocr", "termux-screenshot", "termux-api-start", "termux-api-stop",
             "opencode-setup", "opencode-fix-net", "opencode", "bun-doctor",
             "td-resource", "td-resource-linux", "td-resource-python",

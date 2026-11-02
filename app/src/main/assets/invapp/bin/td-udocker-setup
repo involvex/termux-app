@@ -1,0 +1,69 @@
+#!@BASH@
+# InVxTermux — optional udocker install + pull/create (device-only).
+# Usage: td-udocker-setup [image]
+#   image  OCI ref (default: kalilinux/kali-rolling)
+# Name is derived from the image (kalilinux/kali-rolling → kali). Override with
+# TD_UDOCKER_NAME_OVERRIDE=foo. Installs Termux `udocker` on demand, pulls,
+# creates, and writes a ready marker under $PREFIX/var/td-udocker/.
+# After this:  td-udocker                 # interactive shell
+#              td-nethunter-setup         # add TigerVNC + desktop (Kali)
+# rev: 2026.10.30-1
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+IMAGE="${1:-${TD_UDOCKER_IMAGE:-kalilinux/kali-rolling}}"
+NAME="${TD_UDOCKER_NAME_OVERRIDE:-$(td_udocker_name_from_image "$IMAGE")}"
+STATE_DIR="${TD_UDOCKER_STATE:-$PREFIX/var/td-udocker}"
+
+log() { printf 'td-udocker-setup: %s\n' "$*"; }
+die() { printf 'td-udocker-setup: ERROR: %s\n' "$*" >&2; exit 1; }
+
+if [ "${INVAPP_ON_DEVICE:-0}" != 1 ]; then
+  log "device-only helper"
+  echo "  Reopen InVxTermux on the phone and run: td-udocker-setup [image]" >&2
+  exit 1
+fi
+
+log "rev 2026.10.30-1 (udocker + $IMAGE → $NAME)"
+log "pull can be large (1GB+ layers) — free space under \$PREFIX recommended"
+
+command -v udocker >/dev/null 2>&1 || {
+  log "installing udocker (pulls proot/python/resolv-conf as deps)"
+  pkg install -y --no-install-recommends udocker \
+    || die "pkg install udocker failed"
+}
+td_udocker_ensure || die "udocker not on PATH after install"
+td_udocker_ensure_proot || die "proot repair failed"
+td_udocker_conf_init
+
+mkdir -p "$STATE_DIR"
+
+if td_udocker_container_exists "$NAME"; then
+  log "container '$NAME' already exists — skipping create"
+else
+  log "pulling $IMAGE …"
+  PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" udocker pull "$IMAGE" \
+    || die "udocker pull failed for $IMAGE"
+  log "creating container --name=$NAME"
+  PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
+    udocker create --name="$NAME" "$IMAGE" \
+    || die "udocker create failed"
+  PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
+    udocker setup --execmode=P1 "$NAME" 2>/dev/null || true
+fi
+
+td_udocker_container_exists "$NAME" \
+  || die "container '$NAME' missing after create — try: udocker ps"
+
+PROBE_LOG="$STATE_DIR/$NAME.probe.log"
+if ! td_udocker_run "$NAME" /bin/true >"$PROBE_LOG" 2>&1 \
+  && ! td_udocker_run "$NAME" /bin/sh -c true >"$PROBE_LOG" 2>&1; then
+  echo "td-udocker-setup: probe log tail:" >&2
+  tail -20 "$PROBE_LOG" >&2
+  die "container '$NAME' not runnable — run: td-nethunter-debug $NAME"
+fi
+
+printf '%s\n' "$IMAGE" >"$STATE_DIR/$NAME.image"
+touch "$STATE_DIR/$NAME.ready"
+log "ready — run: td-udocker $NAME"
+log "NetHunter desktop (VNC): td-nethunter-setup"
+log "orphan proot-distro trees (if any): \$PREFIX/var/lib/proot-distro/ — safe to remove"
