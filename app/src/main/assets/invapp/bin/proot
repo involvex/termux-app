@@ -1,0 +1,48 @@
+#!@BASH@
+# INVAPP_PROOT_WRAPPER=1
+# Fork-safe proot for InVxTermux / Terminal Dev.
+#
+# Stock proot under LD_PRELOAD=libinvapp-redirector.so rewrites guest paths and
+# dies with: execve("/usr/bin/bash"): No such file or directory
+# (same class of failure as NetHunter extract). This wrapper:
+#   * runs the real ELF at $PREFIX/libexec/proot-bin
+#   * sets PROOT_LOADER / PROOT_TMP_DIR / PROOT_NO_SECCOMP
+#   * host LD_PRELOAD= (empty — not unset — so redirector does not reinject)
+#   * host LD_LIBRARY_PATH=$PREFIX/lib (proot needs libtalloc.so.2 etc.)
+#   * guest -e LD_LIBRARY_PATH= -e LD_PRELOAD= so guest bash does not see
+#     Termux libs (that caused "libc.so: cannot open shared object file")
+#
+# Reseeded on every app start. After `pkg reinstall proot`, reopen the app or
+# run a helper that calls td_udocker_ensure_proot (moves ELF back to libexec).
+
+REAL="${INVAPP_PROOT_BIN:-$PREFIX/libexec/proot-bin}"
+if [ ! -x "$REAL" ]; then
+    for _c in "$PREFIX/libexec/proot/proot" "$PREFIX/lib/proot/proot"; do
+        if [ -x "$_c" ]; then
+            REAL="$_c"
+            break
+        fi
+    done
+fi
+if [ ! -x "$REAL" ]; then
+    echo "proot: missing ELF at \$PREFIX/libexec/proot-bin" >&2
+    echo "  install: pkg install -y proot && reopen the app (reseeds wrapper)" >&2
+    exit 127
+fi
+
+export PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}"
+export PROOT_TMP_DIR="${PROOT_TMP_DIR:-$PREFIX/tmp/proot}"
+mkdir -p "$PROOT_TMP_DIR" "${PREFIX:-/tmp}/tmp" 2>/dev/null || true
+
+if [ -z "${PROOT_LOADER:-}" ]; then
+    for _l in "$PREFIX/libexec/proot/loader" "$PREFIX/lib/proot/loader"; do
+        if [ -x "$_l" ]; then
+            export PROOT_LOADER="$_l"
+            break
+        fi
+    done
+fi
+
+# Host: Termux libs for proot/talloc. Guest: clear via proot -e (before user args).
+exec env LD_PRELOAD= LD_LIBRARY_PATH="$PREFIX/lib" \
+    "$REAL" -e LD_LIBRARY_PATH= -e LD_PRELOAD= "$@"

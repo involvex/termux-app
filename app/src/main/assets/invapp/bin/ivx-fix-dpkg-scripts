@@ -1,0 +1,73 @@
+#!@BASH@
+# ivx-fix-dpkg-scripts — heal dpkg info/format and patch maintainer scripts.
+#
+# Only touches dpkg maintainer scripts (preinst/postinst/…). Never info/format,
+# *.list, *.md5sums. Older invapp-fix-dpkg-scripts prepended #!$PREFIX/bin/sh
+# to every info/* file and corrupted format (dpkg expects exactly "1\n").
+#
+# Compat: invapp-fix-dpkg-scripts is a thin alias to this command.
+
+set -u
+
+if [ -z "${PREFIX:-}" ]; then
+    PREFIX=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd -P) || PREFIX=''
+fi
+: "${PREFIX:?PREFIX is not set — run inside Termux}"
+
+# Package id from the prefix path (…/data/data/<pkg>/files/usr).
+OLD="com.termux"
+NEW=$(basename "$(dirname "$(dirname "$PREFIX")")" 2>/dev/null || true)
+[ -n "$NEW" ] || NEW="com.involvex.termux_app"
+
+INFO="$PREFIX/var/lib/dpkg/info"
+FORMAT="$INFO/format"
+mkdir -p "$INFO"
+
+_fmt="$(tr -d '\r' < "$FORMAT" 2>/dev/null || true)"
+if [ ! -f "$FORMAT" ] || [ "$_fmt" != "1" ]; then
+    printf '1\n' > "$FORMAT"
+    echo "ivx-fix-dpkg-scripts: restored info/format"
+fi
+
+is_maint() {
+    case "$1" in
+        preinst|postinst|prerm|postrm|config) return 0 ;;
+        *.preinst|*.postinst|*.prerm|*.postrm|*.config) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+strip_accidental_shebang() {
+    local f="$1" line
+    line="$(head -1 "$f" 2>/dev/null || true)"
+    if [ "$line" = "#!$PREFIX/bin/sh" ]; then
+        tail -n +2 "$f" > "$f.new" && mv "$f.new" "$f"
+    fi
+}
+
+fixdir() {
+    local d="$1" f base
+    [ -d "$d" ] || return 0
+    for f in "$d"/*; do
+        [ -f "$f" ] || continue
+        base="${f##*/}"
+        [ "$base" = "format" ] && continue
+        if ! is_maint "$base"; then
+            strip_accidental_shebang "$f"
+            continue
+        fi
+        if ! head -1 "$f" 2>/dev/null | grep -q '^#!'; then
+            { echo "#!$PREFIX/bin/sh"; cat "$f"; } > "$f.new" && mv "$f.new" "$f"
+        fi
+        sed -i "s|$OLD|$NEW|g" "$f" 2>/dev/null || true
+        case "$(head -1 "$f" 2>/dev/null)" in
+            '#!/bin/sh'*) sed -i "1s|^#!/bin/sh|#!$PREFIX/bin/sh|" "$f" 2>/dev/null || true ;;
+            '#!/bin/bash'*) sed -i "1s|^#!/bin/bash|#!$PREFIX/bin/bash|" "$f" 2>/dev/null || true ;;
+        esac
+        chmod 700 "$f" 2>/dev/null || true
+    done
+}
+
+fixdir "$PREFIX/var/lib/dpkg/tmp.ci"
+fixdir "$INFO"
+echo "ivx-fix-dpkg-scripts: patched maintainer scripts under tmp.ci and info"

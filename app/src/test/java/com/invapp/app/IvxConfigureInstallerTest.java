@@ -34,6 +34,10 @@ public class IvxConfigureInstallerTest {
 
         assertTrue(IvxConfigureInstaller.configureFile().getName().equals("ivx-configure"));
         assertTrue(IvxConfigureInstaller.doctorFile().getName().equals("ivx-doctor"));
+        assertTrue(IvxConfigureInstaller.cleanupFile().getName().equals("ivx-cleanup"));
+        assertTrue(IvxConfigureInstaller.fixDpkgFile().getName().equals("ivx-fix-dpkg-scripts"));
+        assertTrue(IvxConfigureInstaller.fixDpkgAliasFile().getName()
+            .equals("invapp-fix-dpkg-scripts"));
         assertTrue(rel(IvxConfigureInstaller.bannerFile()).endsWith("lib/invapp/banner.sh"));
         assertTrue(rel(IvxConfigureInstaller.hookFile()).endsWith("etc/profile.d/invapp-banner.sh"));
         assertTrue(rel(IvxConfigureInstaller.networkHookFile())
@@ -46,6 +50,32 @@ public class IvxConfigureInstallerTest {
     public void execAssets_useThePortableShebangMarker() {
         assertTrue(read("invapp/bin/ivx-configure").startsWith("#!@BASH@"));
         assertTrue(read("invapp/bin/ivx-doctor").startsWith("#!@BASH@"));
+        assertTrue(read("invapp/bin/ivx-cleanup").startsWith("#!@BASH@"));
+        assertTrue(read("invapp/bin/ivx-fix-dpkg-scripts").startsWith("#!@BASH@"));
+        assertTrue(read("invapp/bin/invapp-fix-dpkg-scripts").startsWith("#!@BASH@"));
+        assertTrue(read("invapp/bin/invapp-fix-dpkg-scripts").contains("ivx-fix-dpkg-scripts"));
+    }
+
+    @Test
+    public void cleanup_coversGlobalManagers() {
+        String body = read("invapp/bin/ivx-cleanup");
+        assertTrue(body.contains("list_pkg"));
+        assertTrue(body.contains("list_cargo"));
+        assertTrue(body.contains("list_bun"));
+        assertTrue(body.contains("list_npm"));
+        assertTrue(body.contains("list_pip"));
+        assertTrue(body.contains("list_uv"));
+        assertTrue(body.contains("bun remove -g"));
+        assertTrue(body.contains("uv tool uninstall"));
+    }
+
+    @Test
+    public void fixDpkg_healsFormatAndSkipsNonScripts() {
+        String body = read("invapp/bin/ivx-fix-dpkg-scripts");
+        assertTrue(body.contains("info/format"));
+        assertTrue(body.contains("is_maint"));
+        assertTrue(body.contains("printf '1\\n'"));
+        assertTrue(body.contains("strip_accidental_shebang"));
     }
 
     @Test
@@ -92,6 +122,7 @@ public class IvxConfigureInstallerTest {
         String completion = read("invapp/config/bash_completion.d/invapp-ivx.bash");
         assertTrue(completion.contains("complete -F _ivx_configure ivx-configure"));
         assertTrue(completion.contains("complete -F _ivx_doctor ivx-doctor"));
+        assertTrue(completion.contains("complete -F _ivx_cleanup ivx-cleanup"));
     }
 
     @Test
@@ -118,6 +149,8 @@ public class IvxConfigureInstallerTest {
         String[] assets = {
             "invapp/bin/ivx-configure",
             "invapp/bin/ivx-doctor",
+            "invapp/bin/ivx-cleanup",
+            "invapp/bin/ivx-fix-dpkg-scripts",
             "invapp/banner.sh",
             "invapp/config/profile.d/invapp-banner.sh",
             "invapp/config/profile.d/invapp-network.sh",

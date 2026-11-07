@@ -1,0 +1,3 @@
+#!@BASH@
+# Compat alias → ivx-fix-dpkg-scripts (preferred name).
+exec "$(dirname "$0")/ivx-fix-dpkg-scripts" "$@"

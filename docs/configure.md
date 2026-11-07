@@ -12,6 +12,8 @@ ivx-configure            # interactive menu
 ivx-configure status     # what is installed / enabled
 ivx-configure network dns fix   # fix Go lookup … on [::1]:53
 ivx-doctor               # same as: ivx-configure doctor
+ivx-cleanup              # remove global pkg / cargo / bun / npm / pip / uv installs
+ivx-fix-dpkg-scripts     # heal dpkg info/format + maintainer script shebangs
 ```
 
 Open it from the terminal, **Settings → Setup**, or the right drawer's

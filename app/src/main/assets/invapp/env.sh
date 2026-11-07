@@ -227,21 +227,87 @@ td_udocker_ensure() {
     return 0
 }
 
+# td_udocker_is_elf <path> — true when file starts with ELF magic.
+td_udocker_is_elf() {
+    [ -f "$1" ] || return 1
+    head -c 4 "$1" 2>/dev/null | od -An -tx1 | grep -q '7f 45 4c 46'
+}
+
+# td_udocker_is_invapp_proot_wrapper <path> — seeded fork-safe wrapper (not pip).
+td_udocker_is_invapp_proot_wrapper() {
+    [ -f "$1" ] || return 1
+    head -20 "$1" 2>/dev/null | grep -q 'INVAPP_PROOT_WRAPPER=1'
+}
+
+# td_udocker_rewrap_proot — move ELF off $PREFIX/bin/proot and restore wrapper.
+# After `pkg install/reinstall proot` the ELF lands on bin/proot again; relocate
+# it to libexec/proot-bin and copy libexec/invapp-proot-wrapper back to bin.
+td_udocker_rewrap_proot() {
+    _p="$PREFIX/bin/proot"
+    _real="$PREFIX/libexec/proot-bin"
+    _wrap="$PREFIX/libexec/invapp-proot-wrapper"
+    mkdir -p "$PREFIX/libexec" "$PREFIX/tmp/proot"
+    if td_udocker_is_elf "$_p"; then
+        mv -f "$_p" "$_real" 2>/dev/null || cp -f "$_p" "$_real" || return 1
+        rm -f "$_p" 2>/dev/null || true
+    fi
+    if [ ! -x "$_real" ]; then
+        for _c in "$PREFIX/libexec/proot/proot" "$PREFIX/lib/proot/proot"; do
+            if td_udocker_is_elf "$_c"; then
+                cp -f "$_c" "$_real" && chmod 700 "$_real" && break
+            fi
+        done
+    fi
+    [ -x "$_real" ] || return 1
+    if [ -f "$_wrap" ] && td_udocker_is_invapp_proot_wrapper "$_wrap"; then
+        cp -f "$_wrap" "$_p" && chmod 700 "$_p" || return 1
+        return 0
+    fi
+    # Minimal inline wrapper if the APK template was not seeded yet.
+    cat > "$_p" <<'WRAP'
+#!/bin/bash
+# INVAPP_PROOT_WRAPPER=1
+REAL="${INVAPP_PROOT_BIN:-$PREFIX/libexec/proot-bin}"
+[ -x "$REAL" ] || { echo "proot: missing $PREFIX/libexec/proot-bin" >&2; exit 127; }
+export PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}"
+export PROOT_TMP_DIR="${PROOT_TMP_DIR:-$PREFIX/tmp/proot}"
+mkdir -p "$PROOT_TMP_DIR"
+if [ -z "${PROOT_LOADER:-}" ]; then
+    for _l in "$PREFIX/libexec/proot/loader" "$PREFIX/lib/proot/loader"; do
+        [ -x "$_l" ] && export PROOT_LOADER="$_l" && break
+    done
+fi
+exec env LD_PRELOAD= LD_LIBRARY_PATH="$PREFIX/lib" \
+    "$REAL" -e LD_LIBRARY_PATH= -e LD_PRELOAD= "$@"
+WRAP
+    chmod 700 "$_p"
+}
+
 # td_udocker_ensure_proot — Termux ELF proot must win over a pip "proot" shim.
+# Accepts the invapp fork-safe wrapper; relocates a fresh pkg ELF automatically.
 td_udocker_ensure_proot() {
     _p="$PREFIX/bin/proot"
-    if [ ! -f "$_p" ]; then
+    _real="$PREFIX/libexec/proot-bin"
+    if [ ! -f "$_p" ] && [ ! -f "$_real" ]; then
         echo "td_udocker_ensure_proot: installing proot" >&2
         pkg install -y proot || return 1
-    elif ! head -c 4 "$_p" 2>/dev/null | od -An -tx1 | grep -q '7f 45 4c 46'; then
+    fi
+    if td_udocker_is_elf "$_p"; then
+        td_udocker_rewrap_proot || return 1
+    elif td_udocker_is_invapp_proot_wrapper "$_p"; then
+        [ -x "$_real" ] || td_udocker_rewrap_proot || return 1
+    elif [ -f "$_p" ]; then
         echo "td_udocker_ensure_proot: rogue non-ELF proot shim — reinstalling" >&2
         pkg reinstall -y proot 2>/dev/null \
             || apt-get install -y --reinstall proot \
             || { rm -f "$_p"; pkg install -y proot; } \
             || return 1
+        td_udocker_rewrap_proot || return 1
+    else
+        td_udocker_rewrap_proot || return 1
     fi
     "$_p" --version >/dev/null 2>&1 || {
-        echo "td_udocker_ensure_proot: proot unusable — try: pip uninstall proot && pkg install -y -f proot" >&2
+        echo "td_udocker_ensure_proot: proot unusable — try: pip uninstall proot && pkg install -y -f proot && reopen the app" >&2
         return 1
     }
     return 0
@@ -419,8 +485,9 @@ td_udocker_extract_rootfs() {
     _ptmp="${TD_UDOCKER_STATE}/proot-tmp"
 
     # 1) proot --link2symlink with a clean preload (fork-safe).
+    # Host LD_LIBRARY_PATH=$PREFIX/lib so proot/tar resolve libtalloc etc.
     if [ -n "$_ldr" ]; then
-        env -u LD_PRELOAD \
+        env LD_PRELOAD= LD_LIBRARY_PATH="$PREFIX/lib" \
             PROOT_LOADER="$_ldr" \
             PROOT_TMP_DIR="$_ptmp" \
             TMPDIR="$PREFIX/tmp" \
@@ -429,7 +496,7 @@ td_udocker_extract_rootfs() {
             "$_tar_bin" $_tar_flags "$_archive" -C "$_dest" \
             >"$_err" 2>&1 || true
     else
-        env -u LD_PRELOAD \
+        env LD_PRELOAD= LD_LIBRARY_PATH="$PREFIX/lib" \
             PROOT_TMP_DIR="$_ptmp" \
             TMPDIR="$PREFIX/tmp" \
             PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
@@ -533,8 +600,10 @@ td_udocker_proot_run() {
     _koe="--kill-on-exit"
     [ "${TD_PROOT_KEEP_ALIVE:-0}" = 1 ] && _koe=""
     _env="HOME=/root TERM=${TERM:-xterm-256color} PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8"
+    # Host: LD_PRELOAD= (empty key — unset reinjects redirector) +
+    # LD_LIBRARY_PATH=$PREFIX/lib (proot needs libtalloc). Guest uses env -i.
     if [ -n "$_ldr" ]; then
-        env -u LD_PRELOAD \
+        env LD_PRELOAD= LD_LIBRARY_PATH="$PREFIX/lib" \
             PROOT_LOADER="$_ldr" \
             PROOT_TMP_DIR="${TD_UDOCKER_STATE}/proot-tmp" \
             TMPDIR="$PREFIX/tmp" \
@@ -545,7 +614,7 @@ td_udocker_proot_run() {
             -b "$PREFIX:/termux" \
             /usr/bin/env -i $_env "$@"
     else
-        env -u LD_PRELOAD \
+        env LD_PRELOAD= LD_LIBRARY_PATH="$PREFIX/lib" \
             PROOT_TMP_DIR="${TD_UDOCKER_STATE}/proot-tmp" \
             TMPDIR="$PREFIX/tmp" \
             PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \

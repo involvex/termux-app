@@ -114,8 +114,10 @@ That makes three of the app's workarounds unnecessary and keeps the rest:
 
 * **Dropped** — `libinvapp-redirector.so` (nothing to remap: the prefix already
   *is* `/data/data/com.termux`), `libinvapp-bun-seccomp.so` (Android's seccomp
-  traps `openat2`; Docker has its own profile — see below), and
-  `libinvapp-opencode-shim.so` (Docker provides `/etc/resolv.conf` and `/sys`).
+  traps `openat2`; Docker has its own profile — see below),
+  `libinvapp-opencode-shim.so` (Docker provides `/etc/resolv.conf` and `/sys`),
+  and the fork-safe `$PREFIX/bin/proot` wrapper (`seed.sh` skips it so the
+  real ELF is not replaced — no path redirector in the image).
 * **Kept** — the APK's **android bun build**. `bun-linux-x64.zip` is a glibc
   binary whose ELF interpreter is `/lib64/ld-linux-x86-64.so.2`; that path does
   not exist in this rootfs, so it dies with `required file not found`. The

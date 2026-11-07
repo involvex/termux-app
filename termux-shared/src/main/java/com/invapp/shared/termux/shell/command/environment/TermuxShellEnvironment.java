@@ -381,11 +381,68 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
      * {@code var/lib/dpkg/info/} and in-flight {@code var/lib/dpkg/tmp.ci/} (unpack).
      */
     private synchronized static void fixDpkgMaintainerScripts(String prefix) {
+        if (healDpkgInfoFormatFile(prefix)) {
+            Logger.logInfo(LOG_TAG, "Restored dpkg info/format to \"1\"");
+        }
         int fixed = fixDpkgScriptsInDirectory(new File(prefix + "/var/lib/dpkg/info"), prefix);
         fixed += fixDpkgScriptsInDirectory(new File(prefix + "/var/lib/dpkg/tmp.ci"), prefix);
         if (fixed > 0) {
             Logger.logInfo(LOG_TAG, "Patched " + fixed + " dpkg maintainer script file(s)");
         }
+    }
+
+    /**
+     * Restore {@code $PREFIX/var/lib/dpkg/info/format} when missing or corrupted
+     * (e.g. older helpers prepended a shebang). dpkg expects exactly {@code 1}
+     * plus a newline. Prefer {@code ivx-fix-dpkg-scripts} on device.
+     *
+     * @return {@code true} when the file was written
+     */
+    static boolean healDpkgInfoFormatFile(@NonNull String prefix) {
+        File format = new File(prefix + "/var/lib/dpkg/info/format");
+        StringBuilder contents = new StringBuilder();
+        if (format.isFile()) {
+            Error readError = FileUtils.readTextFromFile("format", format.getAbsolutePath(),
+                Charset.defaultCharset(), contents, true);
+            if (readError == null && isValidDpkgInfoFormat(contents.toString())) {
+                return false;
+            }
+        }
+        File infoDir = format.getParentFile();
+        if (infoDir != null && !infoDir.isDirectory() && !infoDir.mkdirs()) {
+            Logger.logError(LOG_TAG, "Cannot create " + infoDir);
+            return false;
+        }
+        Error writeError = FileUtils.writeTextToFile("format", format.getAbsolutePath(),
+            Charset.defaultCharset(), "1\n", false);
+        if (writeError != null) {
+            Logger.logErrorExtended(LOG_TAG, "Failed to heal info/format\n" + writeError);
+            return false;
+        }
+        return true;
+    }
+
+    /** {@code true} when text is exactly {@code 1} with optional trailing newline. */
+    public static boolean isValidDpkgInfoFormat(@NonNull String text) {
+        String trimmed = text.replace("\r\n", "\n").replace('\r', '\n');
+        return "1".equals(trimmed) || "1\n".equals(trimmed);
+    }
+
+    /**
+     * Strip a leading {@code #!$PREFIX/bin/sh} line left by older dpkg-fix
+     * helpers on non-script dpkg info files.
+     */
+    @NonNull
+    public static String stripAccidentalDpkgShebang(@NonNull String text, @NonNull String prefix) {
+        String marker = "#!" + prefix + "/bin/sh\n";
+        String markerCr = "#!" + prefix + "/bin/sh\r\n";
+        if (text.startsWith(marker)) {
+            return text.substring(marker.length());
+        }
+        if (text.startsWith(markerCr)) {
+            return text.substring(markerCr.length());
+        }
+        return text;
     }
 
     /**
@@ -397,7 +454,8 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
         return patchDpkgMaintainerScriptText(text, prefix, "");
     }
 
-    private static boolean isDpkgMaintainerScriptFileName(@NonNull String fileName) {
+    /** Basename filter matching dpkg maintainer scripts (not {@code format}/lists). */
+    public static boolean isDpkgMaintainerScriptFileName(@NonNull String fileName) {
         if ("preinst".equals(fileName) || "postinst".equals(fileName)
             || "prerm".equals(fileName) || "postrm".equals(fileName)
             || "config".equals(fileName)) {
@@ -411,11 +469,31 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
     @NonNull
     public static String patchDpkgMaintainerScriptText(@NonNull String text, @NonNull String prefix,
             @NonNull String fileName) {
+        if ("format".equals(fileName)) {
+            return isValidDpkgInfoFormat(text) ? text : "1\n";
+        }
         String oldPkg = "com.termux";
         String newPkg = TermuxConstants.TERMUX_PACKAGE_NAME;
+        boolean maint = isDpkgMaintainerScriptFileName(fileName);
+        // Empty fileName = generic body patch (2-arg API / tests): rewrite paths
+        // and #!/bin/sh|bash, but never prepend a shebang.
+        boolean genericBody = fileName.isEmpty();
+        if (!maint && !genericBody) {
+            String stripped = stripAccidentalDpkgShebang(text, prefix);
+            boolean needsListNewline = fileName.endsWith(".list")
+                && !stripped.isEmpty() && !stripped.endsWith("\n");
+            if (!stripped.contains(oldPkg) && !needsListNewline && stripped.equals(text)) {
+                return text;
+            }
+            String patched = stripped.contains(oldPkg)
+                ? stripped.replace(oldPkg, newPkg) : stripped;
+            if (needsListNewline && !patched.endsWith("\n")) {
+                patched = patched + "\n";
+            }
+            return patched;
+        }
         boolean needsListNewline = fileName.endsWith(".list") && !text.isEmpty() && !text.endsWith("\n");
-        boolean needsShebang = isDpkgMaintainerScriptFileName(fileName)
-            && !text.isEmpty() && !text.startsWith("#!");
+        boolean needsShebang = maint && !text.isEmpty() && !text.startsWith("#!");
         if (!text.contains(oldPkg)
             && !text.startsWith("#!/bin/sh")
             && !text.startsWith("#!/bin/bash")
@@ -467,10 +545,12 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
                 Logger.logErrorExtended(LOG_TAG, "Failed to fix " + name + "\n" + writeError);
                 continue;
             }
-            try {
-                //noinspection OctalInteger
-                Os.chmod(file.getAbsolutePath(), 0700);
-            } catch (Exception ignored) {
+            if (isDpkgMaintainerScriptFileName(name)) {
+                try {
+                    //noinspection OctalInteger
+                    Os.chmod(file.getAbsolutePath(), 0700);
+                } catch (Exception ignored) {
+                }
             }
             fixed++;
         }

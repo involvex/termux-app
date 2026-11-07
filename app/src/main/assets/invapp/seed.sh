@@ -123,6 +123,9 @@ install_tree() {
         # bun shim clobber it. The device installs the shim via
         # TermuxBunInstaller.ensureNodeBunShim only when no real nodejs exists.
         [ "$name" = "node" ] && continue
+        # 'proot' wrapper is Android-only (path redirector / PROOT_LOADER). The
+        # container already has a real ELF at $PREFIX/bin/proot — never replace it.
+        [ "$name" = "proot" ] && continue
         # '#!@BASH@' is resolved to this container's shell at install time, so
         # the same file works for any prefix layout.
         sed -e "1s|^#!@BASH@|#!$BASH_BIN|" "$f" > "$dst/$name"

@@ -6,6 +6,10 @@
 | `/usr/bin/env: bad interpreter` on npm/npx | Open a **new** session after update (redirector rewrites shebangs). `pkg install nodejs` if npm is missing |
 | `Permission denied` on `tsc` / bins | Project is under shared storage (**noexec**). Move to `~/repos` |
 | OpenJDK install stuck / `java` dlopen / Bad system call | Run `td-jdk-setup` (installs recommends incl. `libandroid-shmem`). `jdk-doctor` for details. See [OpenJDK 17](openjdk.md) |
+| `dpkg: corrupt info database format file …/info/format` | Older helpers damaged `format` (must be `1\n`). Reopen app or `ivx-fix-dpkg-scripts`, or `printf '1\n' > "$PREFIX/var/lib/dpkg/info/format"` |
+| `pd run` / proot → `execve(bash)` ENOENT or guest `libc.so` / host `libtalloc` missing | Reopen app to reseed `$PREFIX/bin/proot` wrapper (host `LD_LIBRARY_PATH=$PREFIX/lib`, guest `-e LD_LIBRARY_PATH=`). If `libtalloc`/`libandroid-support` missing: `export LD_LIBRARY_PATH=$PREFIX/lib` then reopen app. Incomplete rootfs: `pd reset <distro> && pd install <distro>` |
+| `td-resource-linux --run` → `bad interpreter` or `libandroid-support.so` not found | Reopen app; `--run` rewrites `run.sh` and restores `LD_LIBRARY_PATH=$PREFIX/lib` for host bash |
+| Global tool clutter (pkg / cargo / bun / npm / pip / uv) | `ivx-cleanup` interactive menu |
 | OpenCode `Permission denied` / LIBC / postinstall / SIGSYS | Re-run `opencode-setup` (official V2 tarball + glibc). Do not `unset LD_PRELOAD` |
 | OpenCode `AI_APICallError` / “typo in the url or port” | Local `:4096` OK; Zen/provider broken. `rm -rf ~/.cache/opencode`, re-auth, seed glibc DNS/CA, `opencode-setup`, retry from `~/repos/…` (V1 only: fix `@opencode-ai/plugin@local` → `latest`) |
 | OpenCode `getifaddrs returned an error` | Non-fatal for `0.0.0.0` bind; V2 has no `--mdns`. Override `OPENCODE_HOST=127.0.0.1 td-ai` if needed. Preview uses `127.0.0.1:4096` / `/api/info` |

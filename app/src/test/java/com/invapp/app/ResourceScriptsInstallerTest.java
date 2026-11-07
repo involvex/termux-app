@@ -44,7 +44,7 @@ public class ResourceScriptsInstallerTest {
         assertTrue(body.contains("debian-container"));
         assertTrue(body.contains("xz -t"));
         assertTrue(body.contains("--link2symlink"));
-        // Redirector preserved at top level; unset only inside generated run.sh heredoc.
+        // Redirector preserved at top level; run.sh uses LD_PRELOAD= (empty).
         assertTrue(body.contains("REDIRECTOR_SO"));
         assertFalse(body.contains("com.termux.ultra"));
     }
@@ -175,5 +175,25 @@ public class ResourceScriptsInstallerTest {
         assertTrue(body.contains("reinstalling proot"));
         assertTrue(body.contains("7f 45 4c 46"));
         assertTrue(body.contains("pip uninstall proot"));
+        assertTrue(body.contains("INVAPP_PROOT_WRAPPER=1"));
+    }
+
+    @Test
+    public void linuxBody_forkSafeExtractAndRun() {
+        String body = ResourceScriptsInstaller.linuxBody();
+        assertTrue(body.contains("LD_PRELOAD="));
+        assertTrue("host proot needs Termux libs",
+            body.contains("LD_LIBRARY_PATH=\"$PREFIX/lib\""));
+        assertTrue(body.contains("PROOT_LOADER"));
+        assertTrue(body.contains("libexec/proot-bin"));
+        assertTrue(body.contains("no bin/sh"));
+        assertTrue(body.contains("write_run_sh"));
+        assertTrue("Termux bash shebang for run.sh",
+            body.contains("#!$PREFIX/bin/bash"));
+        assertTrue(body.contains("/usr/bin/env -i"));
+        assertFalse(body.contains("unset LD_PRELOAD"));
+        assertFalse("must not clear host LD_LIBRARY_PATH entirely",
+            body.contains("LD_LIBRARY_PATH= PROOT")
+                || body.contains("LD_LIBRARY_PATH=\\ PROOT"));
     }
 }

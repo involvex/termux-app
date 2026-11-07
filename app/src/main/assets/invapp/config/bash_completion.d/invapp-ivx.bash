@@ -1,4 +1,4 @@
-# bash completion for ivx-configure / ivx-doctor
+# bash completion for ivx-configure / ivx-doctor / ivx-cleanup
 # Installed into $PREFIX/etc/bash_completion.d/ and sourced by
 # $PREFIX/etc/profile.d/invapp-completions.sh (device) or bash-completion.
 #
@@ -108,3 +108,14 @@ _ivx_doctor() {
     COMPREPLY=( $(compgen -W "--strict --network" -- "$cur") )
 }
 complete -F _ivx_doctor ivx-doctor
+
+_ivx_cleanup() {
+    local cur
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    if [ "$COMP_CWORD" -eq 1 ]; then
+        COMPREPLY=( $(compgen -W "pkg cargo bun npm pip uv help --yes --dry-run --no-color" -- "$cur") )
+        return
+    fi
+    COMPREPLY=( $(compgen -W "--yes --dry-run --no-color" -- "$cur") )
+}
+complete -F _ivx_cleanup ivx-cleanup

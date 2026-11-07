@@ -62,8 +62,8 @@ See `ROADMAP.md`.
 | Widget scripts | `~/.shortcuts` templates (defaults: `clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, `screen-ocr`, `tasks/td-ai`; optional catalog: camera/wifi/battery/torch/share/settings/vibrate/volume/location/telephony/`stop-ai`/`td-upgrade`/`stop-agent-worker`/`tasks/agent-worker`); Settings / right drawer; matching Widget APK + API/`pkg install termux-api`. `screen-ocr` → `td-screen-ocr`. **2-finger swipe down** (or Ctrl+Alt+T) opens Tools end drawer. Widget tap always shows **Running: name** toast |
 | Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize bar / Customize keys (also **Settings → Customize keybinds**; writes text-label `extra-keys` + `extra-keys-style=none`). Extra-keys: page 1 ESC/HOME/CTRL as text; swipe L/R for workflow page; end drawer = Tools. Long-press / Ctrl+Alt+M → actions bottom sheet. AI tap when ready opens Preview and may offer **Copy LAN** if `:4096` is wildcard-bound |
 | Completions | App installs `$PREFIX/etc/profile.d/invapp-completions.sh` + `bash_completion.d` for bun/pkg/npm/gh/git. Prefer `pkg install bash-completion` for richer git. **New session** after update. Never edit `~/.bashrc` |
-| Setup / banner | `ivx-configure` (pure bash: appearance, completions, package groups, **network** DNS/proxy/`GOPROXY`, doctor, AI hints, reset) + `ivx-doctor` wrapper + login banner. Art = pre-rendered pyfiglet **pixelfont** output for "InvolveX" in `$PREFIX/lib/invapp/banner.sh` (the GPL `.flf` font is **not** shipped); hooks = `$PREFIX/etc/profile.d/invapp-banner.sh` + `invapp-network.sh` (manual proxy exports); config user-owned in `${XDG_CONFIG_HOME:-~/.config}/invapp/` (`config`, `art.txt`); managed completions `$PREFIX/etc/bash_completion.d/ivx-<tool>.bash`. Banner guarded by `BASH_VERSION` + interactive `$-` + `[ -t 1 ]` + `TERM!=dumb` + empty `SSH_ORIGINAL_COMMAND`, so widgets/`ssh host cmd`/`bash -lc` stay silent. Reseeded every app start by `IvxConfigureInstaller` (+ after bootstrap in `TermuxInstaller`); drawer **Setup** + opt-in quick-bar catalog entry. Docs: `docs/configure.md` |
-| Container | `app/src/main/assets/invapp/` = container twin of the seeded env (bun, `td-*`, configs, `~/.shortcuts`, opencode/cursor installers). Built by the `involvex/termux-docker` fork: `INVAPP_SRC=../termux-app/app/src/main/assets/invapp ./generate.sh --invapp` → `ghcr.io/involvex/termux-docker:<arch>`. Dropped vs APK: path redirector, bun seccomp shim, OpenCode DNS shim. Kept: `--os=android` (prefix is bionic!) + Termux glibc wrappers. Details: `docker/README.md` |
+| Setup / banner | `ivx-configure` (pure bash: appearance, completions, package groups, **network** DNS/proxy/`GOPROXY`, doctor, AI hints, reset) + `ivx-doctor` + `ivx-cleanup` (global pkg/cargo/bun/npm/pip/uv) + `ivx-fix-dpkg-scripts` (+ `invapp-` alias) + login banner. Art = pre-rendered pyfiglet **pixelfont** output for "InvolveX" in `$PREFIX/lib/invapp/banner.sh` (the GPL `.flf` font is **not** shipped); hooks = `$PREFIX/etc/profile.d/invapp-banner.sh` + `invapp-network.sh` (manual proxy exports); config user-owned in `${XDG_CONFIG_HOME:-~/.config}/invapp/` (`config`, `art.txt`); managed completions `$PREFIX/etc/bash_completion.d/ivx-<tool>.bash`. Banner guarded by `BASH_VERSION` + interactive `$-` + `[ -t 1 ]` + `TERM!=dumb` + empty `SSH_ORIGINAL_COMMAND`, so widgets/`ssh host cmd`/`bash -lc` stay silent. Reseeded every app start by `IvxConfigureInstaller` (+ after bootstrap in `TermuxInstaller`); drawer **Setup** + opt-in quick-bar catalog entry. Docs: `docs/configure.md` |
+| Container | `app/src/main/assets/invapp/` = container twin of the seeded env (bun, `td-*`, configs, `~/.shortcuts`, opencode/cursor installers). Built by the `involvex/termux-docker` fork: `INVAPP_SRC=../termux-app/app/src/main/assets/invapp ./generate.sh --invapp` → `ghcr.io/involvex/termux-docker:<arch>`. Dropped vs APK: path redirector, bun seccomp shim, OpenCode DNS shim, fork-safe `proot` wrapper (`seed.sh` skips it). Kept: `--os=android` (prefix is bionic!) + Termux glibc wrappers. Details: `docker/README.md` |
 
 **Do NOT "fix" these with more wrappers:**
 
@@ -183,8 +183,29 @@ See `ROADMAP.md`.
   Not bundled in the APK (~96 MiB deb/arch). `jdk-doctor` + `docs/openjdk.md`.
 - `tmp.ci/preinst: No such file or directory` on `pkg install` — deb
   maintainer script shebang is `#!/data/data/com.termux/.../sh`. Reopen app,
-  `invapp-fix-dpkg-scripts`, `pkg install -f openjdk-17` (apt/dpkg/pkg need
-  redirector wrappers from `TermuxShellEnvironment`).
+  `ivx-fix-dpkg-scripts` (alias `invapp-fix-dpkg-scripts`),
+  `pkg install -f openjdk-17` (apt/dpkg/pkg need redirector wrappers from
+  `TermuxShellEnvironment`).
+- `dpkg: error: corrupt info database format file …/info/format` — older
+  helpers prepended `#!$PREFIX/bin/sh` to **every** file under `info/`
+  including `format` (dpkg expects exactly `1\n`). Reopen the app (session
+  healer restores it) or run `ivx-fix-dpkg-scripts`, or manually:
+  `printf '1\n' > "$PREFIX/var/lib/dpkg/info/format"`.
+- `pd run …` / `proot-distro` → `execve("/usr/bin/bash"): No such file or
+  directory` or guest `libc.so` / host `libtalloc.so.2` missing — stock
+  `proot` under the path redirector breaks guest execve; clearing
+  `LD_LIBRARY_PATH` entirely breaks host proot (`libtalloc`) and bash
+  (`libandroid-support`). Reopen the app to reseed the fork-safe
+  `$PREFIX/bin/proot` wrapper (ELF at `$PREFIX/libexec/proot-bin`: host
+  `LD_PRELOAD=` + `LD_LIBRARY_PATH=$PREFIX/lib`, guest `-e LD_LIBRARY_PATH=`
+  + `PROOT_LOADER`). After `pkg reinstall proot`, reopen or run any helper
+  that calls `td_udocker_ensure_proot`. Incomplete rootfs:
+  `pd reset <distro> && pd install <distro>`. Prefer `td-resource-linux` for
+  Ubuntu/Debian and `td-nethunter*` for Kali when starting fresh.
+- `td-resource-linux --run bash` → `run.sh: /bin/bash: bad interpreter` or
+  `libandroid-support.so` not found — older runners used `#!/bin/bash` or
+  cleared host `LD_LIBRARY_PATH`. Reopen the app; `--run` rewrites `run.sh`
+  and restores `LD_LIBRARY_PATH=$PREFIX/lib` for host bash.
 - `litert-lm` → `cannot locate symbol "_ZN7android18egl_get_connectionEv"` /
   `egl_*` — every Android `litert-lm-api` wheel (0.14 → 0.18) hard-links
   `libEGL/libGLESv2/libGLESv3`, and the system `libGLESv3.so` needs a
@@ -205,7 +226,7 @@ See `ROADMAP.md`.
   wheels are stripped from the Termux package, and a failing ensurepip aborts
   venv creation *before* `--system-site-packages` is written, so the flag would
   silently stay false. pip itself comes from `pkg install python-pip`.
-- Kali NetHunter / desktop — **not** proot-distro. On demand:
+- Kali NetHunter / desktop — preferred path is **not** proot-distro. On demand:
   `td-nethunter-setup` downloads the official **kali.download** NetHunter
   rootfs (`nano`/`minimal`/`full`) into `$PREFIX/var/td-udocker/rootfs/kali`
   and runs it with **direct `proot`** (same images as KeX). Do **not** use
@@ -221,9 +242,10 @@ See `ROADMAP.md`.
   host `udocker`. `TD_PROOT_KEEP_ALIVE=1` / `proot_killonexit = False` so Xvnc
   survives the launcher. Wrong verb or nested `kali-arm64/` not flattened →
   missing `/bin/sh` — use `--from-tar` (rootfs) or `--from-docker-save`.
-  Orphan `$PREFIX/var/lib/proot-distro/` trees are safe to delete. Termux:X11
-  is out of scope until a matching signed X11 APK exists. Docs:
-  `docs/nethunter.md`.
+  Stock `pd` / `proot-distro` works when the fork-safe `proot` wrapper is
+  seeded (see execve note above); orphan trees under
+  `$PREFIX/var/lib/proot-distro/` are still safe to delete. Termux:X11 is out
+  of scope until a matching signed X11 APK exists. Docs: `docs/nethunter.md`.
 
 ## 2. Useful Commands
 
@@ -303,6 +325,8 @@ bun run dev          # or bun run android / build
 ivx-configure        # banner, completions, packages, network DNS/proxy, doctor
 ivx-configure network dns fix   # Go ::1:53 → public nameservers
 ivx-doctor           # read-only health report (--strict, --network)
+ivx-cleanup          # interactive remove: pkg / cargo / bun -g / npm -g / pip / uv
+ivx-fix-dpkg-scripts # heal dpkg info/format + maintainer shebangs
 td-ai                # OpenCode on 0.0.0.0:4096 → Preview 127.0.0.1 / LAN Copy
 # Kali NetHunter (optional, device-only): udocker + TigerVNC → AVNC on :5901
 # td-nethunter-setup            # kali.download rootfs (nano) + VNC; not Hub

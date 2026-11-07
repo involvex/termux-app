@@ -298,6 +298,11 @@ public final class TermuxBunInstaller {
         // #!/usr/bin/env node scripts (npm bins, bunx children) actually run.
         ensureNodeBunShim(context, binDir, bash);
 
+        // Relocate ELF proot → libexec/proot-bin and seed fork-safe wrapper so
+        // proot-distro / pd / td-resource-linux do not ENOENT guest bash under
+        // the path redirector.
+        ensureProotWrapper(context, bash);
+
         writeExec(new File(binDir, "bun-doctor"),
                 assetWithBashShebang(context, "invapp/bin/bun-doctor", bash));
 
@@ -871,7 +876,9 @@ public final class TermuxBunInstaller {
             + "  echo \"td-jdk-setup: pkg missing — finish bootstrap first\" >&2\n"
             + "  exit 1\n"
             + "fi\n"
-            + "if [ -x \"$PREFIX/bin/invapp-fix-dpkg-scripts\" ]; then\n"
+            + "if [ -x \"$PREFIX/bin/ivx-fix-dpkg-scripts\" ]; then\n"
+            + "  \"$PREFIX/bin/ivx-fix-dpkg-scripts\" || true\n"
+            + "elif [ -x \"$PREFIX/bin/invapp-fix-dpkg-scripts\" ]; then\n"
             + "  \"$PREFIX/bin/invapp-fix-dpkg-scripts\" || true\n"
             + "fi\n"
             + "pkg update -y || apt-get update -y\n"
@@ -907,33 +914,7 @@ public final class TermuxBunInstaller {
             + "echo \"New shell sessions load JAVA_HOME from $JDK_HOME/etc/profile.d/java.sh\"\n";
         writeExec(new File(binDir, "td-jdk-setup"), tdJdkSetup);
 
-        String invappPkg = TermuxConstants.TERMUX_PACKAGE_NAME;
-        String fixDpkgScripts = ""
-            + "#!" + bash + "\n"
-            + "PREFIX=\"" + prefix + "\"\n"
-            + "OLD=\"com.termux\"\n"
-            + "NEW=\"" + invappPkg + "\"\n"
-            + "fixdir() {\n"
-            + "  local d=\"$1\"\n"
-            + "  [ -d \"$d\" ] || return 0\n"
-            + "  local f\n"
-            + "  for f in \"$d\"/*; do\n"
-            + "    [ -f \"$f\" ] || continue\n"
-            + "    if ! head -1 \"$f\" 2>/dev/null | grep -q '^#!'; then\n"
-            + "      { echo \"#!$PREFIX/bin/sh\"; cat \"$f\"; } > \"$f.new\" && mv \"$f.new\" \"$f\"\n"
-            + "    fi\n"
-            + "    sed -i \"s|$OLD|$NEW|g\" \"$f\" 2>/dev/null || true\n"
-            + "    case \"$(head -1 \"$f\" 2>/dev/null)\" in\n"
-            + "      '#!/bin/sh'*) sed -i \"1s|^#!/bin/sh|#!$PREFIX/bin/sh|\" \"$f\" 2>/dev/null || true ;;\n"
-            + "      '#!/bin/bash'*) sed -i \"1s|^#!/bin/bash|#!$PREFIX/bin/bash|\" \"$f\" 2>/dev/null || true ;;\n"
-            + "    esac\n"
-            + "    chmod 700 \"$f\" 2>/dev/null || true\n"
-            + "  done\n"
-            + "}\n"
-            + "fixdir \"$PREFIX/var/lib/dpkg/tmp.ci\"\n"
-            + "fixdir \"$PREFIX/var/lib/dpkg/info\"\n"
-            + "echo \"invapp-fix-dpkg-scripts: patched maintainer scripts under tmp.ci and info\"\n";
-        writeExec(new File(binDir, "invapp-fix-dpkg-scripts"), fixDpkgScripts);
+        // ivx-fix-dpkg-scripts (+ invapp- alias) seeded by IvxConfigureInstaller.
 
         String openjdkRecover = ""
             + "#!" + bash + "\n"
@@ -2302,6 +2283,98 @@ public final class TermuxBunInstaller {
     }
 
     /**
+     * Keep a fork-safe {@code $PREFIX/bin/proot} wrapper in front of the Termux
+     * ELF. Stock {@code proot} under the path redirector fails guest
+     * {@code execve("/usr/bin/bash")} for proot-distro and friends.
+     *
+     * <p>On each seed: if {@code bin/proot} is an ELF (fresh {@code pkg install}),
+     * move it to {@code libexec/proot-bin}; always rewrite the wrapper and a
+     * copy at {@code libexec/invapp-proot-wrapper} for shell-side rewrap.
+     */
+    private static void ensureProotWrapper(@NonNull Context context, @NonNull String bash) {
+        String prefix = TermuxConstants.TERMUX_PREFIX_DIR_PATH;
+        File binProot = new File(prefix, "bin/proot");
+        File libexecDir = new File(prefix, "libexec");
+        File realProot = new File(libexecDir, "proot-bin");
+        File wrapperTemplate = new File(libexecDir, "invapp-proot-wrapper");
+        ensureDir(libexecDir);
+
+        if (binProot.isFile() && isElfFile(binProot)) {
+            if (!moveOrCopyFile(binProot, realProot)) {
+                Logger.logWarn(LOG_TAG, "Could not relocate proot ELF to " + realProot);
+            }
+        } else if (!realProot.isFile()) {
+            // Prefer packaged locations if libexec/proot-bin is still empty.
+            File[] candidates = {
+                new File(prefix, "libexec/proot/proot"),
+                new File(prefix, "lib/proot/proot"),
+            };
+            for (File c : candidates) {
+                if (c.isFile() && isElfFile(c) && copyFile(c, realProot)) {
+                    break;
+                }
+            }
+        }
+
+        String wrapper = assetWithBashShebang(context, "invapp/bin/proot", bash);
+        writeExec(wrapperTemplate, wrapper);
+        writeExec(binProot, wrapper);
+    }
+
+    private static boolean isElfFile(@NonNull File file) {
+        try (FileInputStream in = new FileInputStream(file)) {
+            byte[] magic = new byte[4];
+            int n = in.read(magic);
+            return n == 4
+                && magic[0] == 0x7f
+                && magic[1] == 'E'
+                && magic[2] == 'L'
+                && magic[3] == 'F';
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static boolean moveOrCopyFile(@NonNull File from, @NonNull File to) {
+        if (from.equals(to)) {
+            return true;
+        }
+        //noinspection ResultOfMethodCallIgnored
+        to.delete();
+        if (from.renameTo(to)) {
+            return true;
+        }
+        if (!copyFile(from, to)) {
+            return false;
+        }
+        //noinspection ResultOfMethodCallIgnored
+        from.delete();
+        return true;
+    }
+
+    private static boolean copyFile(@NonNull File from, @NonNull File to) {
+        try (FileInputStream in = new FileInputStream(from);
+             FileOutputStream out = new FileOutputStream(to)) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) >= 0) {
+                out.write(buf, 0, n);
+            }
+            try {
+                //noinspection OctalInteger
+                Os.chmod(to.getAbsolutePath(), 0700);
+            } catch (Exception ignored) {
+            }
+            return true;
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "copy " + from + " → " + to + ": " + e.getMessage());
+            //noinspection ResultOfMethodCallIgnored
+            to.delete();
+            return false;
+        }
+    }
+
+    /**
      * Some package files land without the execute bit (dpkg extract / noexec
      * quirks). {@code npm doctor} flags these; fix known PREFIX/bin entries.
      */
@@ -2312,7 +2385,7 @@ public final class TermuxBunInstaller {
         }
         String[] names = {
             "am.termuxam", "ksu", "am", "login", "apt", "apt-get", "dpkg",
-            "bun", "bunx", "node", "td-ai", "td-dev",
+            "bun", "bunx", "node", "proot", "td-ai", "td-dev",
             "td-udocker-setup", "td-udocker", "td-guest",
             "td-nethunter-setup", "td-nethunter", "td-nethunter-debug",
             "td-scaffold", "td-clone",
@@ -2322,7 +2395,8 @@ public final class TermuxBunInstaller {
             "td-resource", "td-resource-linux", "td-resource-python",
             "td-resource-qemu", "td-resource-bun", "td-resource-ai",
             "cursor-agent-setup", "agent", "cursor-agent", "td-agent-worker", "td-upgrade",
-            "ivx-configure", "ivx-doctor"
+            "ivx-configure", "ivx-doctor", "ivx-cleanup",
+            "ivx-fix-dpkg-scripts", "invapp-fix-dpkg-scripts"
         };
         for (String name : names) {
             File f = new File(binDir, name);

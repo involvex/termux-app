@@ -51,7 +51,9 @@ On this fork, `udocker import` re-extracts layers with host proot/tar and fails 
 
 ### Why extract showed `Cannot mknod` / `Cannot hard link`
 
-Android apps cannot create device nodes or many hardlinks. Plain `tar -xJf` therefore exits non‑zero on the NetHunter rootfs. Setup extracts with **`proot --link2symlink tar …`** (same as official KeX), but on this fork that requires **`env -u LD_PRELOAD` + `PROOT_LOADER` + `PROOT_TMP_DIR`** — otherwise proot dies with `execve(…/bin/tar): No such file or directory` or warnings about `/data/data/com.termux/.../tmp`. mknod/hardlink errors stay non‑fatal; success is “`bin/sh` exists”. Plain `tar` is the fallback. Runtime `/dev` comes from host binds.
+Android apps cannot create device nodes or many hardlinks. Plain `tar -xJf` therefore exits non‑zero on the NetHunter rootfs. Setup extracts with **`proot --link2symlink tar …`** (same as official KeX), but on this fork that requires **`LD_PRELOAD=` (empty) + `PROOT_LOADER` + `PROOT_TMP_DIR`** — otherwise proot dies with `execve(…/bin/tar): No such file or directory` or warnings about `/data/data/com.termux/.../tmp`. The app reseeds a fork-safe `$PREFIX/bin/proot` wrapper (ELF at `$PREFIX/libexec/proot-bin`) so stock `pd` / `proot-distro` and `td-resource-linux` get the same fix. mknod/hardlink errors stay non‑fatal; success is “`bin/sh` exists”. Plain `tar` is the fallback. Runtime `/dev` comes from host binds.
+
+If `pd run …` still reports `execve("/usr/bin/bash"): No such file or directory`, reopen the app (reseed wrapper), then `pd reset <distro> && pd install <distro>` when the rootfs is incomplete. Prefer `td-nethunter-setup` for Kali desktop.
 
 ### Why a proot backup had “missing /bin/sh”
 
