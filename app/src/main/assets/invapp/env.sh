@@ -277,7 +277,7 @@ if [ -z "${PROOT_LOADER:-}" ]; then
         [ -x "$_l" ] && export PROOT_LOADER="$_l" && break
     done
 fi
-exec env LD_PRELOAD= LD_LIBRARY_PATH="$PREFIX/lib" "$REAL" "$@"
+exec env LD_PRELOAD= LD_LIBRARY_PATH= "$REAL" "$@"
 WRAP
     chmod 700 "$_p"
 }
@@ -484,9 +484,10 @@ td_udocker_extract_rootfs() {
     _ptmp="${TD_UDOCKER_STATE}/proot-tmp"
 
     # 1) proot --link2symlink with a clean preload (fork-safe).
-    # Host LD_LIBRARY_PATH=$PREFIX/lib so proot/tar resolve libtalloc etc.
+    # Empty LD_LIBRARY_PATH: DT_RUNPATH resolves host tar/proot; guest must not
+    # inherit Termux $PREFIX/lib (breaks guest glibc / libc.so).
     if [ -n "$_ldr" ]; then
-        env LD_PRELOAD= LD_LIBRARY_PATH="$PREFIX/lib" \
+        env LD_PRELOAD= LD_LIBRARY_PATH= \
             PROOT_LOADER="$_ldr" \
             PROOT_TMP_DIR="$_ptmp" \
             TMPDIR="$PREFIX/tmp" \
@@ -495,7 +496,7 @@ td_udocker_extract_rootfs() {
             "$_tar_bin" $_tar_flags "$_archive" -C "$_dest" \
             >"$_err" 2>&1 || true
     else
-        env LD_PRELOAD= LD_LIBRARY_PATH="$PREFIX/lib" \
+        env LD_PRELOAD= LD_LIBRARY_PATH= \
             PROOT_TMP_DIR="$_ptmp" \
             TMPDIR="$PREFIX/tmp" \
             PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
@@ -600,9 +601,10 @@ td_udocker_proot_run() {
     [ "${TD_PROOT_KEEP_ALIVE:-0}" = 1 ] && _koe=""
     _env="HOME=/root TERM=${TERM:-xterm-256color} PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8"
     # Host: LD_PRELOAD= (empty key — unset reinjects redirector) +
-    # LD_LIBRARY_PATH=$PREFIX/lib (proot needs libtalloc). Guest uses env -i.
+    # LD_LIBRARY_PATH= (empty — DT_RUNPATH for libtalloc; must not leak into guest).
+    # Guest command gets /usr/bin/env -i.
     if [ -n "$_ldr" ]; then
-        env LD_PRELOAD= LD_LIBRARY_PATH="$PREFIX/lib" \
+        env LD_PRELOAD= LD_LIBRARY_PATH= \
             PROOT_LOADER="$_ldr" \
             PROOT_TMP_DIR="${TD_UDOCKER_STATE}/proot-tmp" \
             TMPDIR="$PREFIX/tmp" \
@@ -613,7 +615,7 @@ td_udocker_proot_run() {
             -b "$PREFIX:/termux" \
             /usr/bin/env -i $_env "$@"
     else
-        env LD_PRELOAD= LD_LIBRARY_PATH="$PREFIX/lib" \
+        env LD_PRELOAD= LD_LIBRARY_PATH= \
             PROOT_TMP_DIR="${TD_UDOCKER_STATE}/proot-tmp" \
             TMPDIR="$PREFIX/tmp" \
             PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \

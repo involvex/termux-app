@@ -192,21 +192,23 @@ See `ROADMAP.md`.
   healer restores it) or run `ivx-fix-dpkg-scripts`, or manually:
   `printf '1\n' > "$PREFIX/var/lib/dpkg/info/format"`.
 - `pd run …` / `proot-distro` → `execve("/usr/bin/bash"): No such file or
-  directory` or guest `libc.so` / host `libtalloc.so.2` missing — stock
-  `proot` under the path redirector breaks guest execve; clearing
-  `LD_LIBRARY_PATH` entirely breaks host proot (`libtalloc`) and bash
-  (`libandroid-support`). Reopen the app to reseed the fork-safe
-  `$PREFIX/bin/proot` wrapper (ELF at `$PREFIX/libexec/proot-bin`: host
-  `LD_PRELOAD=` + `LD_LIBRARY_PATH=$PREFIX/lib` + `PROOT_LOADER`; Termux
-  proot has no `-e/--env`). Guests that need a clean env use
-  `/usr/bin/env -i` (td-resource-linux / td_udocker). After `pkg reinstall
-  proot`, reopen or run any helper that calls `td_udocker_ensure_proot`.
-  Incomplete rootfs: `pd reset <distro> && pd install <distro>`. Prefer
-  `td-resource-linux` for Ubuntu/Debian and `td-nethunter*` for Kali.
-- `td-resource-linux --run bash` → `run.sh: /bin/bash: bad interpreter` or
-  `libandroid-support.so` not found — older runners used `#!/bin/bash` or
-  cleared host `LD_LIBRARY_PATH`. Reopen the app; `--run` rewrites `run.sh`
-  and restores `LD_LIBRARY_PATH=$PREFIX/lib` for host bash.
+  directory`, guest `libc.so` missing, or `unknown option '-e'` — stock
+  `proot` under the path redirector breaks guest execve. The fork-safe
+  `$PREFIX/bin/proot` wrapper (ELF at `$PREFIX/libexec/proot-bin`) must run
+  with `LD_PRELOAD=` + **`LD_LIBRARY_PATH=` (empty)** + `PROOT_LOADER`:
+  exporting `$PREFIX/lib` into the proot process leaks into the guest and
+  glibc looks for Android `libc.so`. Termux proot has no `-e/--env`; do not
+  inject it. Host shell may still `export LD_LIBRARY_PATH=$PREFIX/lib` for
+  bash/`libandroid-support` — the wrapper clears it for proot only
+  (DT_RUNPATH finds libtalloc). After `pkg reinstall proot`, reopen or run
+  a helper that calls `td_udocker_ensure_proot`. Incomplete rootfs:
+  `pd reset <distro> && pd install <distro>`. Prefer `td-resource-linux`
+  for Ubuntu/Debian and `td-nethunter*` for Kali.
+- `td-resource-linux --run bash` → `cannot execute binary file`,
+  `bad interpreter`, or `libandroid-support.so` not found — older runners
+  used `#!/bin/bash`, or `/bin/bash --login bash` (ELF-as-script), or
+  leaked host `LD_LIBRARY_PATH`. Reopen the app; `--run` rewrites `run.sh`
+  (maps bare `bash`/`sh` → `/bin/bash --login`, clears lib path for proot).
 - `litert-lm` → `cannot locate symbol "_ZN7android18egl_get_connectionEv"` /
   `egl_*` — every Android `litert-lm-api` wheel (0.14 → 0.18) hard-links
   `libEGL/libGLESv2/libGLESv3`, and the system `libGLESv3.so` needs a

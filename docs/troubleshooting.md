@@ -7,8 +7,8 @@
 | `Permission denied` on `tsc` / bins | Project is under shared storage (**noexec**). Move to `~/repos` |
 | OpenJDK install stuck / `java` dlopen / Bad system call | Run `td-jdk-setup` (installs recommends incl. `libandroid-shmem`). `jdk-doctor` for details. See [OpenJDK 17](openjdk.md) |
 | `dpkg: corrupt info database format file …/info/format` | Older helpers damaged `format` (must be `1\n`). Reopen app or `ivx-fix-dpkg-scripts`, or `printf '1\n' > "$PREFIX/var/lib/dpkg/info/format"` |
-| `pd run` / proot → `execve(bash)` ENOENT, `libtalloc` missing, or `unknown option '-e'` | Reopen app to reseed `$PREFIX/bin/proot` wrapper (host `LD_LIBRARY_PATH=$PREFIX/lib`; Termux proot has no `-e`). If libs missing now: `export LD_LIBRARY_PATH=$PREFIX/lib`. Incomplete rootfs: `pd install ubuntu` then `pd run ubuntu` |
-| `td-resource-linux --run` → `bad interpreter` or `libandroid-support.so` not found | Reopen app; `--run` rewrites `run.sh` and restores `LD_LIBRARY_PATH=$PREFIX/lib` for host bash |
+| `pd run` / proot → guest `libc.so` missing, `execve(bash)` ENOENT, or `unknown option '-e'` | Wrapper must use `LD_LIBRARY_PATH=` (empty) for the proot process — `$PREFIX/lib` leaking into the guest breaks glibc. Reseed wrapper (reopen app) or paste-heal; Termux proot has no `-e`. Host shell may still export `$PREFIX/lib` for bash. Incomplete rootfs: `pd install ubuntu` then `pd run ubuntu` |
+| `td-resource-linux --run bash` → `cannot execute binary file` / `bad interpreter` | Reopen app; `--run` rewrites `run.sh` (bare `bash` → `/bin/bash --login`, clears lib path for proot). Or: `td-resource-linux --run` with no args |
 | Global tool clutter (pkg / cargo / bun / npm / pip / uv) | `ivx-cleanup` interactive menu |
 | Low disk / find what eats space | `ivx-disk-analyze` (overview) · `ivx-disk-analyze guests` · `ivx-disk-analyze large ~/repos` |
 | OpenCode `Permission denied` / LIBC / postinstall / SIGSYS | Re-run `opencode-setup` (official V2 tarball + glibc). Do not `unset LD_PRELOAD` |
