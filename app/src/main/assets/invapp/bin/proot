@@ -3,21 +3,24 @@
 # Fork-safe proot for InVxTermux / Terminal Dev.
 #
 # Must use /system/bin/sh — NOT Termux bash. Callers (pd, run.sh) often exec
-# this wrapper under env LD_LIBRARY_PATH= so guest glibc stays clean; Termux
-# bash then dies with libandroid-support.so not found. Android's sh needs no
-# $PREFIX/lib.
+# this wrapper under a cleaned env; Termux bash then dies with
+# libandroid-support.so not found.
 #
-# Stock proot under LD_PRELOAD=libinvapp-redirector.so rewrites guest paths and
-# dies with: execve("/usr/bin/bash"): No such file or directory
-# (same class of failure as NetHunter extract). This wrapper:
+# Host proot-bin needs libtalloc.so.2, but DT_RUNPATH still points at the stock
+# com.termux prefix on this fork (and LD_PRELOAD is cleared so the path
+# redirector cannot rewrite linker opens). Putting ONLY libtalloc into
+# $PREFIX/libexec/proot-libs and setting LD_LIBRARY_PATH to that dir lets the
+# host ELF load without leaking Termux's full $PREFIX/lib into the guest
+# (full $PREFIX/lib → guest "libc.so: cannot open shared object file").
+#
+# Stock proot under LD_PRELOAD=libinvapp-redirector.so also breaks guest
+# execve("/usr/bin/bash"). This wrapper:
 #   * runs the real ELF at $PREFIX/libexec/proot-bin
 #   * sets PROOT_LOADER / PROOT_TMP_DIR / PROOT_NO_SECCOMP
 #   * LD_PRELOAD= (empty — not unset — so redirector does not reinject)
-#   * LD_LIBRARY_PATH= (empty) so guest glibc does not search Termux
-#     $PREFIX/lib for libc.so. proot resolves libtalloc via DT_RUNPATH.
+#   * LD_LIBRARY_PATH=$PREFIX/libexec/proot-libs (libtalloc only)
 #
-# Termux proot does NOT support upstream -e/--env. Callers that need a clean
-# guest env also use /usr/bin/env -i (td-resource-linux, td_udocker_proot_run).
+# Termux proot does NOT support upstream -e/--env.
 #
 # Reseeded on every app start. After `pkg reinstall proot`, reopen the app or
 # run a helper that calls td_udocker_ensure_proot (moves ELF back to libexec).
@@ -37,6 +40,16 @@ if [ ! -x "$REAL" ]; then
     exit 127
 fi
 
+PROOT_LIBS="${INVAPP_PROOT_LIBDIR:-$PREFIX/libexec/proot-libs}"
+if [ ! -e "$PROOT_LIBS/libtalloc.so.2" ] && [ -d "$PREFIX/lib" ]; then
+    mkdir -p "$PROOT_LIBS" 2>/dev/null || true
+    for _t in "$PREFIX/lib"/libtalloc.so*; do
+        [ -e "$_t" ] || continue
+        ln -sf "$_t" "$PROOT_LIBS/" 2>/dev/null \
+            || cp -f "$_t" "$PROOT_LIBS/" 2>/dev/null || true
+    done
+fi
+
 export PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}"
 export PROOT_TMP_DIR="${PROOT_TMP_DIR:-$PREFIX/tmp/proot}"
 mkdir -p "$PROOT_TMP_DIR" "${PREFIX:-/tmp}/tmp" 2>/dev/null || true
@@ -50,6 +63,6 @@ if [ -z "${PROOT_LOADER:-}" ]; then
     done
 fi
 
-# Clear preload + library path for the proot process (inherits into guest).
-# Do not pass -e (unknown on Termux proot). Do not set LD_LIBRARY_PATH=$PREFIX/lib.
-exec env LD_PRELOAD= LD_LIBRARY_PATH= "$REAL" "$@"
+# Narrow LD_LIBRARY_PATH: libtalloc for host ELF only — never full $PREFIX/lib.
+# Do not pass -e (unknown on Termux proot).
+exec env LD_PRELOAD= LD_LIBRARY_PATH="$PROOT_LIBS" "$REAL" "$@"

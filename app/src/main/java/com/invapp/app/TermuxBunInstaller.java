@@ -2288,8 +2288,10 @@ public final class TermuxBunInstaller {
      * {@code execve("/usr/bin/bash")} for proot-distro and friends.
      *
      * <p>On each seed: if {@code bin/proot} is an ELF (fresh {@code pkg install}),
-     * move it to {@code libexec/proot-bin}; always rewrite the wrapper and a
-     * copy at {@code libexec/invapp-proot-wrapper} for shell-side rewrap.
+     * move it to {@code libexec/proot-bin}; symlink {@code libtalloc.so*} into
+     * {@code libexec/proot-libs} (narrow LD_LIBRARY_PATH for the host ELF);
+     * always rewrite the wrapper and a copy at
+     * {@code libexec/invapp-proot-wrapper} for shell-side rewrap.
      */
     private static void ensureProotWrapper(@NonNull Context context, @NonNull String bash) {
         String prefix = TermuxConstants.TERMUX_PREFIX_DIR_PATH;
@@ -2298,6 +2300,7 @@ public final class TermuxBunInstaller {
         File realProot = new File(libexecDir, "proot-bin");
         File wrapperTemplate = new File(libexecDir, "invapp-proot-wrapper");
         ensureDir(libexecDir);
+        ensureProotLibs(prefix);
 
         if (binProot.isFile() && isElfFile(binProot)) {
             if (!moveOrCopyFile(binProot, realProot)) {
@@ -2319,6 +2322,39 @@ public final class TermuxBunInstaller {
         String wrapper = assetWithBashShebang(context, "invapp/bin/proot", bash);
         writeExec(wrapperTemplate, wrapper);
         writeExec(binProot, wrapper);
+    }
+
+    /**
+     * Stage libtalloc for {@code proot-bin} without putting full
+     * {@code $PREFIX/lib} on {@code LD_LIBRARY_PATH} (that breaks guest glibc).
+     */
+    private static void ensureProotLibs(@NonNull String prefix) {
+        File libDir = new File(prefix, "lib");
+        File prootLibs = new File(prefix, "libexec/proot-libs");
+        ensureDir(prootLibs);
+        if (!libDir.isDirectory()) {
+            return;
+        }
+        File[] tallocs = libDir.listFiles((dir, name) -> name.startsWith("libtalloc.so"));
+        if (tallocs == null) {
+            return;
+        }
+        for (File src : tallocs) {
+            if (!src.exists()) {
+                continue;
+            }
+            File dest = new File(prootLibs, src.getName());
+            // Refresh every seed so pkg upgrades of libtalloc are picked up.
+            //noinspection ResultOfMethodCallIgnored
+            dest.delete();
+            try {
+                Os.symlink(src.getAbsolutePath(), dest.getAbsolutePath());
+            } catch (Exception e) {
+                if (!copyFile(src, dest)) {
+                    Logger.logWarn(LOG_TAG, "proot-libs: could not stage " + src.getName());
+                }
+            }
+        }
     }
 
     private static boolean isElfFile(@NonNull File file) {

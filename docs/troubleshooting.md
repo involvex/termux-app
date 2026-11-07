@@ -7,8 +7,8 @@
 | `Permission denied` on `tsc` / bins | Project is under shared storage (**noexec**). Move to `~/repos` |
 | OpenJDK install stuck / `java` dlopen / Bad system call | Run `td-jdk-setup` (installs recommends incl. `libandroid-shmem`). `jdk-doctor` for details. See [OpenJDK 17](openjdk.md) |
 | `dpkg: corrupt info database format file …/info/format` | Older helpers damaged `format` (must be `1\n`). Reopen app or `ivx-fix-dpkg-scripts`, or `printf '1\n' > "$PREFIX/var/lib/dpkg/info/format"` |
-| `pd run` / proot → guest `libc.so` missing, `execve(bash)` ENOENT, or `unknown option '-e'` | Wrapper: `LD_LIBRARY_PATH=` (empty) + shebang `#!/system/bin/sh` (Termux bash dies under cleared lib path with `libandroid-support.so not found`). Reseed or paste-heal. Incomplete rootfs: `pd install ubuntu` then `pd run ubuntu` |
-| `td-resource-linux --run` → `libandroid-support.so not found` / `cannot execute binary file` | Same wrapper shebang issue, or old `run.sh` (`bash --login bash`). `export LD_LIBRARY_PATH=$PREFIX/lib` for the host shell, paste-heal wrapper to `#!/system/bin/sh`, reopen app so `--run` rewrites `run.sh` |
+| `pd run` / proot → guest `libc.so` missing, or host `libtalloc.so.2` not found | Wrapper must use `LD_LIBRARY_PATH=$PREFIX/libexec/proot-libs` (libtalloc only) + `#!/system/bin/sh`. Full `$PREFIX/lib` breaks guest glibc; empty path breaks host proot-bin. Paste-heal or reopen app after rebuild. |
+| `td-resource-linux --run` → `libandroid-support` / `libtalloc` / `cannot execute binary file` | Same as above; host shell: `export LD_LIBRARY_PATH=$PREFIX/lib`. Reopen app so `--run` rewrites `run.sh` |
 | Global tool clutter (pkg / cargo / bun / npm / pip / uv) | `ivx-cleanup` interactive menu |
 | Low disk / find what eats space | `ivx-disk-analyze` (overview) · `ivx-disk-analyze guests` · `ivx-disk-analyze large ~/repos` |
 | OpenCode `Permission denied` / LIBC / postinstall / SIGSYS | Re-run `opencode-setup` (official V2 tarball + glibc). Do not `unset LD_PRELOAD` |

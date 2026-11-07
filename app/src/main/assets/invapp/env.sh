@@ -264,11 +264,19 @@ td_udocker_rewrap_proot() {
         return 0
     fi
     # Minimal inline wrapper if the APK template was not seeded yet.
+    # Narrow lib dir: libtalloc only (full $PREFIX/lib breaks guest glibc).
+    _libs="$PREFIX/libexec/proot-libs"
+    mkdir -p "$_libs"
+    for _t in "$PREFIX/lib"/libtalloc.so*; do
+        [ -e "$_t" ] || continue
+        ln -sf "$_t" "$_libs/" 2>/dev/null || cp -f "$_t" "$_libs/" 2>/dev/null || true
+    done
     cat > "$_p" <<'WRAP'
 #!/system/bin/sh
 # INVAPP_PROOT_WRAPPER=1
 REAL="${INVAPP_PROOT_BIN:-$PREFIX/libexec/proot-bin}"
 [ -x "$REAL" ] || { echo "proot: missing $PREFIX/libexec/proot-bin" >&2; exit 127; }
+PROOT_LIBS="${INVAPP_PROOT_LIBDIR:-$PREFIX/libexec/proot-libs}"
 export PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}"
 export PROOT_TMP_DIR="${PROOT_TMP_DIR:-$PREFIX/tmp/proot}"
 mkdir -p "$PROOT_TMP_DIR"
@@ -277,7 +285,7 @@ if [ -z "${PROOT_LOADER:-}" ]; then
         [ -x "$_l" ] && export PROOT_LOADER="$_l" && break
     done
 fi
-exec env LD_PRELOAD= LD_LIBRARY_PATH= "$REAL" "$@"
+exec env LD_PRELOAD= LD_LIBRARY_PATH="$PROOT_LIBS" "$REAL" "$@"
 WRAP
     chmod 700 "$_p"
 }
@@ -484,10 +492,9 @@ td_udocker_extract_rootfs() {
     _ptmp="${TD_UDOCKER_STATE}/proot-tmp"
 
     # 1) proot --link2symlink with a clean preload (fork-safe).
-    # Empty LD_LIBRARY_PATH: DT_RUNPATH resolves host tar/proot; guest must not
-    # inherit Termux $PREFIX/lib (breaks guest glibc / libc.so).
+    # Library path for libtalloc is set by the proot wrapper (proot-libs).
     if [ -n "$_ldr" ]; then
-        env LD_PRELOAD= LD_LIBRARY_PATH= \
+        env LD_PRELOAD= \
             PROOT_LOADER="$_ldr" \
             PROOT_TMP_DIR="$_ptmp" \
             TMPDIR="$PREFIX/tmp" \
@@ -496,7 +503,7 @@ td_udocker_extract_rootfs() {
             "$_tar_bin" $_tar_flags "$_archive" -C "$_dest" \
             >"$_err" 2>&1 || true
     else
-        env LD_PRELOAD= LD_LIBRARY_PATH= \
+        env LD_PRELOAD= \
             PROOT_TMP_DIR="$_ptmp" \
             TMPDIR="$PREFIX/tmp" \
             PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
@@ -600,11 +607,11 @@ td_udocker_proot_run() {
     _koe="--kill-on-exit"
     [ "${TD_PROOT_KEEP_ALIVE:-0}" = 1 ] && _koe=""
     _env="HOME=/root TERM=${TERM:-xterm-256color} PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8"
-    # Host: LD_PRELOAD= (empty key — unset reinjects redirector) +
-    # LD_LIBRARY_PATH= (empty — DT_RUNPATH for libtalloc; must not leak into guest).
-    # Guest command gets /usr/bin/env -i.
+    # Host: LD_PRELOAD= (empty key — unset reinjects redirector). Library path
+    # for libtalloc is set by the proot wrapper (proot-libs only). Guest gets
+    # /usr/bin/env -i.
     if [ -n "$_ldr" ]; then
-        env LD_PRELOAD= LD_LIBRARY_PATH= \
+        env LD_PRELOAD= \
             PROOT_LOADER="$_ldr" \
             PROOT_TMP_DIR="${TD_UDOCKER_STATE}/proot-tmp" \
             TMPDIR="$PREFIX/tmp" \
@@ -615,7 +622,7 @@ td_udocker_proot_run() {
             -b "$PREFIX:/termux" \
             /usr/bin/env -i $_env "$@"
     else
-        env LD_PRELOAD= LD_LIBRARY_PATH= \
+        env LD_PRELOAD= \
             PROOT_TMP_DIR="${TD_UDOCKER_STATE}/proot-tmp" \
             TMPDIR="$PREFIX/tmp" \
             PROOT_NO_SECCOMP="${PROOT_NO_SECCOMP:-1}" \
