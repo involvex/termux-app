@@ -4,7 +4,7 @@
  *
  * Bun 1.4.x issues these syscalls during `bun install` bin linking; Android's
  * seccomp policy delivers SIGSYS instead of ENOSYS, which kills the process
- * ("Unknown signal 31"). Upstream fix: oven-sh/bun#39775 / #39084 (not in 1.4.2).
+ * ("Unknown signal 31"). Upstream fix: oven-sh/bun#39775 / #39084 (still needed as of 1.4.4).
  *
  * Preload ONLY this library for Bun — do not combine with libinvapp-redirector
  * (path redirector + Bun optional natives can also SIGSYS).

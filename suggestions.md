@@ -96,7 +96,7 @@
 - **Why high:** Biggest support burden in `docs/ai.md:59-99` + `troubleshooting.md`.
 
 ### FEAT-006 — Bun update checker (Confidence: 87%)
-- **Files:** `app/build.gradle:264-315` (`downloadBunBootstraps`, pinned `1.4.2`), `app/.../TermuxBunInstaller.java`, `docs/troubleshooting.md:5`.
+- **Files:** `app/build.gradle:264-315` (`downloadBunBootstraps`, pinned `1.4.4`), `app/.../TermuxBunInstaller.java`, `docs/troubleshooting.md:5`.
 - **Current:** Bun baked via `.incbin` zips, SHA-verified at build; no in-app update path. Users must not use `bun.sh/install` (glibc SIGSYS).
 - **Suggestion:** `bun-version` + `bun-upgrade --check` shell helper: query `oven-sh/bun` releases, compare to `$PREFIX/libexec/bun --version`, warn if glibc binary detected, point to next APK release (don't self-replace `.incbin`). In-app Settings card shows bundled vs running version + "Update via APK" link. Prevents signal-31 regressions from stray installs.
 - **Maintainability:** Keep checksums in one `bun-versions.json` consumed by Gradle + helper.

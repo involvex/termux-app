@@ -284,7 +284,7 @@ def downloadBun(String artifact, String expectedChecksum) {
         file.delete()
     }
 
-    def version = "1.4.2"
+    def version = "1.4.4"
     def remoteUrl = "https://github.com/oven-sh/bun/releases/download/bun-v" + version + "/" + artifact
     logger.quiet("Downloading " + remoteUrl + " ...")
     file.parentFile.mkdirs()
@@ -309,9 +309,9 @@ task downloadBunBootstraps() {
         // Official Bionic Android builds only (not glibc linux-aarch64).
         // 1.4.2+ skips unreadable /data ancestors (CouldntReadCurrentDirectory on Termux).
         downloadBun("bun-linux-aarch64-android.zip",
-            "a1c7e2983f1bb65146beb256a4d72449f23042412bc2cf278aa6397ba27e0274")
+            "d72e42c60e895ccbc16144bb1e0e0ad7ee384841c35b5501a7ec28b4d6d759c9")
         downloadBun("bun-linux-x64-android.zip",
-            "1e90fc0d3b83cb847b34338aff2765a7034bf53c50414344b3b0bf07a330a144")
+            "c1d7819a84407701be1904d8733b9a2e009432c2b80135e11b482c217fa598a9")
     }
 }
 

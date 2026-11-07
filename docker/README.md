@@ -65,7 +65,7 @@ Build knobs (all optional):
 | `TERMUX_ARCH` | host arch | `aarch64`, `arm`, `x86_64`, `i686` |
 | `TERMUX_DOCKER__IMAGE_NAME` | `termux/termux-docker` | tag to build |
 | `TERMUX_DOCKER__BOOTSTRAP_VERSION` | `2026.06.07-r1%2Bapt.android-7` | pin to the APK's `2026.02.12-r1%2Bapt.android-7` for exact parity |
-| `TERMUX_DOCKER__INVAPP_BUN_VERSION` | `1.4.2` | bun release (matches the APK bundle) |
+| `TERMUX_DOCKER__INVAPP_BUN_VERSION` | `1.4.4` | bun release (matches the APK bundle) |
 | `TERMUX_DOCKER__INVAPP_BUN_BASELINE` | `0` | `1` for CPUs without AVX2 |
 | `TERMUX_DOCKER__INVAPP_WITH_AI` | `0` | `1` bakes OpenCode + Cursor Agent into the image |
 | `INVAPP_SRC` | `../termux-app/app/src/main/assets/invapp` | seed tree location |

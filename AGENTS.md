@@ -46,7 +46,7 @@ See `ROADMAP.md`.
 | Package id | `com.involvex.termux_app` |
 | Display name | `InVxTermux` |
 | Path redirector | `LD_PRELOAD=$PREFIX/lib/libinvapp-redirector.so` maps hardcoded `/data/data/com.termux` → this prefix (apt/SSH/node); also rewrites `#!/usr/bin/env` shebangs (npm/npx) |
-| Bun real binary | `$PREFIX/libexec/bun` — official `bun-linux-*-android.zip`, currently **1.4.2** |
+| Bun real binary | `$PREFIX/libexec/bun` — official `bun-linux-*-android.zip`, currently **1.4.4** |
 | Bun wrapper | `$PREFIX/bin/bun` → drops path redirector, preloads `libinvapp-bun-seccomp.so` (SIGSYS→ENOSYS for `openat2`/`fchmodat2`), sets OPENSSL + `--os=android --cpu=…` on install/add/create |
 | bunx | `$PREFIX/bin/bunx` → `bun x --bun` (avoids silent fail when `node` missing) |
 | node shim | `$PREFIX/bin/node` → bun if `nodejs` package not installed |
@@ -352,7 +352,7 @@ without testing bootstrap + all ABIs.
 | Java compat | `1.8` + `coreLibraryDesugaring` (`desugar_jdk_libs:1.1.5`) |
 | App version | `versionCode 204`, `versionName 0.203.0` (semver-enforced at build) |
 | Bootstrap | `2026.02.12-r1+apt.android-7` (aarch64/arm/i686/x86_64, SHA-256 verified); android-5: `2022.04.28-r6` |
-| Bun | `1.4.2` official `bun-linux-{aarch64,x64}-android.zip` (SHA-256 verified, `.incbin` into `libinvapp-bun`, extracted by `TermuxBunInstaller`) |
+| Bun | `1.4.4` official `bun-linux-{aarch64,x64}-android.zip` (SHA-256 verified, `.incbin` into `libinvapp-bun`, extracted by `TermuxBunInstaller`) |
 | Editor | 4-space, LF, UTF-8, final newline (`.editorconfig`); 2-space for `*.yaml` |
 
 ### Dependencies (current)

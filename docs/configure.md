@@ -26,7 +26,7 @@ Every *interactive* login prints the header before the prompt:
   █ █ ▀█ ▀▄▀ █▄█ █▄▄ ▀▄▀ ██▄ █ █
 
     InVxTermux · phone + PC terminal dev
-        bun 1.4.2 · git ✓ · opencode ✓
+        bun 1.4.4 · git ✓ · opencode ✓
    ivx-configure · td-dev · td-ai · td-info
 ```
 
@@ -207,7 +207,7 @@ IVX_BANNER=1          # 0 disables the login banner
 IVX_STYLE=pixelfont   # pixelfont | small | mini | plain | custom | auto
 IVX_COLOR=green       # green | cyan | magenta | white | rainbow | none
 IVX_TIPS=1            # hint line under the header
-IVX_STATUS=1          # "bun 1.4.2 · git ✓" line
+IVX_STATUS=1          # "bun 1.4.4 · git ✓" line
 IVX_FONT=pixelfont    # default font for `banner text`
 IVX_HTTP_PROXY=…      # optional; quoted URL
 IVX_HTTPS_PROXY=…

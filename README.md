@@ -20,7 +20,7 @@ Package id: `com.involvex.termux_app` · Latest: **v0.203.0** · Docs:
 ## Features (this fork)
 
 - **apt / OpenSSH** — path redirector maps hardcoded `/data/data/com.termux` to this package
-- **Bun 1.4.2 (Android)** — embedded; `$PREFIX/libexec/bun` + `$PREFIX/bin/bun` shim (seccomp + `--os=android`)
+- **Bun 1.4.4 (Android)** — embedded; `$PREFIX/libexec/bun` + `$PREFIX/bin/bun` shim (seccomp + `--os=android`)
 - **Default cwd** — `~/repos` (executable). Prefer over `~/storage/shared` (**noexec**)
 - **Localhost Preview** — drawer → **Preview** (port scan / chips / Copy LAN)
 - **OpenCode helper** — `opencode-setup` then `td-ai` (web UI on `:4096`) → Preview

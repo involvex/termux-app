@@ -35,7 +35,7 @@ public final class TermuxBunInstaller {
     private static final String LOG_TAG = "TermuxBunInstaller";
 
     /** Must match the zips downloaded in {@code app/build.gradle}. */
-    public static final String BUNDLED_BUN_VERSION = "1.4.2";
+    public static final String BUNDLED_BUN_VERSION = "1.4.4";
 
     private static final String LIBEXEC_REL = "libexec/bun";
 
