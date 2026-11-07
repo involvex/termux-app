@@ -7,7 +7,7 @@
 | `Permission denied` on `tsc` / bins | Project is under shared storage (**noexec**). Move to `~/repos` |
 | OpenJDK install stuck / `java` dlopen / Bad system call | Run `td-jdk-setup` (installs recommends incl. `libandroid-shmem`). `jdk-doctor` for details. See [OpenJDK 17](openjdk.md) |
 | `dpkg: corrupt info database format file …/info/format` | Older helpers damaged `format` (must be `1\n`). Reopen app or `ivx-fix-dpkg-scripts`, or `printf '1\n' > "$PREFIX/var/lib/dpkg/info/format"` |
-| `pd run` / proot → `execve(bash)` ENOENT or guest `libc.so` / host `libtalloc` missing | Reopen app to reseed `$PREFIX/bin/proot` wrapper (host `LD_LIBRARY_PATH=$PREFIX/lib`, guest `-e LD_LIBRARY_PATH=`). If `libtalloc`/`libandroid-support` missing: `export LD_LIBRARY_PATH=$PREFIX/lib` then reopen app. Incomplete rootfs: `pd reset <distro> && pd install <distro>` |
+| `pd run` / proot → `execve(bash)` ENOENT, `libtalloc` missing, or `unknown option '-e'` | Reopen app to reseed `$PREFIX/bin/proot` wrapper (host `LD_LIBRARY_PATH=$PREFIX/lib`; Termux proot has no `-e`). If libs missing now: `export LD_LIBRARY_PATH=$PREFIX/lib`. Incomplete rootfs: `pd install ubuntu` then `pd run ubuntu` |
 | `td-resource-linux --run` → `bad interpreter` or `libandroid-support.so` not found | Reopen app; `--run` rewrites `run.sh` and restores `LD_LIBRARY_PATH=$PREFIX/lib` for host bash |
 | Global tool clutter (pkg / cargo / bun / npm / pip / uv) | `ivx-cleanup` interactive menu |
 | Low disk / find what eats space | `ivx-disk-analyze` (overview) · `ivx-disk-analyze guests` · `ivx-disk-analyze large ~/repos` |

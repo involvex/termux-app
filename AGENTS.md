@@ -197,11 +197,12 @@ See `ROADMAP.md`.
   `LD_LIBRARY_PATH` entirely breaks host proot (`libtalloc`) and bash
   (`libandroid-support`). Reopen the app to reseed the fork-safe
   `$PREFIX/bin/proot` wrapper (ELF at `$PREFIX/libexec/proot-bin`: host
-  `LD_PRELOAD=` + `LD_LIBRARY_PATH=$PREFIX/lib`, guest `-e LD_LIBRARY_PATH=`
-  + `PROOT_LOADER`). After `pkg reinstall proot`, reopen or run any helper
-  that calls `td_udocker_ensure_proot`. Incomplete rootfs:
-  `pd reset <distro> && pd install <distro>`. Prefer `td-resource-linux` for
-  Ubuntu/Debian and `td-nethunter*` for Kali when starting fresh.
+  `LD_PRELOAD=` + `LD_LIBRARY_PATH=$PREFIX/lib` + `PROOT_LOADER`; Termux
+  proot has no `-e/--env`). Guests that need a clean env use
+  `/usr/bin/env -i` (td-resource-linux / td_udocker). After `pkg reinstall
+  proot`, reopen or run any helper that calls `td_udocker_ensure_proot`.
+  Incomplete rootfs: `pd reset <distro> && pd install <distro>`. Prefer
+  `td-resource-linux` for Ubuntu/Debian and `td-nethunter*` for Kali.
 - `td-resource-linux --run bash` → `run.sh: /bin/bash: bad interpreter` or
   `libandroid-support.so` not found — older runners used `#!/bin/bash` or
   cleared host `LD_LIBRARY_PATH`. Reopen the app; `--run` rewrites `run.sh`

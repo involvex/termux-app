@@ -9,8 +9,9 @@
 #   * sets PROOT_LOADER / PROOT_TMP_DIR / PROOT_NO_SECCOMP
 #   * host LD_PRELOAD= (empty — not unset — so redirector does not reinject)
 #   * host LD_LIBRARY_PATH=$PREFIX/lib (proot needs libtalloc.so.2 etc.)
-#   * guest -e LD_LIBRARY_PATH= -e LD_PRELOAD= so guest bash does not see
-#     Termux libs (that caused "libc.so: cannot open shared object file")
+#
+# Termux proot does NOT support upstream -e/--env. Guest env isolation is done
+# by callers via /usr/bin/env -i (td-resource-linux, td_udocker_proot_run).
 #
 # Reseeded on every app start. After `pkg reinstall proot`, reopen the app or
 # run a helper that calls td_udocker_ensure_proot (moves ELF back to libexec).
@@ -43,6 +44,5 @@ if [ -z "${PROOT_LOADER:-}" ]; then
     done
 fi
 
-# Host: Termux libs for proot/talloc. Guest: clear via proot -e (before user args).
-exec env LD_PRELOAD= LD_LIBRARY_PATH="$PREFIX/lib" \
-    "$REAL" -e LD_LIBRARY_PATH= -e LD_PRELOAD= "$@"
+# Host: Termux libs for proot/talloc. Do not pass -e (unknown on Termux proot).
+exec env LD_PRELOAD= LD_LIBRARY_PATH="$PREFIX/lib" "$REAL" "$@"

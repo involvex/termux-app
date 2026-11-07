@@ -277,8 +277,7 @@ if [ -z "${PROOT_LOADER:-}" ]; then
         [ -x "$_l" ] && export PROOT_LOADER="$_l" && break
     done
 fi
-exec env LD_PRELOAD= LD_LIBRARY_PATH="$PREFIX/lib" \
-    "$REAL" -e LD_LIBRARY_PATH= -e LD_PRELOAD= "$@"
+exec env LD_PRELOAD= LD_LIBRARY_PATH="$PREFIX/lib" "$REAL" "$@"
 WRAP
     chmod 700 "$_p"
 }
