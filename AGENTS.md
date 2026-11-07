@@ -51,7 +51,7 @@ See `ROADMAP.md`.
 | bunx | `$PREFIX/bin/bunx` → `bun x --bun` (avoids silent fail when `node` missing) |
 | node shim | `$PREFIX/bin/node` → bun if `nodejs` package not installed |
 | Default cwd | `~/repos` (exec-capable). `~/storage/shared` is browse/sync only (**noexec**) |
-| Preview | Drawer **Preview** → Scan + chips; **Copy LAN** / long-press chip → `http://<wifi-ip>:<port>` when bound on `0.0.0.0` |
+| Preview | Drawer **Preview** → Scan + chips (loopback by default); any `http`/`https` URL in the bar/WebView; **Copy LAN** / long-press chip → `http://<wifi-ip>:<port>` when bound on `0.0.0.0` |
 | AI helper | `opencode-setup` / `td-ai [port]` → OpenCode V2 `serve` on `:4096` (binds **`0.0.0.0`** by default for LAN; Preview still uses `127.0.0.1`). Setup downloads official V2 `opencode-linux-*.tar.gz` from `opencode.ai/files/bin` (live lookup via update API, fallback `2.0.6`; no `bun install` / no postinstall), then `glibc` + ld-linux wrapper with **`LD_PRELOAD=` empty** and DNS shim via **`ld-linux --preload $PREFIX/lib/libinvapp-opencode-shim.so`** (arm64 shipped in APK assets). Optional `OPENCODE_VERSION=2.0.6` (`1.x` still uses old GitHub tarball); bind override `OPENCODE_HOST=127.0.0.1`. Drawer **AI** probes missing/installed/ready (`GET /api/info` + Basic auth); long-press / **Stop AI** kills `:4096`. On-demand into `$PREFIX`, not baked into APK |
 | Cursor Agent | `cursor-agent-setup` → official `agent-cli-package.tar.gz` (glibc Node 24; **never** Bun / `curl\|bash`). `$PREFIX/bin/agent` runs bundled `node` via `ld-linux` + same DNS shim. Cloud My Machines: `agent login` then `td-agent-worker start` → https://cursor.com/agents. Pin `CURSOR_AGENT_VERSION=…`; after `agent update` run `cursor-agent-setup --wrap-only`. Stack refresh: `td-upgrade` (pkg + opencode + agent rewrap + Bun stamp; no `bun upgrade`) |
 | Dev server | `td-dev [script]` → `bun run` with Preview/LAN hints |
@@ -116,7 +116,7 @@ See `ROADMAP.md`.
   `GET http://127.0.0.1:4096/global/health` (not `:5000/api`).
 - `getifaddrs returned an error` — non-fatal for web bind on `0.0.0.0`;
   never use `--mdns`. Override with `OPENCODE_HOST=127.0.0.1 td-ai` if needed.
-  Firewall/VPN may block LAN clients; Preview always uses loopback.
+  Firewall/VPN may block LAN clients; Preview defaults to loopback and can open any http(s) URL.
 - Banner missing / duplicated / in the wrong place — the hook is
   `$PREFIX/etc/profile.d/invapp-banner.sh`, the renderer
   `$PREFIX/lib/invapp/banner.sh`, and the art is **pre-rendered** (no figlet,
@@ -359,7 +359,7 @@ without testing bootstrap + all ABIs.
 
 **`app`:** `annotation:1.9.0`, `core:1.13.1`, `drawerlayout:1.2.0`,
 `preference:1.2.1`, `viewpager:1.0.0`, `material:1.12.0`,
-`guava:33.7.1-android` (+ `listenablefuture:9999.0-empty…`), Markwon
+`guava:33.7.2-android` (+ `listenablefuture:9999.0-empty…`), Markwon
 `4.6.2` (`core`, `ext-strikethrough`, `linkify`, `recycler`).
 
 **`termux-shared`:** `appcompat:1.6.1`, above core/material/guava/markwon, plus
@@ -479,7 +479,7 @@ termux-app/
   all Termux APKs first (offer backup via https://wiki.termux.com/wiki/Backing_up_Termux).
 - Review-sensitive: hardcoded paths, native/JNI changes, intent extras +
   `RUN_COMMAND` handling, storage `$PREFIX` traversal, WebView Preview
-  (loopback-only, cleartext localhost only — no public tunnels by default).
+  (http/https any host; cleartext permitted for LAN/dev — no public tunnels by default).
 - Dependencies via Dependabot; check advisories before bumping major versions.
 - Report vulnerabilities privately per https://termux.dev/security, not as
   public issues.

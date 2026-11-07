@@ -16,7 +16,7 @@ https://github.com/involvex/termux-app
 |--------|--------|
 | Terminal-first | git / bun / build stay in-session |
 | PC ↔ phone | Same repo: push on PC, pull on phone under `~/repos` |
-| Preview | In-app view of `http://127.0.0.1:<port>` |
+| Preview | In-app WebView for `http(s)://…` (scan chips → `127.0.0.1:<port>`) |
 | AI CLI | e.g. `td-ai` → OpenCode web → Preview |
 
 ## Phases
@@ -33,7 +33,7 @@ https://github.com/involvex/termux-app
 
 - Drawer **Preview** → `LocalhostPreviewActivity`
 - Port field + **Scan** → listening TCP chips (one-tap open)
-- Loopback-only navigation; cleartext only for localhost
+- Any `http`/`https` navigation; cleartext permitted (LAN/dev); scan chips default to loopback
 
 ### 3. AI tools (done — bootstrap)
 

@@ -97,7 +97,7 @@
     <string name="action_preview_copy_lan">Copy LAN</string>
     <string name="action_preview_clear_data">Clear</string>
     <string name="action_preview_open_browser">Browser</string>
-    <string name="msg_preview_only_localhost">Preview only allows localhost / 127.0.0.1</string>
+    <string name="msg_preview_scheme_denied">Preview only allows http and https URLs</string>
     <string name="msg_preview_invalid_port">Enter a port (1–65535) or loopback URL</string>
     <string name="msg_preview_no_ports">No listening ports found — start a dev server, then tap Scan</string>
     <string name="msg_preview_cleared">Preview data cleared — reloading</string>

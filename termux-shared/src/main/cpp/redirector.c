@@ -222,6 +222,12 @@ static void rewrite_termux_paths_in_script(const char* path) {
     int fd = orig_open(path, O_RDONLY);
     if (fd < 0) return;
 
+    struct stat st;
+    if (fstat(fd, &st) != 0) {
+        orig_close(fd);
+        return;
+    }
+
     off_t size = orig_lseek(fd, 0, SEEK_END);
     if (size < 0 || size > 1024 * 1024) {
         orig_close(fd);
@@ -359,14 +365,9 @@ static void rewrite_termux_paths_in_script(const char* path) {
      * Atomic replace: write a sibling temp file and rename over the target.
      * An in-place O_TRUNC write lets concurrent bash/compiler readers see a
      * half-written script (torn reads — "line 8: syntax error" garbage).
+     * Mode comes from fstat on the original open fd (not a later path stat)
+     * so we avoid a TOCTOU race on the destination name.
      */
-    struct stat st;
-    if (stat(path, &st) != 0) {
-        free(data);
-        free(prefixed);
-        free(out);
-        return;
-    }
     char tmp_path[PATH_MAX];
     snprintf(tmp_path, sizeof(tmp_path), "%s.rwXXXXXX", path);
     fd = mkstemp(tmp_path);

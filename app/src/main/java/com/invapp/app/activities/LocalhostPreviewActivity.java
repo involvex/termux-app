@@ -47,7 +47,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -55,12 +54,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * In-app preview of loopback HTTP servers (Vite, Expo web, {@code opencode web}).
- * Only {@code http://127.0.0.1} / {@code localhost} are allowed in the WebView.
- * LAN URLs (when servers bind {@code 0.0.0.0}, including OpenCode via {@code td-ai})
- * are for other devices — use Copy LAN from Preview chips.
- * Opt-in <strong>Copy LAN</strong> copies {@code http://&lt;wifi-ip&gt;:&lt;port&gt;}
- * when the server listens on {@code 0.0.0.0} / {@code ::} — no public tunnels.
+ * In-app preview of HTTP(S) servers (Vite, Expo web, {@code opencode web}, LAN, etc.).
+ * WebView navigation allows any {@code http}/{@code https} URL (plus inert
+ * {@code about}/{@code data} error pages). Bare ports and scan chips default to
+ * {@code 127.0.0.1}. Opt-in <strong>Copy LAN</strong> copies
+ * {@code http://&lt;wifi-ip&gt;:&lt;port&gt;} when the server listens on
+ * {@code 0.0.0.0} / {@code ::} — for sharing with other devices.
  */
 public final class LocalhostPreviewActivity extends AppCompatActivity {
 
@@ -85,6 +84,10 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
     private final Set<Integer> mKnownListening = new HashSet<>();
     private boolean mListeningSeeded;
     private int mCurrentPort = DEFAULT_PORT;
+    @NonNull
+    private String mCurrentHost = "127.0.0.1";
+    @NonNull
+    private String mCurrentScheme = "http";
     /** Path+query preserved when switching ports (default {@code /}). */
     @NonNull
     private String mCurrentPathAndQuery = "/";
@@ -154,11 +157,11 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
                 if (url == null) {
                     return true;
                 }
-                if (isAllowedLoopbackUrl(url)) {
+                if (WorkflowHelper.isAllowedPreviewUrl(url)) {
                     return false;
                 }
                 Toast.makeText(LocalhostPreviewActivity.this,
-                    R.string.msg_preview_only_localhost, Toast.LENGTH_SHORT).show();
+                    R.string.msg_preview_scheme_denied, Toast.LENGTH_SHORT).show();
                 return true;
             }
 
@@ -489,13 +492,6 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             Toast.makeText(this, R.string.msg_preview_invalid_port, Toast.LENGTH_SHORT).show();
             return null;
         }
-        if (!parsed.isLoopback()) {
-            // WebView is loopback-only; LAN URLs go to other devices via Copy LAN.
-            Toast.makeText(this,
-                getString(R.string.msg_preview_only_localhost)
-                    + " — :" + parsed.port + " loaded locally",
-                Toast.LENGTH_LONG).show();
-        }
         return parsed;
     }
 
@@ -517,7 +513,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             }
             mCurrentPathAndQuery = p;
         }
-        loadPort(parsed.port);
+        loadTarget(parsed.loadHost(), parsed.port, parsed.scheme);
         refreshLanHint();
     }
 
@@ -540,9 +536,18 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         }
     }
 
+    /** Load a loopback port (scan chips / intent extras). */
     private void loadPort(int port) {
-        boolean portChanged = port != mCurrentPort;
+        loadTarget("127.0.0.1", port, "http");
+    }
+
+    private void loadTarget(@NonNull String host, int port, @NonNull String scheme) {
+        boolean targetChanged = port != mCurrentPort
+            || !host.equalsIgnoreCase(mCurrentHost)
+            || !scheme.equalsIgnoreCase(mCurrentScheme);
         mCurrentPort = port;
+        mCurrentHost = host;
+        mCurrentScheme = "https".equalsIgnoreCase(scheme) ? "https" : "http";
         PreviewPortPrefs.addRecent(this, port);
         String path = mCurrentPathAndQuery;
         if (path == null || path.isEmpty()) {
@@ -551,13 +556,13 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         if (!path.startsWith("/")) {
             path = "/" + path;
         }
-        String url = "http://127.0.0.1:" + port + path;
+        String url = mCurrentScheme + "://" + mCurrentHost + ":" + port + path;
         mShowingErrorPage = false;
         if (mWebView == null) {
             return;
         }
-        if (portChanged) {
-            // Drop stale history so Back never resurrects another port's SPA shell
+        if (targetChanged) {
+            // Drop stale history so Back never resurrects another host/port's SPA shell
             // (the "ghost OpenCode UI" when :4096 is actually down).
             mWebView.clearHistory();
         }
@@ -581,7 +586,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         if (!path.startsWith("/")) {
             path = "/" + path;
         }
-        return "http://127.0.0.1:" + mCurrentPort + path;
+        return mCurrentScheme + "://" + mCurrentHost + ":" + mCurrentPort + path;
     }
 
     @NonNull
@@ -609,19 +614,11 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         if (mPortInput.hasFocus()) {
             return;
         }
-        if (url.startsWith("data:") || url.startsWith("about:")) {
+        if (!WorkflowHelper.isAllowedPreviewUrl(url)
+            || url.startsWith("data:") || url.startsWith("about:")) {
             return;
         }
         try {
-            Uri uri = Uri.parse(url);
-            String host = uri.getHost();
-            if (host == null) {
-                return;
-            }
-            String lower = host.toLowerCase(Locale.US);
-            if (!"127.0.0.1".equals(lower) && !"localhost".equals(lower)) {
-                return;
-            }
             if (!url.equals(mPortInput.getText().toString())) {
                 mPortInput.setText(url);
             }
@@ -705,16 +702,20 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         if (url == null || url.startsWith("data:") || url.startsWith("about:")) {
             return;
         }
+        if (!WorkflowHelper.isAllowedPreviewUrl(url)) {
+            return;
+        }
         try {
             Uri uri = Uri.parse(url);
             String host = uri.getHost();
             if (host == null) {
                 return;
             }
-            String lower = host.toLowerCase(Locale.US);
-            if (!"127.0.0.1".equals(lower) && !"localhost".equals(lower)) {
-                return;
+            String scheme = uri.getScheme();
+            if (scheme != null) {
+                mCurrentScheme = "https".equalsIgnoreCase(scheme) ? "https" : "http";
             }
+            mCurrentHost = host;
             String path = uri.getEncodedPath();
             if (path == null || path.isEmpty()) {
                 path = "/";
@@ -725,6 +726,10 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             int port = uri.getPort();
             if (port > 0) {
                 mCurrentPort = port;
+            } else if ("https".equals(mCurrentScheme)) {
+                mCurrentPort = 443;
+            } else {
+                mCurrentPort = 80;
             }
         } catch (Exception ignored) {
             // keep previous path
@@ -751,7 +756,9 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             + "li{margin:.4rem 0}</style></head><body>"
             + "<h1>Nothing on :" + port + "</h1>"
             + "<p>Preview could not load "
-            + "<code>http://127.0.0.1:" + port + escapeHtml(mCurrentPathAndQuery)
+            + "<code>" + escapeHtml(mCurrentScheme) + "://"
+            + escapeHtml(mCurrentHost) + ":" + port
+            + escapeHtml(mCurrentPathAndQuery)
             + "</code>.</p>"
             + "<ul>"
             + "<li>Is <code>bun run dev</code> / <code>td-dev</code> running?</li>"
@@ -762,7 +769,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             + "</ul>"
             + "<p>Toolbar: Back · Fwd · Reload · Scan · Copy LAN · Clear · Browser</p>"
             + "</body></html>";
-        // Null base URL on purpose: using http://127.0.0.1:port as base lets a
+        // Null base URL on purpose: using the live origin as base lets a
         // cached SPA shell resolve relative assets and masquerade as a live app
         // ("ghost OpenCode UI" with no projects). about:blank keeps it inert.
         mWebView.loadDataWithBaseURL(null,
@@ -776,18 +783,6 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             .replace("<", "&lt;")
             .replace(">", "&gt;")
             .replace("\"", "&quot;");
-    }
-
-    private static boolean isAllowedLoopbackUrl(String url) {
-        String lower = url.toLowerCase(Locale.US);
-        return lower.startsWith("http://127.0.0.1:")
-            || lower.startsWith("http://127.0.0.1/")
-            || lower.startsWith("http://localhost:")
-            || lower.startsWith("http://localhost/")
-            || lower.equals("http://127.0.0.1")
-            || lower.equals("http://localhost")
-            || lower.startsWith("about:")
-            || lower.startsWith("data:");
     }
 
     @Override

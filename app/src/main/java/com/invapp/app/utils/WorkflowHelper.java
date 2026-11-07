@@ -56,10 +56,10 @@ public final class WorkflowHelper {
 
     /**
      * Parse Preview input that may be a bare port ({@code 4096}),
-     * {@code host:port}, or a full loopback URL
-     * ({@code http://127.0.0.1:4096/path?q=1}).
+     * {@code host:port}, or a full URL
+     * ({@code http://127.0.0.1:4096/path?q=1}, {@code https://example.com:443/}).
      *
-     * @return {@code int[]{port}} plus path via {@code outPath[0]}, or null when invalid
+     * @return parsed target, or null when invalid
      */
     @Nullable
     public static ParsedPreviewUrl parsePreviewInput(@Nullable String raw) {
@@ -82,10 +82,17 @@ public final class WorkflowHelper {
         }
         String lower = s.toLowerCase(java.util.Locale.US);
         String work = s;
-        // Strip scheme.
-        int scheme = lower.indexOf("://");
-        if (scheme >= 0) {
-            work = s.substring(scheme + 3);
+        String scheme = "http";
+        // Strip scheme; preserve https when present.
+        int schemeSep = lower.indexOf("://");
+        if (schemeSep >= 0) {
+            String schemePart = lower.substring(0, schemeSep);
+            if ("https".equals(schemePart)) {
+                scheme = "https";
+            } else if (!"http".equals(schemePart)) {
+                return null;
+            }
+            work = s.substring(schemeSep + 3);
         }
         // Split host:port + path.
         String hostPort = work;
@@ -138,42 +145,72 @@ public final class WorkflowHelper {
         if (port < 1 || port > 65535) {
             return null;
         }
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
         String hostLower = host.trim().toLowerCase(java.util.Locale.US);
         if (!hostLower.isEmpty()
             && !"127.0.0.1".equals(hostLower)
             && !"localhost".equals(hostLower)
             && !"[::1]".equals(hostLower)
             && !"::1".equals(hostLower)) {
-            // Non-loopback hosts are LAN targets — caller surfaces Copy LAN instead.
-            return new ParsedPreviewUrl(port, path, host.trim());
+            return new ParsedPreviewUrl(port, path, host.trim(), scheme);
         }
-        if (!path.startsWith("/")) {
-            path = "/" + path;
-        }
-        return new ParsedPreviewUrl(port, path);
+        return new ParsedPreviewUrl(port, path, null, scheme);
     }
 
-    /** Parsed Preview target: loopback port + path, plus optional non-loopback host. */
+    /**
+     * Whether Preview WebView may navigate to {@code url}.
+     * Allows {@code http}/{@code https} plus inert {@code about}/{@code data} pages.
+     */
+    public static boolean isAllowedPreviewUrl(@Nullable String url) {
+        if (url == null || url.isEmpty()) {
+            return false;
+        }
+        String lower = url.toLowerCase(java.util.Locale.US);
+        return lower.startsWith("http://")
+            || lower.startsWith("https://")
+            || lower.startsWith("about:")
+            || lower.startsWith("data:");
+    }
+
+    /** Parsed Preview target: port + path, optional host, and http/https scheme. */
     public static final class ParsedPreviewUrl {
         public final int port;
         @NonNull
         public final String pathAndQuery;
         @Nullable
         public final String nonLoopbackHost;
+        /** {@code http} or {@code https}. */
+        @NonNull
+        public final String scheme;
 
         public ParsedPreviewUrl(int port, @NonNull String pathAndQuery) {
-            this(port, pathAndQuery, null);
+            this(port, pathAndQuery, null, "http");
         }
 
         public ParsedPreviewUrl(int port, @NonNull String pathAndQuery,
                                  @Nullable String nonLoopbackHost) {
+            this(port, pathAndQuery, nonLoopbackHost, "http");
+        }
+
+        public ParsedPreviewUrl(int port, @NonNull String pathAndQuery,
+                                 @Nullable String nonLoopbackHost,
+                                 @NonNull String scheme) {
             this.port = port;
             this.pathAndQuery = pathAndQuery;
             this.nonLoopbackHost = nonLoopbackHost;
+            this.scheme = "https".equalsIgnoreCase(scheme) ? "https" : "http";
         }
 
         public boolean isLoopback() {
             return nonLoopbackHost == null;
+        }
+
+        /** Host used for loading: non-loopback when set, otherwise {@code 127.0.0.1}. */
+        @NonNull
+        public String loadHost() {
+            return nonLoopbackHost != null ? nonLoopbackHost : "127.0.0.1";
         }
     }
 

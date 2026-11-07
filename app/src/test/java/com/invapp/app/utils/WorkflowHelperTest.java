@@ -90,9 +90,34 @@ public class WorkflowHelperTest {
         WorkflowHelper.ParsedPreviewUrl lan =
             WorkflowHelper.parsePreviewInput("http://192.168.1.10:4096/");
         assertTrue(lan != null && lan.port == 4096 && !lan.isLoopback());
+        assertEquals("192.168.1.10", lan.loadHost());
+        assertEquals("http", lan.scheme);
 
+        WorkflowHelper.ParsedPreviewUrl httpsRemote =
+            WorkflowHelper.parsePreviewInput("https://example.com:8443/app");
+        assertTrue(httpsRemote != null && httpsRemote.port == 8443
+            && !httpsRemote.isLoopback());
+        assertEquals("https", httpsRemote.scheme);
+        assertEquals("example.com", httpsRemote.loadHost());
+        assertEquals("/app", httpsRemote.pathAndQuery);
+
+        assertTrue(WorkflowHelper.parsePreviewInput("ftp://127.0.0.1:21/") == null);
         assertTrue(WorkflowHelper.parsePreviewInput("") == null);
         assertTrue(WorkflowHelper.parsePreviewInput("0") == null);
         assertTrue(WorkflowHelper.parsePreviewInput("not a url") == null);
+    }
+
+    @Test
+    public void isAllowedPreviewUrl_allowsHttpHttpsAndInertSchemes() {
+        assertTrue(WorkflowHelper.isAllowedPreviewUrl("http://127.0.0.1:5173/"));
+        assertTrue(WorkflowHelper.isAllowedPreviewUrl("https://example.com/"));
+        assertTrue(WorkflowHelper.isAllowedPreviewUrl("http://192.168.1.10:4096/"));
+        assertTrue(WorkflowHelper.isAllowedPreviewUrl("about:blank"));
+        assertTrue(WorkflowHelper.isAllowedPreviewUrl("data:text/html,hi"));
+        assertTrue(!WorkflowHelper.isAllowedPreviewUrl("file:///sdcard/x.html"));
+        assertTrue(!WorkflowHelper.isAllowedPreviewUrl("javascript:alert(1)"));
+        assertTrue(!WorkflowHelper.isAllowedPreviewUrl("content://com.example/x"));
+        assertTrue(!WorkflowHelper.isAllowedPreviewUrl(null));
+        assertTrue(!WorkflowHelper.isAllowedPreviewUrl(""));
     }
 }
