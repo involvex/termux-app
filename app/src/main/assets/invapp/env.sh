@@ -265,7 +265,7 @@ td_udocker_rewrap_proot() {
     fi
     # Minimal inline wrapper if the APK template was not seeded yet.
     cat > "$_p" <<'WRAP'
-#!/bin/bash
+#!/system/bin/sh
 # INVAPP_PROOT_WRAPPER=1
 REAL="${INVAPP_PROOT_BIN:-$PREFIX/libexec/proot-bin}"
 [ -x "$REAL" ] || { echo "proot: missing $PREFIX/libexec/proot-bin" >&2; exit 127; }

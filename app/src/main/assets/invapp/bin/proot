@@ -1,17 +1,20 @@
-#!@BASH@
+#!/system/bin/sh
 # INVAPP_PROOT_WRAPPER=1
 # Fork-safe proot for InVxTermux / Terminal Dev.
+#
+# Must use /system/bin/sh — NOT Termux bash. Callers (pd, run.sh) often exec
+# this wrapper under env LD_LIBRARY_PATH= so guest glibc stays clean; Termux
+# bash then dies with libandroid-support.so not found. Android's sh needs no
+# $PREFIX/lib.
 #
 # Stock proot under LD_PRELOAD=libinvapp-redirector.so rewrites guest paths and
 # dies with: execve("/usr/bin/bash"): No such file or directory
 # (same class of failure as NetHunter extract). This wrapper:
 #   * runs the real ELF at $PREFIX/libexec/proot-bin
 #   * sets PROOT_LOADER / PROOT_TMP_DIR / PROOT_NO_SECCOMP
-#   * host LD_PRELOAD= (empty — not unset — so redirector does not reinject)
-#   * host LD_LIBRARY_PATH= (empty) so guest glibc does not search Termux
-#     $PREFIX/lib for libc.so — that yields "libc.so: cannot open shared object".
-#     proot/tar resolve libtalloc via DT_RUNPATH (Android 7+ Termux); do not
-#     re-export LD_LIBRARY_PATH here (leaks into every guest).
+#   * LD_PRELOAD= (empty — not unset — so redirector does not reinject)
+#   * LD_LIBRARY_PATH= (empty) so guest glibc does not search Termux
+#     $PREFIX/lib for libc.so. proot resolves libtalloc via DT_RUNPATH.
 #
 # Termux proot does NOT support upstream -e/--env. Callers that need a clean
 # guest env also use /usr/bin/env -i (td-resource-linux, td_udocker_proot_run).

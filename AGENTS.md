@@ -195,20 +195,23 @@ See `ROADMAP.md`.
   directory`, guest `libc.so` missing, or `unknown option '-e'` — stock
   `proot` under the path redirector breaks guest execve. The fork-safe
   `$PREFIX/bin/proot` wrapper (ELF at `$PREFIX/libexec/proot-bin`) must run
-  with `LD_PRELOAD=` + **`LD_LIBRARY_PATH=` (empty)** + `PROOT_LOADER`:
-  exporting `$PREFIX/lib` into the proot process leaks into the guest and
-  glibc looks for Android `libc.so`. Termux proot has no `-e/--env`; do not
-  inject it. Host shell may still `export LD_LIBRARY_PATH=$PREFIX/lib` for
-  bash/`libandroid-support` — the wrapper clears it for proot only
-  (DT_RUNPATH finds libtalloc). After `pkg reinstall proot`, reopen or run
-  a helper that calls `td_udocker_ensure_proot`. Incomplete rootfs:
+  with `LD_PRELOAD=` + **`LD_LIBRARY_PATH=` (empty)** + `PROOT_LOADER`, and
+  the wrapper shebang must be **`#!/system/bin/sh`** (not Termux bash):
+  callers often `env LD_LIBRARY_PATH= proot …`, and Termux bash then dies
+  with `libandroid-support.so not found`. Exporting `$PREFIX/lib` into the
+  proot process leaks into the guest (`libc.so` missing). Termux proot has
+  no `-e/--env`. Host shell may still `export LD_LIBRARY_PATH=$PREFIX/lib`
+  for bash — the wrapper clears it for proot only (DT_RUNPATH finds
+  libtalloc). After `pkg reinstall proot`, reopen or run a helper that
+  calls `td_udocker_ensure_proot`. Incomplete rootfs:
   `pd reset <distro> && pd install <distro>`. Prefer `td-resource-linux`
   for Ubuntu/Debian and `td-nethunter*` for Kali.
 - `td-resource-linux --run bash` → `cannot execute binary file`,
   `bad interpreter`, or `libandroid-support.so` not found — older runners
   used `#!/bin/bash`, or `/bin/bash --login bash` (ELF-as-script), or
-  leaked host `LD_LIBRARY_PATH`. Reopen the app; `--run` rewrites `run.sh`
-  (maps bare `bash`/`sh` → `/bin/bash --login`, clears lib path for proot).
+  `env LD_LIBRARY_PATH= proot` with a bash-shebang wrapper. Reopen the app;
+  `--run` rewrites `run.sh` (maps bare `bash`/`sh` → `/bin/bash --login`,
+  calls `proot-bin` under cleared lib path).
 - `litert-lm` → `cannot locate symbol "_ZN7android18egl_get_connectionEv"` /
   `egl_*` — every Android `litert-lm-api` wheel (0.14 → 0.18) hard-links
   `libEGL/libGLESv2/libGLESv3`, and the system `libGLESv3.so` needs a
