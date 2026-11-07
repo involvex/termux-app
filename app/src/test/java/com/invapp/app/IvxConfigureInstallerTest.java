@@ -28,6 +28,7 @@ public class IvxConfigureInstallerTest {
         assertTrue(rel(IvxConfigureInstaller.doctorFile()).startsWith(prefix));
         assertTrue(rel(IvxConfigureInstaller.bannerFile()).startsWith(prefix));
         assertTrue(rel(IvxConfigureInstaller.hookFile()).startsWith(prefix));
+        assertTrue(rel(IvxConfigureInstaller.networkHookFile()).startsWith(prefix));
         assertTrue(rel(IvxConfigureInstaller.completionFile()).startsWith(prefix));
         assertTrue(rel(IvxConfigureInstaller.stampFile()).startsWith(prefix));
 
@@ -35,6 +36,8 @@ public class IvxConfigureInstallerTest {
         assertTrue(IvxConfigureInstaller.doctorFile().getName().equals("ivx-doctor"));
         assertTrue(rel(IvxConfigureInstaller.bannerFile()).endsWith("lib/invapp/banner.sh"));
         assertTrue(rel(IvxConfigureInstaller.hookFile()).endsWith("etc/profile.d/invapp-banner.sh"));
+        assertTrue(rel(IvxConfigureInstaller.networkHookFile())
+            .endsWith("etc/profile.d/invapp-network.sh"));
         assertTrue(rel(IvxConfigureInstaller.completionFile())
             .endsWith("etc/bash_completion.d/invapp-ivx.bash"));
     }
@@ -53,6 +56,19 @@ public class IvxConfigureInstallerTest {
         assertTrue(hook.contains("INVAPP_NO_BANNER"));
         assertTrue(hook.contains("return 0"));
         assertTrue(hook.contains("BASH_VERSION"));
+    }
+
+    @Test
+    public void networkHook_exportsFromUserConfigOnly() {
+        String hook = read("invapp/config/profile.d/invapp-network.sh");
+        assertTrue(hook.contains("IVX_HTTP_PROXY"));
+        assertTrue(hook.contains("IVX_ALL_PROXY"));
+        assertTrue(hook.contains("IVX_GOPROXY"));
+        assertTrue(hook.contains("export HTTP_PROXY"));
+        assertTrue(hook.contains("export GOPROXY"));
+        assertTrue("must not scrape free proxy lists",
+            !hook.contains("proxy-list") && !hook.contains("proxifly"));
+        assertTrue("must source user config", hook.contains("invapp/config"));
     }
 
     @Test
@@ -77,12 +93,32 @@ public class IvxConfigureInstallerTest {
     }
 
     @Test
+    public void configure_hasNetworkDnsAndProxySurface() {
+        String configure = read("invapp/bin/ivx-configure");
+        assertTrue(configure.contains("cmd_network"));
+        assertTrue(configure.contains("network_dns_fix"));
+        assertTrue(configure.contains("IVX_HTTP_PROXY"));
+        assertTrue(configure.contains("IVX_GOPROXY"));
+        assertTrue(configure.contains("doc_dns"));
+        assertTrue(configure.contains("nameserver 8.8.8.8")
+            || configure.contains("8.8.8.8"));
+        assertTrue("must refuse free-proxy scraping",
+            configure.contains("free public proxy")
+                || configure.contains("NOT supported"));
+        String completion = read("invapp/config/bash_completion.d/invapp-ivx.bash");
+        assertTrue(completion.contains("network"));
+        assertTrue(completion.contains("goproxy"));
+        assertTrue(completion.contains("dns"));
+    }
+
+    @Test
     public void assets_neverHardcodeTheStockPackageId() {
         String[] assets = {
             "invapp/bin/ivx-configure",
             "invapp/bin/ivx-doctor",
             "invapp/banner.sh",
             "invapp/config/profile.d/invapp-banner.sh",
+            "invapp/config/profile.d/invapp-network.sh",
             "invapp/config/bash_completion.d/invapp-ivx.bash",
         };
         for (String asset : assets) {

@@ -1,21 +1,23 @@
 #!@BASH@
 # ivx-configure -- InVxTermux first-run setup: login banner, shell completions,
-# basic packages, and a read-only doctor.
+# basic packages, DNS/proxy/GOPROXY, and a read-only doctor.
 #
 # Pure bash on purpose: no fzf/gum/ruby/python, works offline, and behaves the
 # same in the APK and in the termux-docker container. It never edits
 # ~/.bashrc / ~/.profile / ~/.zshrc -- profile.d and $PREFIX/etc/bash_completion.d
-# are the supported hooks.
+# are the supported hooks. Network proxy URLs are manual only (no free-proxy
+# scrapers).
 #
 # Config (sourced, user owned):  $XDG_CONFIG_HOME/invapp/config
 # Custom banner art:            $XDG_CONFIG_HOME/invapp/art.txt
 # Managed completions:          $PREFIX/etc/bash_completion.d/ivx-<tool>.bash
+# Network exports:              $PREFIX/etc/profile.d/invapp-network.sh
 #
 # See `ivx-configure help`.
 
 set -u
 
-IVX_VERSION=1.0.0
+IVX_VERSION=1.1.0
 
 # $PREFIX is exported by Termux and by the seeded wrappers. Fall back to the
 # script's own location ($PREFIX/bin/ivx-configure) so a bare `bash
@@ -111,9 +113,17 @@ cfg_load() {
     : "${IVX_TIPS:=1}"
     : "${IVX_STATUS:=1}"
     : "${IVX_FONT:=pixelfont}"
+    : "${IVX_HTTP_PROXY:=}"
+    : "${IVX_HTTPS_PROXY:=}"
+    : "${IVX_ALL_PROXY:=}"
+    : "${IVX_NO_PROXY:=}"
+    : "${IVX_GOPROXY:=}"
+    : "${IVX_DNS_NS1:=8.8.8.8}"
+    # IVX_DNS_NS2: leave unset vs empty distinct (empty = user chose a single NS).
 }
 
 # cfg_set KEY VALUE -- replace the key, keep every unrelated line.
+# Plain values (no spaces/quotes needed). Prefer cfg_set_quoted for URLs.
 cfg_set() {
     _ivx_key=$1
     _ivx_val=$2
@@ -139,6 +149,53 @@ cfg_set() {
     return 0
 }
 
+# cfg_set_quoted KEY VALUE -- write KEY=<shell-quoted value> (safe for URLs).
+cfg_set_quoted() {
+    _ivx_key=$1
+    _ivx_raw=$2
+    # bash printf %q produces a source-safe token (handles quotes, spaces).
+    printf -v _ivx_val '%q' "$_ivx_raw"
+    if ! mkdir -p "$CONFIG_DIR" 2>/dev/null; then
+        err "cannot create $CONFIG_DIR"
+        return 1
+    fi
+    _ivx_tmp="$CONFIG_FILE.tmp.$$"
+    if [ -f "$CONFIG_FILE" ]; then
+        grep -v -E "^[[:space:]]*(export[[:space:]]+)?${_ivx_key}=" \
+            "$CONFIG_FILE" > "$_ivx_tmp" 2>/dev/null || true
+    else
+        : > "$_ivx_tmp"
+    fi
+    printf '%s=%s\n' "$_ivx_key" "$_ivx_val" >> "$_ivx_tmp"
+    if [ "$OPT_DRY" = 1 ]; then
+        info "would set ${_ivx_key}=${_ivx_val} in $CONFIG_FILE"
+        rm -f "$_ivx_tmp"
+        return 0
+    fi
+    mv -f "$_ivx_tmp" "$CONFIG_FILE" || { err "cannot write $CONFIG_FILE"; return 1; }
+    chmod 644 "$CONFIG_FILE" 2>/dev/null || true
+    return 0
+}
+
+# cfg_unset KEY -- remove the key from the config file.
+cfg_unset() {
+    _ivx_key=$1
+    if [ ! -f "$CONFIG_FILE" ]; then
+        return 0
+    fi
+    _ivx_tmp="$CONFIG_FILE.tmp.$$"
+    grep -v -E "^[[:space:]]*(export[[:space:]]+)?${_ivx_key}=" \
+        "$CONFIG_FILE" > "$_ivx_tmp" 2>/dev/null || true
+    if [ "$OPT_DRY" = 1 ]; then
+        info "would unset ${_ivx_key} in $CONFIG_FILE"
+        rm -f "$_ivx_tmp"
+        return 0
+    fi
+    mv -f "$_ivx_tmp" "$CONFIG_FILE" || { err "cannot write $CONFIG_FILE"; return 1; }
+    chmod 644 "$CONFIG_FILE" 2>/dev/null || true
+    return 0
+}
+
 cfg_show() {
     cfg_load
     printf '  %-12s %s\n' "banner" "$IVX_BANNER"
@@ -147,6 +204,12 @@ cfg_show() {
     printf '  %-12s %s\n' "tips" "$IVX_TIPS"
     printf '  %-12s %s\n' "status" "$IVX_STATUS"
     printf '  %-12s %s\n' "figlet font" "$IVX_FONT"
+    printf '  %-12s %s\n' "http_proxy" "${IVX_HTTP_PROXY:-"(unset)"}"
+    printf '  %-12s %s\n' "https_proxy" "${IVX_HTTPS_PROXY:-"(unset)"}"
+    printf '  %-12s %s\n' "all_proxy" "${IVX_ALL_PROXY:-"(unset)"}"
+    printf '  %-12s %s\n' "no_proxy" "${IVX_NO_PROXY:-"(unset)"}"
+    printf '  %-12s %s\n' "goproxy" "${IVX_GOPROXY:-"(unset)"}"
+    printf '  %-12s %s / %s\n' "dns" "$IVX_DNS_NS1" "${IVX_DNS_NS2:-"(default 1.1.1.1)"}"
     if [ -r "$ART_FILE" ]; then
         printf '  %-12s %s\n' "custom art" "$ART_FILE"
     fi
@@ -583,6 +646,436 @@ cmd_packages() {
 }
 
 # ---------------------------------------------------------------------------
+# network (DNS + manual proxy / GOPROXY)
+# ---------------------------------------------------------------------------
+RESOLV_FILE="$PREFIX/etc/resolv.conf"
+RESOLV_GLIBC="$PREFIX/glibc/etc/resolv.conf"
+NETWORK_HOOK="$PROFILE_D/invapp-network.sh"
+
+# Return 0 if the nameserver token is loopback (broken for Go on Android).
+_net_is_loopback_ns() {
+    case "$1" in
+        127.*|::1|0:0:0:0:0:0:0:1|[::1]) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Print non-comment nameserver lines from a resolv.conf (or nothing).
+_net_list_nameservers() {
+    _ivx_rf=${1:-}
+    [ -r "$_ivx_rf" ] || return 0
+    awk '/^[[:space:]]*nameserver[[:space:]]+/ { print $2 }' "$_ivx_rf" 2>/dev/null
+}
+
+# Count usable (non-loopback) nameservers in a file. Sets _ivx_ns_ok / _ivx_ns_bad.
+_net_classify_resolv() {
+    _ivx_rf=$1
+    _ivx_ns_ok=0
+    _ivx_ns_bad=0
+    _ivx_ns_total=0
+    if [ ! -s "$_ivx_rf" ]; then
+        return 0
+    fi
+    while IFS= read -r _ivx_ns || [ -n "${_ivx_ns:-}" ]; do
+        [ -z "${_ivx_ns:-}" ] && continue
+        _ivx_ns_total=$((_ivx_ns_total + 1))
+        if _net_is_loopback_ns "$_ivx_ns"; then
+            _ivx_ns_bad=$((_ivx_ns_bad + 1))
+        else
+            _ivx_ns_ok=$((_ivx_ns_ok + 1))
+        fi
+    done <<EOF
+$(_net_list_nameservers "$_ivx_rf")
+EOF
+}
+
+_net_write_resolv() {
+    _ivx_ns1=$1
+    _ivx_ns2=${2:-}
+    _ivx_target=$3
+    _ivx_dir=$(dirname "$_ivx_target")
+    if [ "$OPT_DRY" = 1 ]; then
+        info "would write $_ivx_target -> nameserver $_ivx_ns1${_ivx_ns2:+ / $_ivx_ns2}"
+        return 0
+    fi
+    if ! mkdir -p "$_ivx_dir" 2>/dev/null; then
+        err "cannot create $_ivx_dir"
+        return 1
+    fi
+    _ivx_tmp="$_ivx_target.tmp.$$"
+    {
+        printf '# Managed by ivx-configure network (Do NOT use 127.0.0.1 / ::1)\n'
+        printf 'nameserver %s\n' "$_ivx_ns1"
+        if [ -n "$_ivx_ns2" ]; then
+            printf 'nameserver %s\n' "$_ivx_ns2"
+        fi
+    } > "$_ivx_tmp" || { err "cannot write $_ivx_tmp"; return 1; }
+    mv -f "$_ivx_tmp" "$_ivx_target" || { err "cannot install $_ivx_target"; return 1; }
+    chmod 644 "$_ivx_target" 2>/dev/null || true
+    return 0
+}
+
+network_dns_status() {
+    cfg_load
+    printf '\n  %sDNS / resolv.conf%s\n' "$C_B" "$C_RST"
+    hr
+    printf '  %-14s %s / %s\n' "preferred NS" "$IVX_DNS_NS1" "$IVX_DNS_NS2"
+    for _ivx_rf in "$RESOLV_FILE" "$RESOLV_GLIBC"; do
+        if [ ! -e "$_ivx_rf" ]; then
+            if [ "$_ivx_rf" = "$RESOLV_GLIBC" ] && [ ! -d "$PREFIX/glibc" ]; then
+                dim "glibc resolv: (no \$PREFIX/glibc — skip)"
+                continue
+            fi
+            warn "missing: $_ivx_rf"
+            continue
+        fi
+        _net_classify_resolv "$_ivx_rf"
+        if [ "$_ivx_ns_total" -eq 0 ]; then
+            warn "empty nameservers: $_ivx_rf"
+        elif [ "$_ivx_ns_ok" -eq 0 ]; then
+            err "only loopback nameservers in $_ivx_rf (Go falls back to ::1:53)"
+        else
+            ok "$_ivx_rf  (${_ivx_ns_ok} usable NS)"
+        fi
+        _net_list_nameservers "$_ivx_rf" | while IFS= read -r _ivx_ns; do
+            if _net_is_loopback_ns "$_ivx_ns"; then
+                printf '    %s!%s nameserver %s (loopback)\n' "$C_Y" "$C_RST" "$_ivx_ns"
+            else
+                printf '      nameserver %s\n' "$_ivx_ns"
+            fi
+        done
+    done
+    printf '\n'
+}
+
+network_dns_fix() {
+    # Fresh load so a prior in-shell IVX_DNS_NS2='' does not leak across calls.
+    unset IVX_DNS_NS1 IVX_DNS_NS2
+    cfg_load
+    _ivx_ns1=$IVX_DNS_NS1
+    if [ -n "${IVX_DNS_NS2+x}" ]; then
+        # Key present in config (may be empty = single nameserver).
+        _ivx_ns2=$IVX_DNS_NS2
+    else
+        _ivx_ns2=1.1.1.1
+    fi
+    if _net_is_loopback_ns "$_ivx_ns1" || { [ -n "$_ivx_ns2" ] && _net_is_loopback_ns "$_ivx_ns2"; }; then
+        err "IVX_DNS_NS* must not be loopback; reset with: ivx-configure network dns set 8.8.8.8 1.1.1.1"
+        return 1
+    fi
+    _net_write_resolv "$_ivx_ns1" "$_ivx_ns2" "$RESOLV_FILE" || return 1
+    ok "wrote $RESOLV_FILE"
+    if [ -d "$PREFIX/glibc" ]; then
+        _net_write_resolv "$_ivx_ns1" "$_ivx_ns2" "$RESOLV_GLIBC" || return 1
+        ok "wrote $RESOLV_GLIBC"
+    else
+        dim "glibc not installed — skipped $RESOLV_GLIBC"
+    fi
+    dim "open a new session (or re-run go) so resolvers re-read the file"
+}
+
+network_dns_set() {
+    _ivx_ns1=${1:-}
+    _ivx_ns2=${2:-}
+    if [ -z "$_ivx_ns1" ]; then
+        err "usage: ivx-configure network dns set <ns1> [ns2]"
+        return 1
+    fi
+    if _net_is_loopback_ns "$_ivx_ns1"; then
+        err "refusing loopback nameserver: $_ivx_ns1"
+        return 1
+    fi
+    if [ -n "$_ivx_ns2" ] && _net_is_loopback_ns "$_ivx_ns2"; then
+        err "refusing loopback nameserver: $_ivx_ns2"
+        return 1
+    fi
+    cfg_set IVX_DNS_NS1 "$_ivx_ns1" || return 1
+    if [ -n "$_ivx_ns2" ]; then
+        cfg_set IVX_DNS_NS2 "$_ivx_ns2" || return 1
+    else
+        # Explicit empty: single-NS resolv.conf (do not re-default to 1.1.1.1).
+        cfg_set IVX_DNS_NS2 '' || return 1
+    fi
+    ok "preferred DNS: $_ivx_ns1${_ivx_ns2:+ / $_ivx_ns2}"
+    network_dns_fix
+}
+
+_net_validate_proxy_url() {
+    _ivx_url=$1
+    case "$_ivx_url" in
+        http://*|https://*|socks5://*|socks5h://*) return 0 ;;
+        *)
+            err "proxy URL must start with http://, https://, socks5://, or socks5h://"
+            return 1
+            ;;
+    esac
+}
+
+network_proxy_status() {
+    cfg_load
+    printf '\n  %sProxy env (manual)%s\n' "$C_B" "$C_RST"
+    hr
+    printf '  %-14s %s\n' "HTTP_PROXY" "${IVX_HTTP_PROXY:-"(unset)"}"
+    printf '  %-14s %s\n' "HTTPS_PROXY" "${IVX_HTTPS_PROXY:-"(unset)"}"
+    printf '  %-14s %s\n' "ALL_PROXY" "${IVX_ALL_PROXY:-"(unset)"}"
+    printf '  %-14s %s\n' "NO_PROXY" "${IVX_NO_PROXY:-"(unset)"}"
+    if [ -f "$NETWORK_HOOK" ]; then
+        ok "export hook: $NETWORK_HOOK"
+    else
+        warn "export hook missing (reopen the app): $NETWORK_HOOK"
+    fi
+    dim "free public proxy lists are NOT supported — paste your own URL"
+    printf '\n'
+}
+
+network_proxy_set() {
+    _ivx_url=${1:-}
+    if [ -z "$_ivx_url" ]; then
+        err "usage: ivx-configure network proxy set <url>"
+        return 1
+    fi
+    _net_validate_proxy_url "$_ivx_url" || return 1
+    case "$_ivx_url" in
+        socks5://*|socks5h://*)
+            cfg_set_quoted IVX_ALL_PROXY "$_ivx_url" || return 1
+            ok "ALL_PROXY=$_ivx_url"
+            ;;
+        *)
+            cfg_set_quoted IVX_HTTP_PROXY "$_ivx_url" || return 1
+            cfg_set_quoted IVX_HTTPS_PROXY "$_ivx_url" || return 1
+            ok "HTTP(S)_PROXY=$_ivx_url"
+            ;;
+    esac
+    if [ -z "${IVX_NO_PROXY:-}" ]; then
+        cfg_set_quoted IVX_NO_PROXY 'localhost,127.0.0.1,::1,.local' || true
+    fi
+    dim "open a new session (or: eval \"\$(ivx-configure network apply)\")"
+}
+
+network_proxy_socks() {
+    _ivx_url=${1:-}
+    if [ -z "$_ivx_url" ]; then
+        err "usage: ivx-configure network proxy socks <socks5://host:port>"
+        return 1
+    fi
+    case "$_ivx_url" in
+        socks5://*|socks5h://*) : ;;
+        *)
+            # allow bare host:port
+            case "$_ivx_url" in
+                *://*)
+                    err "SOCKS URL must use socks5:// or socks5h://"
+                    return 1
+                    ;;
+                *) _ivx_url="socks5://${_ivx_url}" ;;
+            esac
+            ;;
+    esac
+    cfg_set_quoted IVX_ALL_PROXY "$_ivx_url" || return 1
+    ok "ALL_PROXY=$_ivx_url"
+    dim "open a new session (or: eval \"\$(ivx-configure network apply)\")"
+}
+
+network_proxy_clear() {
+    cfg_unset IVX_HTTP_PROXY
+    cfg_unset IVX_HTTPS_PROXY
+    cfg_unset IVX_ALL_PROXY
+    cfg_unset IVX_NO_PROXY
+    ok "cleared HTTP(S)_PROXY / ALL_PROXY / NO_PROXY from config"
+    dim "open a new session to drop exports from the current shell"
+}
+
+network_goproxy_status() {
+    cfg_load
+    printf '\n  %sGOPROXY%s\n' "$C_B" "$C_RST"
+    hr
+    printf '  %-14s %s\n' "IVX_GOPROXY" "${IVX_GOPROXY:-"(unset — Go default)"}"
+    if command -v go >/dev/null 2>&1; then
+        printf '  %-14s %s\n' "go env" "$(go env GOPROXY 2>/dev/null || echo '?')"
+    else
+        dim "go not installed (pkg install golang)"
+    fi
+    dim "presets: google | goproxyio | direct  (DNS must work first)"
+    printf '\n'
+}
+
+network_goproxy_preset() {
+    _ivx_name=${1:-}
+    case "$_ivx_name" in
+        google|proxy.golang.org)
+            _ivx_val='https://proxy.golang.org,direct'
+            ;;
+        goproxyio|goproxy.io)
+            _ivx_val='https://goproxy.io,direct'
+            ;;
+        direct)
+            _ivx_val='direct'
+            ;;
+        *)
+            err "usage: ivx-configure network goproxy preset <google|goproxyio|direct>"
+            return 1
+            ;;
+    esac
+    cfg_set_quoted IVX_GOPROXY "$_ivx_val" || return 1
+    ok "GOPROXY=$_ivx_val"
+    dim "open a new session (or: eval \"\$(ivx-configure network apply)\")"
+}
+
+network_goproxy_set() {
+    _ivx_val=${1:-}
+    if [ -z "$_ivx_val" ]; then
+        err "usage: ivx-configure network goproxy set <value>"
+        return 1
+    fi
+    cfg_set_quoted IVX_GOPROXY "$_ivx_val" || return 1
+    ok "GOPROXY=$_ivx_val"
+    dim "open a new session (or: eval \"\$(ivx-configure network apply)\")"
+}
+
+network_goproxy_clear() {
+    cfg_unset IVX_GOPROXY
+    ok "cleared IVX_GOPROXY (Go uses its built-in default again after a new session)"
+}
+
+network_status() {
+    network_dns_status
+    network_proxy_status
+    network_goproxy_status
+}
+
+# Print export lines suitable for: eval "$(ivx-configure network apply)"
+network_apply() {
+    cfg_load
+    if [ -n "${IVX_HTTP_PROXY:-}" ]; then
+        printf "export HTTP_PROXY=%q\n" "$IVX_HTTP_PROXY"
+        printf "export http_proxy=%q\n" "$IVX_HTTP_PROXY"
+        if [ -z "${IVX_HTTPS_PROXY:-}" ]; then
+            printf "export HTTPS_PROXY=%q\n" "$IVX_HTTP_PROXY"
+            printf "export https_proxy=%q\n" "$IVX_HTTP_PROXY"
+        fi
+    fi
+    if [ -n "${IVX_HTTPS_PROXY:-}" ]; then
+        printf "export HTTPS_PROXY=%q\n" "$IVX_HTTPS_PROXY"
+        printf "export https_proxy=%q\n" "$IVX_HTTPS_PROXY"
+    fi
+    if [ -n "${IVX_ALL_PROXY:-}" ]; then
+        printf "export ALL_PROXY=%q\n" "$IVX_ALL_PROXY"
+        printf "export all_proxy=%q\n" "$IVX_ALL_PROXY"
+    fi
+    if [ -n "${IVX_NO_PROXY:-}" ]; then
+        printf "export NO_PROXY=%q\n" "$IVX_NO_PROXY"
+        printf "export no_proxy=%q\n" "$IVX_NO_PROXY"
+    fi
+    if [ -n "${IVX_GOPROXY:-}" ]; then
+        printf "export GOPROXY=%q\n" "$IVX_GOPROXY"
+    fi
+    if [ -z "${IVX_HTTP_PROXY:-}${IVX_HTTPS_PROXY:-}${IVX_ALL_PROXY:-}${IVX_GOPROXY:-}" ]; then
+        info "no proxy/GOPROXY keys set — nothing to export" >&2
+    fi
+}
+
+network_test() {
+    cfg_load
+    printf '\n  %sNetwork smoke test%s\n' "$C_B" "$C_RST"
+    hr
+    _net_classify_resolv "$RESOLV_FILE"
+    if [ "${_ivx_ns_ok:-0}" -eq 0 ]; then
+        warn "resolv.conf has no usable nameserver — run: ivx-configure network dns fix"
+    else
+        ok "resolv.conf has ${_ivx_ns_ok} usable nameserver(s)"
+    fi
+    if command -v getent >/dev/null 2>&1; then
+        if getent hosts example.com >/dev/null 2>&1; then
+            ok "getent hosts example.com"
+        else
+            warn "getent hosts example.com failed"
+        fi
+    elif command -v ping >/dev/null 2>&1; then
+        if ping -c 1 -W 3 8.8.8.8 >/dev/null 2>&1; then
+            ok "ping 8.8.8.8"
+        else
+            warn "ping 8.8.8.8 failed"
+        fi
+    fi
+    if command -v curl >/dev/null 2>&1; then
+        if curl -fsS --max-time 8 -o /dev/null https://example.com 2>/dev/null; then
+            ok "curl https://example.com"
+        else
+            warn "curl https://example.com failed"
+        fi
+        _ivx_px=${IVX_HTTPS_PROXY:-${IVX_HTTP_PROXY:-${IVX_ALL_PROXY:-}}}
+        if [ -n "$_ivx_px" ]; then
+            if curl -fsS --max-time 10 -x "$_ivx_px" -o /dev/null https://example.com 2>/dev/null; then
+                ok "curl via proxy ($_ivx_px)"
+            else
+                warn "curl via proxy failed ($_ivx_px)"
+            fi
+        fi
+    else
+        warn "curl missing (pkg install curl)"
+    fi
+    if command -v go >/dev/null 2>&1; then
+        info "go env GOPROXY=$(go env GOPROXY 2>/dev/null || echo '?')"
+    fi
+    printf '\n'
+}
+
+cmd_network() {
+    _ivx_sub=${1:-status}
+    [ $# -gt 0 ] && shift
+    case "$_ivx_sub" in
+        status|show) network_status ;;
+        apply) network_apply ;;
+        test) network_test ;;
+        dns)
+            _ivx_dns=${1:-status}
+            [ $# -gt 0 ] && shift
+            case "$_ivx_dns" in
+                status|show) network_dns_status ;;
+                fix|seed) network_dns_fix ;;
+                set) network_dns_set "$@" ;;
+                *)
+                    err "usage: ivx-configure network dns status|fix|set <ns1> [ns2]"
+                    return 1
+                    ;;
+            esac
+            ;;
+        proxy)
+            _ivx_px=${1:-status}
+            [ $# -gt 0 ] && shift
+            case "$_ivx_px" in
+                status|show) network_proxy_status ;;
+                set) network_proxy_set "$@" ;;
+                socks) network_proxy_socks "$@" ;;
+                clear|unset) network_proxy_clear ;;
+                *)
+                    err "usage: ivx-configure network proxy status|set <url>|socks <url>|clear"
+                    return 1
+                    ;;
+            esac
+            ;;
+        goproxy|go)
+            _ivx_go=${1:-status}
+            [ $# -gt 0 ] && shift
+            case "$_ivx_go" in
+                status|show) network_goproxy_status ;;
+                preset) network_goproxy_preset "$@" ;;
+                set) network_goproxy_set "$@" ;;
+                clear|unset) network_goproxy_clear ;;
+                *)
+                    err "usage: ivx-configure network goproxy status|preset <name>|set <value>|clear"
+                    return 1
+                    ;;
+            esac
+            ;;
+        *)
+            err "usage: ivx-configure network status|dns|proxy|goproxy|apply|test"
+            return 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
 # doctor
 # ---------------------------------------------------------------------------
 DOC_PASS=0
@@ -756,7 +1249,51 @@ doc_tooling() {
     fi
 }
 
+doc_dns() {
+    cfg_load
+    if [ ! -s "$RESOLV_FILE" ]; then
+        fail "resolv.conf missing/empty: $RESOLV_FILE (ivx-configure network dns fix)"
+    else
+        _net_classify_resolv "$RESOLV_FILE"
+        if [ "$_ivx_ns_ok" -eq 0 ]; then
+            fail "resolv.conf has no usable nameserver (loopback-only → Go ::1:53)"
+        elif [ "$_ivx_ns_bad" -gt 0 ]; then
+            docwarn "resolv.conf mixes loopback nameservers (prefer: network dns fix)"
+        else
+            pass "resolv.conf: $_ivx_ns_ok nameserver(s)"
+        fi
+    fi
+    if [ -d "$PREFIX/glibc" ]; then
+        if [ ! -s "$RESOLV_GLIBC" ]; then
+            docwarn "glibc resolv.conf missing: $RESOLV_GLIBC"
+        else
+            _net_classify_resolv "$RESOLV_GLIBC"
+            if [ "$_ivx_ns_ok" -eq 0 ]; then
+                fail "glibc resolv.conf unusable (OpenCode/Agent DNS)"
+            else
+                pass "glibc resolv.conf: $_ivx_ns_ok nameserver(s)"
+            fi
+        fi
+    fi
+    if [ -f "$NETWORK_HOOK" ]; then
+        pass "network export hook: $NETWORK_HOOK"
+    else
+        docwarn "network export hook missing (reopen the app)"
+    fi
+    if [ -n "${IVX_HTTP_PROXY:-}${IVX_HTTPS_PROXY:-}${IVX_ALL_PROXY:-}" ]; then
+        dim "proxy: HTTP=${IVX_HTTP_PROXY:--} HTTPS=${IVX_HTTPS_PROXY:--} ALL=${IVX_ALL_PROXY:--}"
+    else
+        dim "proxy: unset (ivx-configure network proxy set <url>)"
+    fi
+    if [ -n "${IVX_GOPROXY:-}" ]; then
+        dim "GOPROXY: $IVX_GOPROXY"
+    else
+        dim "GOPROXY: unset (Go default)"
+    fi
+}
+
 doc_network() {
+    cfg_load
     if ! command -v curl >/dev/null 2>&1; then
         docwarn "network check skipped: curl missing"
         return 0
@@ -765,6 +1302,29 @@ doc_network() {
         pass "network: github.com reachable"
     else
         docwarn "network: github.com not reachable (offline, DNS, or VPN)"
+    fi
+    _ivx_px=${IVX_HTTPS_PROXY:-${IVX_HTTP_PROXY:-${IVX_ALL_PROXY:-}}}
+    if [ -n "$_ivx_px" ]; then
+        if curl -fsS --max-time 8 -x "$_ivx_px" -o /dev/null https://example.com 2>/dev/null; then
+            pass "network: curl via configured proxy"
+        else
+            docwarn "network: curl via proxy failed ($_ivx_px)"
+        fi
+    fi
+    if command -v go >/dev/null 2>&1; then
+        _ivx_ge=$(go env GOPROXY 2>/dev/null || true)
+        if [ -n "$_ivx_ge" ]; then
+            pass "go env GOPROXY=$_ivx_ge"
+        else
+            dim "go present but GOPROXY empty"
+        fi
+    fi
+    if command -v getent >/dev/null 2>&1; then
+        if getent hosts example.com >/dev/null 2>&1; then
+            pass "DNS: getent hosts example.com"
+        else
+            docwarn "DNS: getent hosts example.com failed"
+        fi
     fi
 }
 
@@ -786,6 +1346,7 @@ cmd_doctor() {
     doc_completions
     doc_banner
     doc_tooling
+    doc_dns
     case " $* " in
         *" --network "*) doc_network ;;
     esac
@@ -872,6 +1433,11 @@ cmd_status() {
     else
         printf '  %-14s %s\n' "login hook" "MISSING (reopen the app)"
     fi
+    if [ -f "$NETWORK_HOOK" ]; then
+        printf '  %-14s %s\n' "network hook" "installed"
+    else
+        printf '  %-14s %s\n' "network hook" "MISSING (reopen the app)"
+    fi
     _ivx_count=0
     if [ -d "$COMPLETION_DIR" ]; then
         _ivx_count=$(find "$COMPLETION_DIR" -maxdepth 1 -name 'ivx-*.bash' 2>/dev/null | wc -l | tr -d ' ')
@@ -881,6 +1447,18 @@ cmd_status() {
         printf '  %-14s %s\n' "custom art" "$ART_FILE"
     fi
     printf '  %-14s %s\n' "bun" "$(cat "$PREFIX/var/lib/invapp/bun.version" 2>/dev/null || echo 'unknown')"
+    _net_classify_resolv "$RESOLV_FILE"
+    if [ "${_ivx_ns_ok:-0}" -gt 0 ]; then
+        printf '  %-14s %s usable NS in resolv.conf\n' "dns" "$_ivx_ns_ok"
+    else
+        printf '  %-14s %s\n' "dns" "broken/missing (network dns fix)"
+    fi
+    if [ -n "${IVX_HTTP_PROXY:-}${IVX_ALL_PROXY:-}" ]; then
+        printf '  %-14s %s\n' "proxy" "${IVX_HTTP_PROXY:-${IVX_ALL_PROXY}}"
+    else
+        printf '  %-14s %s\n' "proxy" "unset"
+    fi
+    printf '  %-14s %s\n' "goproxy" "${IVX_GOPROXY:-"(Go default)"}"
     printf '\n'
 }
 
@@ -910,20 +1488,30 @@ COMMANDS
                                  render custom art with figlet -> art.txt
   completions [list|all|clean|TOOL...]
   packages [list|essentials|quality|build|network|all]
+  network status                 DNS + proxy + GOPROXY overview
+  network dns status|fix|set <ns1> [ns2]
+                                 seed $PREFIX/etc/resolv.conf (fixes Go ::1:53)
+  network proxy status|set <url>|socks <url>|clear
+                                 manual HTTP(S)/SOCKS only (no free-proxy lists)
+  network goproxy status|preset <google|goproxyio|direct>|set <val>|clear
+  network apply                  print exports for: eval "$(… network apply)"
+  network test                   opt-in DNS/curl/(proxy) smoke test
   doctor [--strict] [--network]  read-only health report
   ai [status|opencode|agent]     OpenCode / Cursor Agent hints
   reset                          remove user config + custom art
   help                           this text
 
 FILES
-  $XDG_CONFIG_HOME/invapp/config      banner settings (sourced)
+  $XDG_CONFIG_HOME/invapp/config      banner + network settings (sourced)
   $XDG_CONFIG_HOME/invapp/art.txt     custom banner art
+  $PREFIX/etc/profile.d/invapp-network.sh
   $PREFIX/etc/bash_completion.d/ivx-*.bash
 
 NOTES
   * never edits ~/.bashrc / ~/.profile / ~/.zshrc
   * no implicit `pkg update`; installs only what you pick
-  * open a new session after changing the banner or completions
+  * open a new session after changing the banner, completions, or proxy
+  * Go "lookup … on [::1]:53" is DNS — run: network dns fix (not a free proxy)
 EOF
 }
 
@@ -1037,6 +1625,64 @@ ai_menu() {
     done
 }
 
+network_menu() {
+    while :; do
+        cfg_load
+        printf '\n  %sNetwork%s\n' "$C_B" "$C_RST"
+        hr
+        _net_classify_resolv "$RESOLV_FILE"
+        if [ "${_ivx_ns_ok:-0}" -gt 0 ]; then
+            printf '   DNS      %s usable nameserver(s)\n' "$_ivx_ns_ok"
+        else
+            printf '   DNS      %sbroken/missing%s — Go may hit ::1:53\n' "$C_Y" "$C_RST"
+        fi
+        printf '   HTTP     %s\n' "${IVX_HTTP_PROXY:-"(unset)"}"
+        printf '   SOCKS    %s\n' "${IVX_ALL_PROXY:-"(unset)"}"
+        printf '   GOPROXY  %s\n' "${IVX_GOPROXY:-"(Go default)"}"
+        hr
+        printf '   1) DNS status\n   2) DNS fix (8.8.8.8 / 1.1.1.1)\n'
+        printf '   3) set DNS nameservers…\n'
+        printf '   4) set HTTP(S) proxy…\n   5) set SOCKS5 proxy…\n   6) clear proxy\n'
+        printf '   7) GOPROXY preset…\n   8) clear GOPROXY\n'
+        printf '   9) smoke test\n   s) full status\n   b) back\n'
+        ask '> '
+        case "${IVX_REPLY:-}" in
+            1) network_dns_status; pause ;;
+            2) network_dns_fix; pause ;;
+            3)
+                ask 'nameserver 1 [8.8.8.8]: '
+                _ivx_a=${IVX_REPLY:-8.8.8.8}
+                ask 'nameserver 2 [1.1.1.1]: '
+                _ivx_b=${IVX_REPLY:-1.1.1.1}
+                network_dns_set "$_ivx_a" "$_ivx_b"
+                pause
+                ;;
+            4)
+                ask 'HTTP(S) proxy URL (http://host:port): '
+                [ -n "${IVX_REPLY:-}" ] && network_proxy_set "$IVX_REPLY"
+                pause
+                ;;
+            5)
+                ask 'SOCKS5 URL (socks5://host:port): '
+                [ -n "${IVX_REPLY:-}" ] && network_proxy_socks "$IVX_REPLY"
+                pause
+                ;;
+            6) network_proxy_clear; pause ;;
+            7)
+                ask 'preset (google/goproxyio/direct): '
+                [ -n "${IVX_REPLY:-}" ] && network_goproxy_preset "$IVX_REPLY"
+                pause
+                ;;
+            8) network_goproxy_clear; pause ;;
+            9) network_test; pause ;;
+            s|S) network_status; pause ;;
+            b|B|back|q) return 0 ;;
+            '') : ;;
+            *) warn "unknown choice: $IVX_REPLY" ;;
+        esac
+    done
+}
+
 menu_main() {
     while :; do
         cfg_load
@@ -1054,10 +1700,11 @@ menu_main() {
         printf '   1) Appearance        banner %s · %s · %s\n' "$IVX_BANNER" "$IVX_STYLE" "$IVX_COLOR"
         printf '   2) Shell completions %s managed\n' "${_ivx_count:-0}"
         printf '   3) Basic packages    essentials / quality / build / network\n'
-        printf '   4) Doctor            read-only health report\n'
-        printf '   5) AI tools          opencode / cursor agent\n'
-        printf '   6) Preview banner\n'
-        printf '   7) Status\n'
+        printf '   4) Network           DNS / proxy / GOPROXY\n'
+        printf '   5) Doctor            read-only health report\n'
+        printf '   6) AI tools          opencode / cursor agent\n'
+        printf '   7) Preview banner\n'
+        printf '   8) Status\n'
         printf '   a) Advanced          reset config\n'
         printf '   q) Quit\n'
         ask '> '
@@ -1065,10 +1712,11 @@ menu_main() {
             1) appearance_menu ;;
             2) completions_menu ;;
             3) packages_menu ;;
-            4) cmd_doctor; pause ;;
-            5) ai_menu ;;
-            6) banner_preview; pause ;;
-            7) cmd_status; pause ;;
+            4) network_menu ;;
+            5) cmd_doctor; pause ;;
+            6) ai_menu ;;
+            7) banner_preview; pause ;;
+            8) cmd_status; pause ;;
             a|A)
                 ask 'Remove user config and custom art? [y/N] '
                 case "${IVX_REPLY:-}" in
@@ -1095,6 +1743,7 @@ case "$_ivx_cmd" in
     banner) cmd_banner "$@" ;;
     completions|completion) cmd_completions "$@" ;;
     packages|pkg) cmd_packages "$@" ;;
+    network|net) cmd_network "$@" ;;
     doctor) cmd_doctor "$@" ;;
     ai) cmd_ai "$@" ;;
     reset) cmd_reset ;;

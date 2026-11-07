@@ -6,9 +6,43 @@
 # shellcheck disable=SC2207
 
 _ivx_configure() {
-    local cur prev
+    local cur prev words cword
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
+    words=("${COMP_WORDS[@]}")
+    cword=$COMP_CWORD
+
+    # Nested: network dns|proxy|goproxy …
+    if [ "$cword" -ge 2 ] && { [ "${words[1]}" = "network" ] || [ "${words[1]}" = "net" ]; }; then
+        case "${words[2]:-}" in
+            dns)
+                if [ "$cword" -eq 3 ]; then
+                    COMPREPLY=( $(compgen -W "status fix set" -- "$cur") )
+                fi
+                return
+                ;;
+            proxy)
+                if [ "$cword" -eq 3 ]; then
+                    COMPREPLY=( $(compgen -W "status set socks clear" -- "$cur") )
+                fi
+                return
+                ;;
+            goproxy|go)
+                if [ "$cword" -eq 3 ]; then
+                    COMPREPLY=( $(compgen -W "status preset set clear" -- "$cur") )
+                elif [ "$cword" -eq 4 ] && [ "${words[3]}" = "preset" ]; then
+                    COMPREPLY=( $(compgen -W "google goproxyio direct" -- "$cur") )
+                fi
+                return
+                ;;
+            *)
+                if [ "$cword" -eq 2 ]; then
+                    COMPREPLY=( $(compgen -W "status dns proxy goproxy apply test" -- "$cur") )
+                fi
+                return
+                ;;
+        esac
+    fi
 
     case "$prev" in
         banner)
@@ -31,6 +65,10 @@ _ivx_configure() {
             COMPREPLY=( $(compgen -W "list essentials quality build network all" -- "$cur") )
             return
             ;;
+        network|net)
+            COMPREPLY=( $(compgen -W "status dns proxy goproxy apply test" -- "$cur") )
+            return
+            ;;
         ai)
             COMPREPLY=( $(compgen -W "status opencode agent" -- "$cur") )
             return
@@ -50,7 +88,7 @@ _ivx_configure() {
     esac
 
     if [ "$COMP_CWORD" -eq 1 ]; then
-        COMPREPLY=( $(compgen -W "status banner completions packages doctor ai reset help" -- "$cur") )
+        COMPREPLY=( $(compgen -W "status banner completions packages network doctor ai reset help" -- "$cur") )
         return
     fi
 

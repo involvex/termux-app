@@ -1,13 +1,16 @@
 # First-run setup + login banner
 
 InVxTermux ships one setup surface: `ivx-configure`. It owns the login banner,
-bash completions, a short list of optional packages, and a read-only health
-report. Everything is plain bash — no `fzf`, `gum`, `ruby`, `python`, or network
-access — so it behaves the same on the phone and in the container image.
+bash completions, optional packages, DNS / manual proxy / `GOPROXY`, and a
+read-only health report. Everything is plain bash — no `fzf`, `gum`, `ruby`, or
+`python` — so it behaves the same on the phone and in the container image.
+Core commands stay offline; only `network test` and `doctor --network` probe
+the network on purpose.
 
 ```bash
 ivx-configure            # interactive menu
 ivx-configure status     # what is installed / enabled
+ivx-configure network dns fix   # fix Go lookup … on [::1]:53
 ivx-doctor               # same as: ivx-configure doctor
 ```
 
@@ -110,6 +113,41 @@ groups install exactly the packages listed. If a bulk install fails, each
 package is retried individually so one bad name cannot abort the group. Use
 `--dry-run` to see the exact `pkg install` command without running it.
 
+## Network (DNS + manual proxy)
+
+Go (and some other tools) read `$PREFIX/etc/resolv.conf`. When that file is
+missing or only lists loopback (`127.0.0.1` / `::1`), Go falls back to
+`[::1]:53` and fails with:
+
+```text
+lookup goproxy.io on [::1]:53: … connection refused
+```
+
+That is a **DNS** problem. A free public HTTP proxy list will not fix it.
+
+```bash
+ivx-configure network status
+ivx-configure network dns fix              # write 8.8.8.8 + 1.1.1.1
+ivx-configure network dns set 1.1.1.1 8.8.8.8
+ivx-configure network proxy set http://127.0.0.1:7890
+ivx-configure network proxy socks socks5://127.0.0.1:1080
+ivx-configure network proxy clear
+ivx-configure network goproxy preset google   # or goproxyio | direct
+ivx-configure network goproxy clear
+eval "$(ivx-configure network apply)"      # export into the current shell
+ivx-configure network test                 # opt-in DNS/curl smoke test
+```
+
+| Subcommand | Effect |
+|---|---|
+| `dns fix` | Seed `$PREFIX/etc/resolv.conf` (and `$PREFIX/glibc/etc/resolv.conf` when glibc exists). Refuses loopback nameservers. |
+| `proxy set` / `socks` | Store a **manual** URL in config; `$PREFIX/etc/profile.d/invapp-network.sh` exports `HTTP(S)_PROXY` / `ALL_PROXY` / `NO_PROXY` on new sessions. |
+| `goproxy preset` | `google` → `https://proxy.golang.org,direct`; `goproxyio` → `https://goproxy.io,direct`; `direct` → `direct`. DNS must work first. |
+
+Free public proxy scrapers are **not** supported. Paste a proxy you control
+(Clash, VPS, corporate). Open a **new session** after changing proxy /
+`GOPROXY`, or `eval "$(ivx-configure network apply)"`.
+
 ## Doctor
 
 `ivx-configure doctor` (or `ivx-doctor`) is a read-only report — it never
@@ -123,10 +161,13 @@ installs or changes anything:
 - `bash-completion` runtime, completion loader, managed file count
 - banner hook, banner library, config syntax
 - `termux-api`, `opencode`, `agent`, `java`
+- `$PREFIX/etc/resolv.conf` usable nameservers (fails on loopback-only / empty)
+- network export hook + whether proxy / `GOPROXY` keys are set
 
 `--strict` turns warnings into a non-zero exit (useful in CI); `--network` also
-probes `github.com`. Deeper per-topic reports stay where they are:
-`bun-doctor`, `jdk-doctor`, `td-info`, `td-resource-ai`.
+probes `github.com`, optional configured proxy, `getent`, and `go env GOPROXY`.
+Deeper per-topic reports stay where they are: `bun-doctor`, `jdk-doctor`,
+`td-info`, `td-resource-ai`.
 
 ## Configuration
 
@@ -140,11 +181,18 @@ IVX_COLOR=green       # green | cyan | magenta | white | rainbow | none
 IVX_TIPS=1            # hint line under the header
 IVX_STATUS=1          # "bun 1.4.2 · git ✓" line
 IVX_FONT=pixelfont    # default font for `banner text`
+IVX_HTTP_PROXY=…      # optional; quoted URL
+IVX_HTTPS_PROXY=…
+IVX_ALL_PROXY=…       # socks5://…
+IVX_NO_PROXY=localhost,127.0.0.1,::1,.local
+IVX_GOPROXY=…         # optional Go module proxy
+IVX_DNS_NS1=8.8.8.8   # preferred nameservers for `network dns fix`
+IVX_DNS_NS2=1.1.1.1
 ```
 
 A broken config cannot break login: the renderer ignores read/source errors and
 falls back to the built-in art. `ivx-configure doctor` reports syntax errors and
-`ivx-configure reset` removes the config and custom art.
+`ivx-configure reset` removes the config and custom art (including proxy keys).
 
 ## Container parity
 

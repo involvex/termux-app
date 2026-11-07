@@ -17,7 +17,7 @@ import java.nio.charset.StandardCharsets;
  *
  * <ul>
  *   <li>{@code $PREFIX/bin/ivx-configure} — banner / completions / packages /
- *       doctor menu (pure bash, no fzf/gum)</li>
+ *       network / doctor menu (pure bash, no fzf/gum)</li>
  *   <li>{@code $PREFIX/bin/ivx-doctor} — thin wrapper for
  *       {@code ivx-configure doctor}, matching {@code bun-doctor} /
  *       {@code jdk-doctor}</li>
@@ -25,6 +25,8 @@ import java.nio.charset.StandardCharsets;
  *       renderer, sourced by the login hook</li>
  *   <li>{@code $PREFIX/etc/profile.d/invapp-banner.sh} — interactive-only
  *       login banner hook (no {@code ~/.bashrc} edits)</li>
+ *   <li>{@code $PREFIX/etc/profile.d/invapp-network.sh} — optional
+ *       HTTP(S)/SOCKS/GOPROXY exports from user config</li>
  *   <li>{@code $PREFIX/etc/bash_completion.d/invapp-ivx.bash} — completions
  *       for the new commands</li>
  * </ul>
@@ -38,12 +40,13 @@ public final class IvxConfigureInstaller {
     private static final String LOG_TAG = "IvxConfigureInstaller";
 
     /** Bumped when the seeded shell assets change in a user-visible way. */
-    public static final String VERSION = "1.0.0";
+    public static final String VERSION = "1.1.0";
 
     public static final String ASSET_CONFIGURE = "invapp/bin/ivx-configure";
     public static final String ASSET_DOCTOR = "invapp/bin/ivx-doctor";
     public static final String ASSET_BANNER = "invapp/banner.sh";
     public static final String ASSET_HOOK = "invapp/config/profile.d/invapp-banner.sh";
+    public static final String ASSET_NETWORK_HOOK = "invapp/config/profile.d/invapp-network.sh";
     public static final String ASSET_COMPLETION = "invapp/config/bash_completion.d/invapp-ivx.bash";
 
     public static final String BIN_CONFIGURE = "ivx-configure";
@@ -51,6 +54,7 @@ public final class IvxConfigureInstaller {
 
     private static final String LIB_BANNER_REL = "lib/invapp/banner.sh";
     private static final String HOOK_REL = "etc/profile.d/invapp-banner.sh";
+    private static final String NETWORK_HOOK_REL = "etc/profile.d/invapp-network.sh";
     private static final String COMPLETION_REL = "etc/bash_completion.d/invapp-ivx.bash";
     private static final String STAMP_REL = "var/lib/invapp/ivx.version";
 
@@ -79,6 +83,11 @@ public final class IvxConfigureInstaller {
     @NonNull
     public static File hookFile() {
         return new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, HOOK_REL);
+    }
+
+    @NonNull
+    public static File networkHookFile() {
+        return new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, NETWORK_HOOK_REL);
     }
 
     @NonNull
@@ -115,6 +124,7 @@ public final class IvxConfigureInstaller {
         // Sourced/sidecar assets: 0644, same writer the shell library uses.
         ok &= ShellLibraryInstaller.writeAssetToFile(context, ASSET_BANNER, bannerFile());
         ok &= ShellLibraryInstaller.writeAssetToFile(context, ASSET_HOOK, hookFile());
+        ok &= ShellLibraryInstaller.writeAssetToFile(context, ASSET_NETWORK_HOOK, networkHookFile());
         ok &= ShellLibraryInstaller.writeAssetToFile(context, ASSET_COMPLETION, completionFile());
 
         if (!ok) {

@@ -62,7 +62,7 @@ See `ROADMAP.md`.
 | Widget scripts | `~/.shortcuts` templates (defaults: `clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, `screen-ocr`, `tasks/td-ai`; optional catalog: camera/wifi/battery/torch/share/settings/vibrate/volume/location/telephony/`stop-ai`/`td-upgrade`/`stop-agent-worker`/`tasks/agent-worker`); Settings / right drawer; matching Widget APK + API/`pkg install termux-api`. `screen-ocr` → `td-screen-ocr`. **2-finger swipe down** (or Ctrl+Alt+T) opens Tools end drawer. Widget tap always shows **Running: name** toast |
 | Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize bar / Customize keys (writes quoted `extra-keys` in `~/.termux/termux.properties`). Extra-keys: 2-row nav page + swipe L/R for workflow page; end drawer = Tools (Preview/AI/Clone/New/Widget scripts). Long-press / Ctrl+Alt+M → actions bottom sheet. AI tap when ready opens Preview and may offer **Copy LAN** if `:4096` is wildcard-bound |
 | Completions | App installs `$PREFIX/etc/profile.d/invapp-completions.sh` + `bash_completion.d` for bun/pkg/npm/gh/git. Prefer `pkg install bash-completion` for richer git. **New session** after update. Never edit `~/.bashrc` |
-| Setup / banner | `ivx-configure` (pure bash: appearance, completions, package groups, doctor, AI hints, reset) + `ivx-doctor` wrapper + login banner. Art = pre-rendered pyfiglet **pixelfont** output for "InvolveX" in `$PREFIX/lib/invapp/banner.sh` (the GPL `.flf` font is **not** shipped); hook = `$PREFIX/etc/profile.d/invapp-banner.sh`; config user-owned in `${XDG_CONFIG_HOME:-~/.config}/invapp/` (`config`, `art.txt`); managed completions `$PREFIX/etc/bash_completion.d/ivx-<tool>.bash`. Guarded by `BASH_VERSION` + interactive `$-` + `[ -t 1 ]` + `TERM!=dumb` + empty `SSH_ORIGINAL_COMMAND`, so widgets/`ssh host cmd`/`bash -lc` stay silent. Reseeded every app start by `IvxConfigureInstaller` (+ after bootstrap in `TermuxInstaller`); drawer **Setup** + opt-in quick-bar catalog entry. Docs: `docs/configure.md` |
+| Setup / banner | `ivx-configure` (pure bash: appearance, completions, package groups, **network** DNS/proxy/`GOPROXY`, doctor, AI hints, reset) + `ivx-doctor` wrapper + login banner. Art = pre-rendered pyfiglet **pixelfont** output for "InvolveX" in `$PREFIX/lib/invapp/banner.sh` (the GPL `.flf` font is **not** shipped); hooks = `$PREFIX/etc/profile.d/invapp-banner.sh` + `invapp-network.sh` (manual proxy exports); config user-owned in `${XDG_CONFIG_HOME:-~/.config}/invapp/` (`config`, `art.txt`); managed completions `$PREFIX/etc/bash_completion.d/ivx-<tool>.bash`. Banner guarded by `BASH_VERSION` + interactive `$-` + `[ -t 1 ]` + `TERM!=dumb` + empty `SSH_ORIGINAL_COMMAND`, so widgets/`ssh host cmd`/`bash -lc` stay silent. Reseeded every app start by `IvxConfigureInstaller` (+ after bootstrap in `TermuxInstaller`); drawer **Setup** + opt-in quick-bar catalog entry. Docs: `docs/configure.md` |
 | Container | `app/src/main/assets/invapp/` = container twin of the seeded env (bun, `td-*`, configs, `~/.shortcuts`, opencode/cursor installers). Built by the `involvex/termux-docker` fork: `INVAPP_SRC=../termux-app/app/src/main/assets/invapp ./generate.sh --invapp` → `ghcr.io/involvex/termux-docker:<arch>`. Dropped vs APK: path redirector, bun seccomp shim, OpenCode DNS shim. Kept: `--os=android` (prefix is bionic!) + Termux glibc wrappers. Details: `docker/README.md` |
 
 **Do NOT "fix" these with more wrappers:**
@@ -143,6 +143,13 @@ See `ROADMAP.md`.
   login still prints. `ivx-configure doctor` names the syntax error and
   `ivx-configure reset` removes the config + custom art. Do not add parsing or
   a fallback config copy: user edits must win.
+- Go `lookup … on [::1]:53` / `connection refused` — empty or loopback
+  `$PREFIX/etc/resolv.conf`; Go falls back to a local DNS stub. Fix with
+  `ivx-configure network dns fix` (seeds `8.8.8.8` / `1.1.1.1`, syncs glibc
+  twin when present). **Not** fixed by free public HTTP proxy lists or
+  `GOPROXY` alone. Optional manual proxy: `ivx-configure network proxy set
+  http://host:port` or `… socks socks5://…` (exported by
+  `profile.d/invapp-network.sh` on a **new** session).
 - `screen-ocr` / screenshot OCR failing — needs Termux:API APK +
   `pkg install termux-api tesseract`, and usually `termux-setup-storage` for
   `--latest`. Eng lang pack ships with `tesseract`; other langs need
@@ -281,7 +288,8 @@ git clone <url> myapp && cd myapp
 bun install
 bun run dev          # or bun run android / build
 # Drawer → Preview → Scan → tap port (e.g. 3000)
-ivx-configure        # banner on/off + style, completions, package groups, doctor
+ivx-configure        # banner, completions, packages, network DNS/proxy, doctor
+ivx-configure network dns fix   # Go ::1:53 → public nameservers
 ivx-doctor           # read-only health report (--strict, --network)
 td-ai                # OpenCode on 0.0.0.0:4096 → Preview 127.0.0.1 / LAN Copy
 # Kali NetHunter (optional, device-only): udocker + TigerVNC → AVNC on :5901
