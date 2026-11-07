@@ -56,7 +56,7 @@ import com.invapp.app.activities.HelpActivity;
 import com.invapp.app.activities.LocalhostPreviewActivity;
 import com.invapp.app.activities.SettingsActivity;
 import com.invapp.app.utils.AiSessionHelper;
-import com.invapp.app.utils.ExtraKeysBarHelper;
+import com.invapp.app.utils.ExtraKeysCustomizeUi;
 import com.invapp.app.utils.LanShareHelper;
 import com.invapp.app.utils.LaunchPrefs;
 import com.invapp.app.utils.LocalhostPortScanner;
@@ -843,37 +843,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void showCustomizeExtraKeysDialog() {
-        final String[] labels = ExtraKeysBarHelper.PAGE2_LABELS;
-        final boolean[] checked = ExtraKeysBarHelper.checkedFlags(
-            ExtraKeysBarHelper.getPage2Ids(this));
-        new AlertDialog.Builder(this)
-            .setTitle(R.string.title_customize_extra_keys)
-            .setMessage(R.string.msg_customize_extra_keys)
-            .setMultiChoiceItems(labels, checked, (dialog, which, isChecked) -> {
-                checked[which] = isChecked;
-            })
-            .setPositiveButton(android.R.string.ok, (dialog, which) -> {
-                List<String> ids = ExtraKeysBarHelper.filterToCatalogOrder(checked);
-                ExtraKeysBarHelper.setPage2Ids(this, ids);
-                if (ExtraKeysBarHelper.writeExtraKeysProperty(ids)) {
-                    if (mTermuxTerminalExtraKeys != null) {
-                        mTermuxTerminalExtraKeys.reloadFromProperties();
-                    }
-                    showToast(getString(R.string.msg_extra_keys_updated), true);
-                } else {
-                    showToast(getString(R.string.error_extra_keys_write_failed), true);
-                }
-            })
-            .setNeutralButton(R.string.action_workflow_reset_bar, (dialog, which) -> {
-                ExtraKeysBarHelper.resetToDefault(this);
-                List<String> ids = ExtraKeysBarHelper.getPage2Ids(this);
-                if (ExtraKeysBarHelper.writeExtraKeysProperty(ids)
-                    && mTermuxTerminalExtraKeys != null) {
-                    mTermuxTerminalExtraKeys.reloadFromProperties();
-                }
-            })
-            .setNegativeButton(android.R.string.cancel, null)
-            .show();
+        ExtraKeysCustomizeUi.show(this, () -> {
+            if (mTermuxTerminalExtraKeys != null) {
+                mTermuxTerminalExtraKeys.reloadFromProperties();
+            }
+        });
     }
 
     private void showCustomizeWorkflowBarDialog() {

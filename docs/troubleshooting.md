@@ -21,7 +21,8 @@
 | `ivx-configure completions all` skips tools | Generators only run for installed binaries — the table marks them `no`. Install the tool first, then re-run |
 | Doctor `FAIL` on a container | Android-only checks (redirector, `termux-api`) are informational when `INVAPP_ON_DEVICE=0`. `--strict` in CI should allow those |
 | `ivx-doctor` says the banner hook is missing | Reopen the app (it reseeds on start) or run `td-upgrade` on device. `ivx-configure` and `ivx-doctor` are re-written every launch |
-| Extra keys only show ESC/nav | Swipe the key bar **left** for workflow page (pull / bun i / …). **⋯ → Customize keys…** or swipe from the right edge for Tools |
+| Extra keys only show ESC/nav | Swipe the key bar **left/right** for workflow page (pull / bun i / …). **Tools → Customize keys…** or **Settings → Customize keybinds** |
+| Extra keys show weird symbols (⎈ ⎋ ⇱) | `extra-keys-style=all` — set `extra-keys-style=none` or run **Customize keybinds → Reset** (writes text HOME/END/CTRL) |
 | Green-bar `ls` folders | Hacker theme ANSI clash — new session or replace `~/.termux/colors.properties` |
 | Phantom kill `[signal 9]` (Android 12+) | OS phantom/CPU killer — see upstream Termux issue [#2366](https://github.com/termux/termux-app/issues/2366) |
 | Plugin install fail | Same signature + `sharedUserId` source only; uninstall all, reinstall set |

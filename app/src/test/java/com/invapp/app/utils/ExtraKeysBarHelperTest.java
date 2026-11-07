@@ -71,14 +71,36 @@ public class ExtraKeysBarHelperTest {
     public void emptyPage2StillEmitsKeyboard() {
         String json = ExtraKeysBarHelper.buildExtraKeysJson(Collections.emptyList());
         assertTrue(json.contains("KEYBOARD"));
+        assertTrue(json.contains("display: 'kbd'"));
+    }
+
+    @Test
+    public void page0UsesTextDisplays() {
+        String json = ExtraKeysBarHelper.buildExtraKeysJson(
+            Arrays.asList(ExtraKeysBarHelper.ID_PULL));
+        assertTrue(json.contains("display: 'HOME'"));
+        assertTrue(json.contains("display: 'CTRL'"));
+        assertTrue(json.contains("display: 'END'"));
+    }
+
+    @Test
+    public void upsertRawPropertySetsStyleNone() {
+        String text = "extra-keys-style = all\nnight-mode=true\n";
+        String out = ExtraKeysBarHelper.upsertRawProperty(text,
+            "extra-keys-style", ExtraKeysBarHelper.STYLE_TEXT);
+        assertTrue(out.contains("extra-keys-style = none"));
+        assertFalse(out.contains("extra-keys-style = all"));
     }
 
     @Test
     public void defaultPropertyConstantLooksMultiPage() {
         String def = com.invapp.shared.termux.settings.properties.TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS;
         // Multi-page JSON starts with [[[ (page → row → key)
-        assertTrue(def.startsWith("[[['") || def.startsWith("[[[\"") || def.contains("]],[["));
+        assertTrue(def.startsWith("[[[") || def.contains("]],[["));
         assertTrue(def.contains("PULL"));
         assertTrue(def.contains("DRAWER_RIGHT"));
+        assertTrue(def.contains("display: 'HOME'"));
+        assertEquals("none",
+            com.invapp.shared.termux.settings.properties.TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS_STYLE);
     }
 }

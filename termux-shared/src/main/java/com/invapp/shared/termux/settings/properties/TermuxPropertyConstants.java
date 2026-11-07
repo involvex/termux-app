@@ -332,15 +332,34 @@ public final class TermuxPropertyConstants {
      */
     public static final String DEFAULT_IVALUE_EXTRA_KEYS =
         "["
-            + "[['ESC','/',{key: '-', popup: '|'},'HOME','UP','END','PGUP'],"
-            + "['TAB','CTRL','ALT','LEFT','DOWN','RIGHT','PGDN']],"
-            + "[[{key: 'PULL', display: 'pull'},{key: 'BUNI', display: 'bun i'},{key: 'DEV', display: 'dev'},{key: 'REPOS', display: 'repos'}],"
-            + "[{key: 'CLONE', display: 'clone'},{key: 'AI', display: 'AI'},'DRAWER',{key: 'DRAWER_RIGHT', display: 'tools'},'KEYBOARD','PASTE']]"
+            + "[["
+            + "{key: 'ESC', display: 'ESC'},"
+            + "{key: '/', display: '/'},"
+            + "{key: '-', popup: '|', display: '-'},"
+            + "{key: 'HOME', display: 'HOME'},"
+            + "{key: 'UP', display: 'UP'},"
+            + "{key: 'END', display: 'END'},"
+            + "{key: 'PGUP', display: 'PGUP'}"
+            + "],["
+            + "{key: 'TAB', display: 'TAB'},"
+            + "{key: 'CTRL', display: 'CTRL'},"
+            + "{key: 'ALT', display: 'ALT'},"
+            + "{key: 'LEFT', display: 'LEFT'},"
+            + "{key: 'DOWN', display: 'DOWN'},"
+            + "{key: 'RIGHT', display: 'RIGHT'},"
+            + "{key: 'PGDN', display: 'PGDN'}"
+            + "]],"
+            + "[[{key: 'PULL', display: 'pull'},{key: 'BUNI', display: 'bun i'},"
+            + "{key: 'DEV', display: 'dev'},{key: 'REPOS', display: 'repos'}],"
+            + "[{key: 'CLONE', display: 'clone'},{key: 'AI', display: 'AI'},"
+            + "{key: 'DRAWER', display: 'drawer'},{key: 'DRAWER_RIGHT', display: 'tools'},"
+            + "{key: 'KEYBOARD', display: 'kbd'},{key: 'PASTE', display: 'paste'}]]"
             + "]";
 
     /** Defines the key for extra keys style */
     public static final String KEY_EXTRA_KEYS_STYLE =  "extra-keys-style"; // Default: "extra-keys-style"
-    public static final String DEFAULT_IVALUE_EXTRA_KEYS_STYLE = "default";
+    /** {@code none} = plain text labels (HOME/END/CTRL), not ISO arrow glyphs. */
+    public static final String DEFAULT_IVALUE_EXTRA_KEYS_STYLE = "none";
 
 
 

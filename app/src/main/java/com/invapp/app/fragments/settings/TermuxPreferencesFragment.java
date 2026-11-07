@@ -18,6 +18,7 @@ import androidx.preference.SwitchPreferenceCompat;
 
 import com.invapp.R;
 import com.invapp.app.WidgetScriptsUi;
+import com.invapp.app.utils.ExtraKeysCustomizeUi;
 import com.invapp.app.utils.IntegratedTools;
 import com.invapp.app.utils.LaunchPrefs;
 import com.invapp.app.utils.PreviewPortPrefs;
@@ -36,6 +37,14 @@ public class TermuxPreferencesFragment extends PreferenceFragmentCompat {
         preferenceManager.setPreferenceDataStore(TermuxPreferencesDataStore.getInstance(context));
 
         setPreferencesFromResource(R.xml.termux_preferences, rootKey);
+
+        Preference customizeKeys = findPreference("customize_extra_keys");
+        if (customizeKeys != null) {
+            customizeKeys.setOnPreferenceClickListener(preference -> {
+                ExtraKeysCustomizeUi.show(context, null);
+                return true;
+            });
+        }
 
         Preference widgetScripts = findPreference("widget_scripts");
         if (widgetScripts != null) {

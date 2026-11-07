@@ -17,6 +17,12 @@
         app:fragment="com.invapp.app.fragments.settings.termux.TerminalViewPreferencesFragment"/>
 
     <Preference
+        app:key="customize_extra_keys"
+        app:title="@string/title_settings_customize_extra_keys"
+        app:summary="@string/summary_settings_customize_extra_keys"
+        app:persistent="false"/>
+
+    <Preference
         app:key="widget_scripts"
         app:title="@string/title_widget_scripts"
         app:summary="@string/summary_widget_scripts"

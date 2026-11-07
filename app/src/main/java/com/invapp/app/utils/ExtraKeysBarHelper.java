@@ -60,9 +60,31 @@ public final class ExtraKeysBarHelper {
     private static final String SEP = ",";
     private static final String LOG_TAG = "ExtraKeysBarHelper";
 
+    /**
+     * Text labels for every key so {@code extra-keys-style=all} cannot turn
+     * HOME/END/CTRL into ISO symbols. Style is still forced to {@code none} on write.
+     */
     private static final String PAGE0_JSON =
-        "[['ESC','/',{key: '-', popup: '|'},'HOME','UP','END','PGUP'],"
-            + "['TAB','CTRL','ALT','LEFT','DOWN','RIGHT','PGDN']]";
+        "[["
+            + "{key: 'ESC', display: 'ESC'},"
+            + "{key: '/', display: '/'},"
+            + "{key: '-', popup: '|', display: '-'},"
+            + "{key: 'HOME', display: 'HOME'},"
+            + "{key: 'UP', display: 'UP'},"
+            + "{key: 'END', display: 'END'},"
+            + "{key: 'PGUP', display: 'PGUP'}"
+            + "],["
+            + "{key: 'TAB', display: 'TAB'},"
+            + "{key: 'CTRL', display: 'CTRL'},"
+            + "{key: 'ALT', display: 'ALT'},"
+            + "{key: 'LEFT', display: 'LEFT'},"
+            + "{key: 'DOWN', display: 'DOWN'},"
+            + "{key: 'RIGHT', display: 'RIGHT'},"
+            + "{key: 'PGDN', display: 'PGDN'}"
+            + "]]";
+
+    /** Prefer plain text over arrow/ISO glyphs. */
+    public static final String STYLE_TEXT = "none";
 
     private ExtraKeysBarHelper() {}
 
@@ -188,9 +210,9 @@ public final class ExtraKeysBarHelper {
             case ID_AI: return "{key: 'AI', display: 'AI'}";
             case ID_NEW: return "{key: 'NEW', display: 'new'}";
             case ID_DRAWER_RIGHT: return "{key: 'DRAWER_RIGHT', display: 'tools'}";
-            case ID_DRAWER: return "'DRAWER'";
-            case ID_KEYBOARD: return "'KEYBOARD'";
-            case ID_PASTE: return "'PASTE'";
+            case ID_DRAWER: return "{key: 'DRAWER', display: 'drawer'}";
+            case ID_KEYBOARD: return "{key: 'KEYBOARD', display: 'kbd'}";
+            case ID_PASTE: return "{key: 'PASTE', display: 'paste'}";
             default: return "'" + id + "'";
         }
     }
@@ -209,7 +231,8 @@ public final class ExtraKeysBarHelper {
     }
 
     /**
-     * Writes / updates the {@code extra-keys} property in primary termux.properties.
+     * Writes / updates {@code extra-keys} and forces {@code extra-keys-style=none}
+     * (text labels) in primary termux.properties.
      * @return true on success
      */
     public static boolean writeExtraKeysProperty(@NonNull List<String> page2Ids) {
@@ -232,6 +255,9 @@ public final class ExtraKeysBarHelper {
             }
             String updated = upsertProperty(contents.toString(),
                 TermuxPropertyConstants.KEY_EXTRA_KEYS, json);
+            // Prefer unquoted simple token for style (no JSON braces).
+            updated = upsertRawProperty(updated,
+                TermuxPropertyConstants.KEY_EXTRA_KEYS_STYLE, STYLE_TEXT);
             Error writeError = FileUtils.writeTextToFile("termux.properties",
                 propsFile.getAbsolutePath(), StandardCharsets.UTF_8, updated, false);
             if (writeError != null) {
@@ -279,7 +305,17 @@ public final class ExtraKeysBarHelper {
      */
     @NonNull
     static String upsertProperty(@NonNull String text, @NonNull String key, @NonNull String value) {
-        String line = key + " = " + quotePropertyValue(value);
+        return upsertLine(text, key, key + " = " + quotePropertyValue(value));
+    }
+
+    /** Insert or replace an unquoted {@code key = value} line (for simple tokens). */
+    @NonNull
+    static String upsertRawProperty(@NonNull String text, @NonNull String key, @NonNull String value) {
+        return upsertLine(text, key, key + " = " + value);
+    }
+
+    @NonNull
+    private static String upsertLine(@NonNull String text, @NonNull String key, @NonNull String line) {
         String[] lines = text.split("\n", -1);
         StringBuilder out = new StringBuilder();
         boolean replaced = false;
