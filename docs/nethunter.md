@@ -4,25 +4,25 @@ Optional, **device-only** desktop. Connect with **AVNC**, RealVNC Viewer, or Net
 
 ## Recommended setup (kali.download rootfs)
 
-Do **not** use `pd install kalilinux/kali-rolling` / `pd login kali-rolling` on this fork — Hub OCI layers often yield `proot error: execve("/usr/bin/bash"): No such file or directory`. Docker Hub pulls also fail often on Termux/Android. Use the same official NetHunter rootfs tarballs as [KeX / install-nethunter-termux](https://gitlab.com/kalilinux/nethunter/build-scripts/kali-nethunter-rootless):
+Two backends work on this fork once the fork-safe `proot` wrapper is seeded:
+
+| Backend | Setup | Shell | VNC :5901 |
+|---------|--------|-------|-----------|
+| **kali.download** (full NetHunter) | `td-proot-nethunter setup` | `td-proot-nethunter shell` | `td-proot-nethunter` |
+| **proot-distro / pd** | `td-proot-nethunter setup --pd` or `pd install kalilinux/kali-rolling` | `td-proot-nethunter shell` | `td-proot-nethunter start --pd` |
+
+Bare `td-proot-nethunter` uses NetHunter VNC if that stack is ready; otherwise it opens a **pd** Kali shell when `kali-rolling` is installed. If `pd login` still prints `execve("/usr/bin/bash")` ENOENT, reopen the app (reseed wrapper) or run `td-proot-nethunter setup` (kali.download).
 
 ```bash
-td-proot-nethunter setup                 # alias: td-nethunter-setup (nano ~170 MiB)
-# or smaller / larger:
-td-proot-nethunter setup --variant minimal
-td-proot-nethunter setup --variant full
+td-proot-nethunter setup                 # kali.download nano (~170 MiB) + VNC
+td-proot-nethunter setup --variant minimal|full
+td-proot-nethunter setup --pd            # pd install kalilinux/kali-rolling
+td-proot-nethunter shell                 # NetHunter or pd
+td-proot-nethunter                       # VNC if ready, else pd shell
+td-proot-nethunter start --pd            # VNC inside pd guest
 ```
 
-Then:
-
-```bash
-td-proot-nethunter shell   # or: td-udocker
-td-proot-nethunter         # start VNC on 127.0.0.1:5901
-td-proot-nethunter stop
-td-proot-nethunter debug
-```
-
-Ubuntu/Debian desktop (separate from Kali): `td-proot-linux --gui` → **`127.0.0.1:5902`**.
+Ubuntu/Debian desktop (separate): `td-proot-linux --gui` → **`127.0.0.1:5902`**.
 
 ## PC transfer (when you want the Docker image)
 

@@ -1,62 +1,280 @@
 #!@BASH@
-# InVxTermux — Kali NetHunter via kali.download + fork-safe proot (not pd).
+# InVxTermux — Kali helpers (two backends).
 #
-#   td-proot-nethunter              # same as: td-nethunter (start VNC :5901)
-#   td-proot-nethunter setup …      # td-nethunter-setup
-#   td-proot-nethunter start|stop   # td-nethunter / --stop
-#   td-proot-nethunter shell …      # td-udocker [kali] …
-#   td-proot-nethunter debug        # td-nethunter-debug
+# Preferred desktop stack (TigerVNC :5901, AVNC/KeX):
+#   td-proot-nethunter setup          # kali.download via td-nethunter-setup
+#   td-proot-nethunter                # start VNC
+#   td-proot-nethunter shell          # td-udocker
 #
-# Do NOT use `pd install kalilinux/kali-rolling` on this fork — Hub layers
-# often lack a working /usr/bin/bash under our proot (execve ENOENT). Official
-# path: kali.download rootfs → td-nethunter-setup.
-# rev: 2026.11.07-1
+# Also supported when you already use proot-distro:
+#   td-proot-nethunter setup --pd     # pd install kalilinux/kali-rolling
+#   td-proot-nethunter shell          # → pd login kali-rolling
+#   td-proot-nethunter                # → pd login (no VNC until setup)
+#   td-proot-nethunter start --pd     # apt VNC inside pd guest → :5901
+#
+# rev: 2026.11.08-1
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 export LD_LIBRARY_PATH="$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 log() { printf 'td-proot-nethunter: %s\n' "$*"; }
+die() { printf 'td-proot-nethunter: ERROR: %s\n' "$*" >&2; exit 1; }
+
+PD_NAME="${TD_PD_KALI_NAME:-kali-rolling}"
+PD_IMAGE="${TD_PD_KALI_IMAGE:-kalilinux/kali-rolling}"
+DISPLAY_NUM="${TD_NETHUNTER_DISPLAY:-1}"
+VNCPORT=$((5900 + DISPLAY_NUM))
 
 usage() {
   cat <<EOF
 usage: td-proot-nethunter [setup|start|stop|shell|debug|help] [args…]
 
-  setup […]   td-nethunter-setup (kali.download nano/minimal/full, or --from-tar)
-  start […]   td-nethunter — VNC on 127.0.0.1:5901 (AVNC / KeX)
-  stop […]    td-nethunter --stop
-  shell […]   td-udocker [kali] — interactive root shell / one-shot
-  debug […]   td-nethunter-debug
-  (default)   start VNC (td-nethunter)
+  setup [--pd] […]   kali.download NetHunter (default)  OR  --pd → pd install
+  shell […]          NetHunter rootfs shell, else pd login $PD_NAME
+  start [--pd] […]   VNC :$VNCPORT (NetHunter stack, or --pd guest VNC)
+  stop […]           stop NetHunter VNC (or pd guest vncserver)
+  debug […]          td-nethunter-debug
+  (default)          start VNC if NetHunter ready, else pd login if present
 
-Ubuntu/Debian GUI: td-proot-linux --gui  (port 5902)
+Ubuntu/Debian: td-proot-linux / td-proot-linux --gui  (:5902)
 EOF
   exit 2
 }
 
-cmd="${1-start}"
+ensure_proot_wrapper() {
+  if [ -f "$PREFIX/lib/invapp/env.sh" ]; then
+    # shellcheck disable=SC1090
+    . "$PREFIX/lib/invapp/env.sh"
+    td_udocker_ensure_proot 2>/dev/null || true
+  fi
+}
+
+nethunter_ready() {
+  td_udocker_nethunter_ready "${TD_UDOCKER_NAME:-kali}" 2>/dev/null
+}
+
+pd_kali_installed() {
+  command -v pd >/dev/null 2>&1 || return 1
+  # Match "* kali-rolling" / "kali-rolling" in pd list output.
+  pd list 2>/dev/null | grep -Eq "(^|[[:space:]*])${PD_NAME}([[:space:]]|$)" \
+    || pd list 2>/dev/null | grep -Eq '(^|[[:space:]*])kali(-rolling)?([[:space:]]|$)'
+}
+
+pd_kali_name() {
+  if pd list 2>/dev/null | grep -Eq "(^|[[:space:]*])${PD_NAME}([[:space:]]|$)"; then
+    printf '%s\n' "$PD_NAME"
+    return 0
+  fi
+  for n in kali-rolling kali; do
+    if pd list 2>/dev/null | grep -Eq "(^|[[:space:]*])${n}([[:space:]]|$)"; then
+      printf '%s\n' "$n"
+      return 0
+    fi
+  done
+  return 1
+}
+
+run_pd_shell() {
+  ensure_proot_wrapper
+  command -v pd >/dev/null 2>&1 || die "proot-distro (pd) not installed — pkg install proot-distro"
+  _name="$(pd_kali_name)" || {
+    log "no pd Kali container — installing $PD_IMAGE as $PD_NAME…"
+    pd install "$PD_IMAGE" || die "pd install $PD_IMAGE failed"
+    _name="$PD_NAME"
+  }
+  export LD_LIBRARY_PATH="$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  if [ $# -eq 0 ]; then
+    log "pd login $_name"
+    exec pd login "$_name"
+  fi
+  log "pd login $_name -- $*"
+  exec pd login "$_name" -- "$@"
+}
+
+setup_pd() {
+  ensure_proot_wrapper
+  command -v pd >/dev/null 2>&1 || die "pkg install proot-distro"
+  if pd_kali_installed; then
+    log "pd Kali already installed: $(pd_kali_name)"
+  else
+    log "pd install $PD_IMAGE …"
+    pd install "$PD_IMAGE" || die "pd install failed"
+  fi
+  log "shell: td-proot-nethunter shell"
+  log "VNC:   td-proot-nethunter start --pd   (installs tigervnc inside guest)"
+}
+
+# Install + start TigerVNC inside a pd Kali guest (best-effort desktop).
+start_pd_vnc() {
+  ensure_proot_wrapper
+  _name="$(pd_kali_name)" || die "no pd Kali — run: td-proot-nethunter setup --pd"
+  export LD_LIBRARY_PATH="$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  log "ensuring VNC packages inside $_name (apt; first run is slow)…"
+  pd login "$_name" -- /bin/bash -lc '
+    export DEBIAN_FRONTEND=noninteractive
+    if ! command -v Xtigervnc >/dev/null 2>&1 && ! command -v vncserver >/dev/null 2>&1; then
+      apt-get update -qq
+      apt-get install -y --no-install-recommends \
+        tigervnc-standalone-server tigervnc-tools tigervnc-common \
+        openbox xterm dbus-x11 xfce4 2>/dev/null \
+        || apt-get install -y --no-install-recommends \
+          tigervnc-standalone-server openbox xterm dbus-x11
+    fi
+    mkdir -p /root/.vnc
+    if [ ! -f /root/.vnc/xstartup ]; then
+      cat > /root/.vnc/xstartup <<'\''XS'\''
+#!/bin/sh
+unset SESSION_MANAGER
+unset DBUS_SESSION_BUS_ADDRESS
+xsetroot -solid grey &
+if command -v startxfce4 >/dev/null 2>&1; then exec startxfce4
+elif command -v openbox-session >/dev/null 2>&1; then exec openbox-session
+else openbox & xterm & sleep infinity; fi
+XS
+      chmod +x /root/.vnc/xstartup
+    fi
+  ' || die "apt/VNC prepare failed inside $_name"
+
+  if ! (exec 3<>/dev/tcp/127.0.0.1/"$VNCPORT") 2>/dev/null; then
+    log "starting VNC on :$DISPLAY_NUM → 127.0.0.1:$VNCPORT"
+    # Run vnc in background inside guest; pd session may exit — use nohup.
+    pd login "$_name" -- /bin/bash -lc "
+      if command -v Xtigervnc >/dev/null 2>&1; then
+        nohup Xtigervnc :$DISPLAY_NUM -localhost yes -geometry 1280x720 -depth 24 \
+          -desktop td-kali -xstartup /root/.vnc/xstartup \
+          >/root/.td-pd-vnc.log 2>&1 &
+      else
+        vncserver -kill :$DISPLAY_NUM >/dev/null 2>&1 || true
+        vncserver :$DISPLAY_NUM -geometry 1280x720 -depth 24 -localhost yes \
+          -xstartup /root/.vnc/xstartup >/root/.td-pd-vnc.log 2>&1 &
+      fi
+      sleep 2
+      echo started
+    " || true
+  fi
+  _i=0
+  while [ "$_i" -lt 20 ] && ! (exec 3<>/dev/tcp/127.0.0.1/"$VNCPORT") 2>/dev/null; do
+    sleep 1
+    _i=$((_i + 1))
+  done
+  if (exec 3<>/dev/tcp/127.0.0.1/"$VNCPORT") 2>/dev/null; then
+    log "VNC listening on 127.0.0.1:$VNCPORT"
+    echo "  apps: AVNC / RealVNC / KeX"
+    echo "  stop: td-proot-nethunter stop --pd"
+    if command -v am >/dev/null 2>&1; then
+      am start -a android.intent.action.VIEW -d "vnc://127.0.0.1:$VNCPORT" >/dev/null 2>&1 || true
+    fi
+  else
+    die "VNC not up — inside guest: cat /root/.td-pd-vnc.log"
+  fi
+}
+
+stop_pd_vnc() {
+  _name="$(pd_kali_name)" || { log "no pd Kali"; return 0; }
+  pd login "$_name" -- /bin/bash -lc "
+    vncserver -kill :$DISPLAY_NUM >/dev/null 2>&1 || true
+    pkill -f 'Xtigervnc.*:$DISPLAY_NUM' 2>/dev/null || true
+    pkill -f 'Xvnc.*:$DISPLAY_NUM' 2>/dev/null || true
+  " >/dev/null 2>&1 || true
+  log "pd VNC stop requested for $_name :$DISPLAY_NUM"
+}
+
+hint_missing() {
+  cat <<EOF >&2
+td-proot-nethunter: no Kali guest yet.
+
+  Full NetHunter desktop (recommended):
+    td-proot-nethunter setup
+    td-proot-nethunter
+
+  Or proot-distro (what you used manually):
+    td-proot-nethunter setup --pd
+    td-proot-nethunter shell
+EOF
+  exit 1
+}
+
+# --- argv ---
+FORCE_PD=0
+cmd="${1-}"
 [ $# -gt 0 ] && shift
+
+# Bare invocation → smart default
+if [ -z "$cmd" ]; then
+  if nethunter_ready; then
+    exec td-nethunter "$@"
+  elif pd_kali_installed; then
+    log "NetHunter stack not set up — opening pd shell ($(pd_kali_name))"
+    log "tip: VNC via  td-proot-nethunter start --pd   or full stack: setup"
+    run_pd_shell
+  else
+    hint_missing
+  fi
+fi
+
+# Optional --pd on any verb
+_args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --pd) FORCE_PD=1; shift ;;
+    *) _args+=("$1"); shift ;;
+  esac
+done
+set -- "${_args[@]+"${_args[@]}"}"
 
 case "$cmd" in
   -h|--help|help) usage ;;
   setup|install)
+    if [ "$FORCE_PD" = 1 ] || [ "${1-}" = "--pd" ]; then
+      [ "${1-}" = "--pd" ] && shift
+      setup_pd
+      exit 0
+    fi
     exec td-nethunter-setup "$@"
     ;;
+  shell|sh|udocker|guest|login)
+    if [ "$FORCE_PD" = 1 ]; then
+      run_pd_shell "$@"
+    elif nethunter_ready; then
+      if [ $# -eq 0 ]; then exec td-udocker; else exec td-udocker "$@"; fi
+    elif pd_kali_installed; then
+      run_pd_shell "$@"
+    else
+      hint_missing
+    fi
+    ;;
   start|gui|vnc)
-    exec td-nethunter "$@"
+    if [ "$FORCE_PD" = 1 ]; then
+      start_pd_vnc
+      exit 0
+    fi
+    if nethunter_ready; then
+      exec td-nethunter "$@"
+    elif pd_kali_installed; then
+      log "no NetHunter VNC marker — using pd backend"
+      start_pd_vnc
+      exit 0
+    else
+      hint_missing
+    fi
     ;;
   stop|gui-stop)
-    exec td-nethunter --stop "$@"
-    ;;
-  shell|sh|udocker|guest)
-    if [ $# -eq 0 ]; then
-      exec td-udocker
+    if [ "$FORCE_PD" = 1 ] || { ! nethunter_ready && pd_kali_installed; }; then
+      stop_pd_vnc
+      exit 0
     fi
-    exec td-udocker "$@"
+    exec td-nethunter --stop "$@"
     ;;
   debug)
     exec td-nethunter-debug "$@"
     ;;
   *)
-    # Unknown verb → treat as td-nethunter args (name / display).
-    exec td-nethunter "$cmd" "$@"
+    # Treat as td-nethunter name/display, or pd shell if only NetHunter missing.
+    if nethunter_ready; then
+      exec td-nethunter "$cmd" "$@"
+    elif pd_kali_installed; then
+      run_pd_shell "$cmd" "$@"
+    else
+      hint_missing
+    fi
     ;;
 esac
