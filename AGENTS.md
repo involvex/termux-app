@@ -150,6 +150,10 @@ See `ROADMAP.md`.
   `GOPROXY` alone. Optional manual proxy: `ivx-configure network proxy set
   http://host:port` or `… socks socks5://…` (exported by
   `profile.d/invapp-network.sh` on a **new** session).
+- Go `module lookup disabled by GOPROXY=off` — DNS is fine; Go itself has
+  fetch disabled (`go env GOPROXY` / often `go env -w`). Fix:
+  `ivx-configure network goproxy preset google` (also `go env -w`), or
+  `go env -u GOPROXY`.
 - `screen-ocr` / screenshot OCR failing — needs Termux:API APK +
   `pkg install termux-api tesseract`, and usually `termux-setup-storage` for
   `--latest`. Eng lang pack ships with `tesseract`; other langs need

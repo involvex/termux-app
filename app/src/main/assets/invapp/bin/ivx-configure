@@ -17,7 +17,7 @@
 
 set -u
 
-IVX_VERSION=1.1.0
+IVX_VERSION=1.1.1
 
 # $PREFIX is exported by Termux and by the seeded wrappers. Fall back to the
 # script's own location ($PREFIX/bin/ivx-configure) so a bare `bash
@@ -719,7 +719,9 @@ network_dns_status() {
     cfg_load
     printf '\n  %sDNS / resolv.conf%s\n' "$C_B" "$C_RST"
     hr
-    printf '  %-14s %s / %s\n' "preferred NS" "$IVX_DNS_NS1" "$IVX_DNS_NS2"
+    # IVX_DNS_NS2 may be unset under set -u (distinct from empty = single NS).
+    printf '  %-14s %s / %s\n' "preferred NS" "$IVX_DNS_NS1" \
+        "${IVX_DNS_NS2:-"(default 1.1.1.1)"}"
     for _ivx_rf in "$RESOLV_FILE" "$RESOLV_GLIBC"; do
         if [ ! -e "$_ivx_rf" ]; then
             if [ "$_ivx_rf" = "$RESOLV_GLIBC" ] && [ ! -d "$PREFIX/glibc" ]; then
@@ -885,13 +887,52 @@ network_proxy_clear() {
     dim "open a new session to drop exports from the current shell"
 }
 
+# Print effective go env GOPROXY (empty if go missing).
+_net_go_goproxy() {
+    if command -v go >/dev/null 2>&1; then
+        go env GOPROXY 2>/dev/null || true
+    fi
+}
+
+# Warn when Go has module fetch disabled (common after `go env -w GOPROXY=off`).
+_net_warn_goproxy_off() {
+    _ivx_ge=$(_net_go_goproxy)
+    case "$_ivx_ge" in
+        off|OFF)
+            warn "go env GOPROXY=off — module downloads are disabled"
+            dim "fix: ivx-configure network goproxy preset google"
+            dim "  or: go env -u GOPROXY   /   go env -w GOPROXY=https://proxy.golang.org,direct"
+            return 1
+            ;;
+    esac
+    return 0
+}
+
+# Persist GOPROXY into both invapp config and `go env -w` when go is present.
+_net_goproxy_persist() {
+    _ivx_val=$1
+    cfg_set_quoted IVX_GOPROXY "$_ivx_val" || return 1
+    export GOPROXY="$_ivx_val"
+    if command -v go >/dev/null 2>&1; then
+        if go env -w "GOPROXY=$_ivx_val" >/dev/null 2>&1; then
+            ok "go env -w GOPROXY=$_ivx_val"
+        else
+            warn "could not write go env -w GOPROXY (config export still set)"
+        fi
+    fi
+    ok "IVX_GOPROXY=$_ivx_val (exported in this shell)"
+    dim "new sessions: profile.d/invapp-network.sh + go env file"
+}
+
 network_goproxy_status() {
     cfg_load
     printf '\n  %sGOPROXY%s\n' "$C_B" "$C_RST"
     hr
-    printf '  %-14s %s\n' "IVX_GOPROXY" "${IVX_GOPROXY:-"(unset — Go default)"}"
+    printf '  %-14s %s\n' "IVX_GOPROXY" "${IVX_GOPROXY:-"(unset — shell export off)"}"
     if command -v go >/dev/null 2>&1; then
-        printf '  %-14s %s\n' "go env" "$(go env GOPROXY 2>/dev/null || echo '?')"
+        _ivx_ge=$(_net_go_goproxy)
+        printf '  %-14s %s\n' "go env" "${_ivx_ge:-?}"
+        _net_warn_goproxy_off || true
     else
         dim "go not installed (pkg install golang)"
     fi
@@ -916,9 +957,7 @@ network_goproxy_preset() {
             return 1
             ;;
     esac
-    cfg_set_quoted IVX_GOPROXY "$_ivx_val" || return 1
-    ok "GOPROXY=$_ivx_val"
-    dim "open a new session (or: eval \"\$(ivx-configure network apply)\")"
+    _net_goproxy_persist "$_ivx_val"
 }
 
 network_goproxy_set() {
@@ -927,14 +966,26 @@ network_goproxy_set() {
         err "usage: ivx-configure network goproxy set <value>"
         return 1
     fi
-    cfg_set_quoted IVX_GOPROXY "$_ivx_val" || return 1
-    ok "GOPROXY=$_ivx_val"
-    dim "open a new session (or: eval \"\$(ivx-configure network apply)\")"
+    case "$_ivx_val" in
+        off|OFF)
+            warn "GOPROXY=off disables all module downloads"
+            ;;
+    esac
+    _net_goproxy_persist "$_ivx_val"
 }
 
 network_goproxy_clear() {
     cfg_unset IVX_GOPROXY
-    ok "cleared IVX_GOPROXY (Go uses its built-in default again after a new session)"
+    unset GOPROXY 2>/dev/null || true
+    if command -v go >/dev/null 2>&1; then
+        # Drop a stuck `go env -w GOPROXY=off` so Go's built-in default returns.
+        if go env -u GOPROXY >/dev/null 2>&1; then
+            ok "cleared go env GOPROXY (built-in default)"
+        else
+            warn "could not go env -u GOPROXY — try manually"
+        fi
+    fi
+    ok "cleared IVX_GOPROXY from invapp config"
 }
 
 network_status() {
@@ -1015,7 +1066,19 @@ network_test() {
         warn "curl missing (pkg install curl)"
     fi
     if command -v go >/dev/null 2>&1; then
-        info "go env GOPROXY=$(go env GOPROXY 2>/dev/null || echo '?')"
+        _ivx_ge=$(_net_go_goproxy)
+        case "$_ivx_ge" in
+            off|OFF)
+                err "go env GOPROXY=off — module lookup disabled"
+                dim "fix: ivx-configure network goproxy preset google"
+                ;;
+            '')
+                info "go env GOPROXY=(empty)"
+                ;;
+            *)
+                ok "go env GOPROXY=$_ivx_ge"
+                ;;
+        esac
     fi
     printf '\n'
 }
@@ -1286,9 +1349,23 @@ doc_dns() {
         dim "proxy: unset (ivx-configure network proxy set <url>)"
     fi
     if [ -n "${IVX_GOPROXY:-}" ]; then
-        dim "GOPROXY: $IVX_GOPROXY"
+        dim "GOPROXY config: $IVX_GOPROXY"
     else
-        dim "GOPROXY: unset (Go default)"
+        dim "GOPROXY config: unset"
+    fi
+    if command -v go >/dev/null 2>&1; then
+        _ivx_ge=$(_net_go_goproxy)
+        case "$_ivx_ge" in
+            off|OFF)
+                fail "go env GOPROXY=off (ivx-configure network goproxy preset google)"
+                ;;
+            '')
+                dim "go env GOPROXY: (empty/default)"
+                ;;
+            *)
+                pass "go env GOPROXY=$_ivx_ge"
+                ;;
+        esac
     fi
 }
 
@@ -1312,12 +1389,18 @@ doc_network() {
         fi
     fi
     if command -v go >/dev/null 2>&1; then
-        _ivx_ge=$(go env GOPROXY 2>/dev/null || true)
-        if [ -n "$_ivx_ge" ]; then
-            pass "go env GOPROXY=$_ivx_ge"
-        else
-            dim "go present but GOPROXY empty"
-        fi
+        _ivx_ge=$(_net_go_goproxy)
+        case "$_ivx_ge" in
+            off|OFF)
+                fail "go env GOPROXY=off (module lookup disabled — network goproxy preset google)"
+                ;;
+            '')
+                dim "go present but GOPROXY empty"
+                ;;
+            *)
+                pass "go env GOPROXY=$_ivx_ge"
+                ;;
+        esac
     fi
     if command -v getent >/dev/null 2>&1; then
         if getent hosts example.com >/dev/null 2>&1; then

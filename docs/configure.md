@@ -142,7 +142,12 @@ ivx-configure network test                 # opt-in DNS/curl smoke test
 |---|---|
 | `dns fix` | Seed `$PREFIX/etc/resolv.conf` (and `$PREFIX/glibc/etc/resolv.conf` when glibc exists). Refuses loopback nameservers. |
 | `proxy set` / `socks` | Store a **manual** URL in config; `$PREFIX/etc/profile.d/invapp-network.sh` exports `HTTP(S)_PROXY` / `ALL_PROXY` / `NO_PROXY` on new sessions. |
-| `goproxy preset` | `google` → `https://proxy.golang.org,direct`; `goproxyio` → `https://goproxy.io,direct`; `direct` → `direct`. DNS must work first. |
+| `goproxy preset` | `google` → `https://proxy.golang.org,direct`; `goproxyio` → `https://goproxy.io,direct`; `direct` → `direct`. Also runs `go env -w` when `go` is installed. DNS must work first. |
+
+If `go env GOPROXY` is `off`, module downloads fail with `module lookup disabled
+by GOPROXY=off` even when DNS and curl work. That is a Go setting (often from
+`go env -w GOPROXY=off`), not a missing HTTP proxy. Fix with
+`ivx-configure network goproxy preset google` or `go env -u GOPROXY`.
 
 Free public proxy scrapers are **not** supported. Paste a proxy you control
 (Clash, VPS, corporate). Open a **new session** after changing proxy /
