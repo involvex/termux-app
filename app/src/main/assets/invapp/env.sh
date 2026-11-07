@@ -259,18 +259,12 @@ td_udocker_rewrap_proot() {
         done
     fi
     [ -x "$_real" ] || return 1
+    td_udocker_stage_proot_libs
     if [ -f "$_wrap" ] && td_udocker_is_invapp_proot_wrapper "$_wrap"; then
         cp -f "$_wrap" "$_p" && chmod 700 "$_p" || return 1
         return 0
     fi
     # Minimal inline wrapper if the APK template was not seeded yet.
-    # Narrow lib dir: libtalloc only (full $PREFIX/lib breaks guest glibc).
-    _libs="$PREFIX/libexec/proot-libs"
-    mkdir -p "$_libs"
-    for _t in "$PREFIX/lib"/libtalloc.so*; do
-        [ -e "$_t" ] || continue
-        ln -sf "$_t" "$_libs/" 2>/dev/null || cp -f "$_t" "$_libs/" 2>/dev/null || true
-    done
     cat > "$_p" <<'WRAP'
 #!/system/bin/sh
 # INVAPP_PROOT_WRAPPER=1
@@ -288,6 +282,19 @@ fi
 exec env LD_PRELOAD= LD_LIBRARY_PATH="$PROOT_LIBS" "$REAL" "$@"
 WRAP
     chmod 700 "$_p"
+}
+
+# td_udocker_stage_proot_libs — host-only .so for proot-bin (not full $PREFIX/lib).
+td_udocker_stage_proot_libs() {
+    _libs="${INVAPP_PROOT_LIBDIR:-$PREFIX/libexec/proot-libs}"
+    mkdir -p "$_libs"
+    [ -d "$PREFIX/lib" ] || return 0
+    for _pat in 'libtalloc.so*' 'libandroid-shmem.so*' 'libandroid-support.so*'; do
+        for _t in "$PREFIX/lib"/$_pat; do
+            [ -e "$_t" ] || continue
+            ln -sf "$_t" "$_libs/" 2>/dev/null || cp -f "$_t" "$_libs/" 2>/dev/null || true
+        done
+    done
 }
 
 # td_udocker_ensure_proot — Termux ELF proot must win over a pip "proot" shim.

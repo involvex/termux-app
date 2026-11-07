@@ -2288,7 +2288,8 @@ public final class TermuxBunInstaller {
      * {@code execve("/usr/bin/bash")} for proot-distro and friends.
      *
      * <p>On each seed: if {@code bin/proot} is an ELF (fresh {@code pkg install}),
-     * move it to {@code libexec/proot-bin}; symlink {@code libtalloc.so*} into
+     * move it to {@code libexec/proot-bin}; symlink host-only deps
+     * ({@code libtalloc}, {@code libandroid-shmem}, …) into
      * {@code libexec/proot-libs} (narrow LD_LIBRARY_PATH for the host ELF);
      * always rewrite the wrapper and a copy at
      * {@code libexec/invapp-proot-wrapper} for shell-side rewrap.
@@ -2325,7 +2326,7 @@ public final class TermuxBunInstaller {
     }
 
     /**
-     * Stage libtalloc for {@code proot-bin} without putting full
+     * Stage host-only shared libs for {@code proot-bin} without putting full
      * {@code $PREFIX/lib} on {@code LD_LIBRARY_PATH} (that breaks guest glibc).
      */
     private static void ensureProotLibs(@NonNull String prefix) {
@@ -2335,16 +2336,34 @@ public final class TermuxBunInstaller {
         if (!libDir.isDirectory()) {
             return;
         }
-        File[] tallocs = libDir.listFiles((dir, name) -> name.startsWith("libtalloc.so"));
-        if (tallocs == null) {
+        final String[] prefixes = {
+            "libtalloc.so",
+            "libandroid-shmem.so",
+            "libandroid-support.so",
+        };
+        File[] matches = libDir.listFiles((dir, name) -> {
+            for (String p : prefixes) {
+                if (name.equals(p) || name.startsWith(p + ".")) {
+                    return true;
+                }
+            }
+            // Also accept libtalloc.so.2 style where prefix already includes .so
+            for (String p : prefixes) {
+                if (name.startsWith(p)) {
+                    return true;
+                }
+            }
+            return false;
+        });
+        if (matches == null) {
             return;
         }
-        for (File src : tallocs) {
+        for (File src : matches) {
             if (!src.exists()) {
                 continue;
             }
             File dest = new File(prootLibs, src.getName());
-            // Refresh every seed so pkg upgrades of libtalloc are picked up.
+            // Refresh every seed so pkg upgrades are picked up.
             //noinspection ResultOfMethodCallIgnored
             dest.delete();
             try {

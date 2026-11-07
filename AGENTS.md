@@ -196,15 +196,16 @@ See `ROADMAP.md`.
   `proot` under the path redirector breaks guest execve. The fork-safe
   `$PREFIX/bin/proot` wrapper (ELF at `$PREFIX/libexec/proot-bin`) must run
   with `LD_PRELOAD=` + **`LD_LIBRARY_PATH=$PREFIX/libexec/proot-libs`**
-  (libtalloc symlinks only) + `PROOT_LOADER`, and shebang
-  **`#!/system/bin/sh`** (not Termux bash). Full `$PREFIX/lib` on the proot
-  process leaks into the guest (`libc.so` missing); empty path breaks host
-  `proot-bin` (DT_RUNPATH still points at stock `com.termux`, redirector is
-  cleared). Termux proot has no `-e/--env`. Host shell may still export
-  `$PREFIX/lib` for bash. After `pkg reinstall proot`, reopen or run a
-  helper that calls `td_udocker_ensure_proot`. Incomplete rootfs:
-  `pd reset <distro> && pd install <distro>`. Prefer `td-resource-linux`
-  for Ubuntu/Debian and `td-nethunter*` for Kali.
+  (libtalloc + libandroid-shmem + libandroid-support symlinks only) +
+  `PROOT_LOADER`, and shebang **`#!/system/bin/sh`** (not Termux bash).
+  Full `$PREFIX/lib` on the proot process leaks into the guest (`libc.so`
+  missing); empty path breaks host `proot-bin` (DT_RUNPATH still points at
+  stock `com.termux`, redirector is cleared). Termux proot has no `-e/--env`.
+  Host shell may still export `$PREFIX/lib` for bash. After `pkg reinstall
+  proot`, reopen or run a helper that calls `td_udocker_ensure_proot`
+  (ELF lands on `bin/proot` again — must move back to libexec). Incomplete
+  rootfs: `pd reset <distro> && pd install <distro>`. Prefer
+  `td-resource-linux` for Ubuntu/Debian and `td-nethunter*` for Kali.
 - `td-resource-linux --run bash` → `cannot execute binary file`,
   `bad interpreter`, or `libandroid-support.so` not found — older runners
   used `#!/bin/bash`, or `/bin/bash --login bash` (ELF-as-script), or

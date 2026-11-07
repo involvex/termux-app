@@ -6,19 +6,19 @@
 # this wrapper under a cleaned env; Termux bash then dies with
 # libandroid-support.so not found.
 #
-# Host proot-bin needs libtalloc.so.2, but DT_RUNPATH still points at the stock
-# com.termux prefix on this fork (and LD_PRELOAD is cleared so the path
-# redirector cannot rewrite linker opens). Putting ONLY libtalloc into
-# $PREFIX/libexec/proot-libs and setting LD_LIBRARY_PATH to that dir lets the
-# host ELF load without leaking Termux's full $PREFIX/lib into the guest
-# (full $PREFIX/lib → guest "libc.so: cannot open shared object file").
+# Host proot-bin needs libtalloc + libandroid-shmem (and friends), but
+# DT_RUNPATH still points at the stock com.termux prefix on this fork (and
+# LD_PRELOAD is cleared so the path redirector cannot rewrite linker opens).
+# Stage those host-only libs into $PREFIX/libexec/proot-libs and set
+# LD_LIBRARY_PATH to that dir — never full $PREFIX/lib (guest then fails with
+# "libc.so: cannot open shared object file").
 #
 # Stock proot under LD_PRELOAD=libinvapp-redirector.so also breaks guest
 # execve("/usr/bin/bash"). This wrapper:
 #   * runs the real ELF at $PREFIX/libexec/proot-bin
 #   * sets PROOT_LOADER / PROOT_TMP_DIR / PROOT_NO_SECCOMP
 #   * LD_PRELOAD= (empty — not unset — so redirector does not reinject)
-#   * LD_LIBRARY_PATH=$PREFIX/libexec/proot-libs (libtalloc only)
+#   * LD_LIBRARY_PATH=$PREFIX/libexec/proot-libs (host deps only)
 #
 # Termux proot does NOT support upstream -e/--env.
 #
@@ -41,12 +41,21 @@ if [ ! -x "$REAL" ]; then
 fi
 
 PROOT_LIBS="${INVAPP_PROOT_LIBDIR:-$PREFIX/libexec/proot-libs}"
-if [ ! -e "$PROOT_LIBS/libtalloc.so.2" ] && [ -d "$PREFIX/lib" ]; then
+# Host-only deps for proot-bin (keep out of guest by never using full $PREFIX/lib).
+if [ -d "$PREFIX/lib" ]; then
     mkdir -p "$PROOT_LIBS" 2>/dev/null || true
-    for _t in "$PREFIX/lib"/libtalloc.so*; do
-        [ -e "$_t" ] || continue
-        ln -sf "$_t" "$PROOT_LIBS/" 2>/dev/null \
-            || cp -f "$_t" "$PROOT_LIBS/" 2>/dev/null || true
+    for _pat in \
+        'libtalloc.so*' \
+        'libandroid-shmem.so*' \
+        'libandroid-support.so*'
+    do
+        for _t in "$PREFIX/lib"/$_pat; do
+            [ -e "$_t" ] || continue
+            _bn="${_t##*/}"
+            [ -e "$PROOT_LIBS/$_bn" ] && continue
+            ln -sf "$_t" "$PROOT_LIBS/$_bn" 2>/dev/null \
+                || cp -f "$_t" "$PROOT_LIBS/$_bn" 2>/dev/null || true
+        done
     done
 fi
 
@@ -63,6 +72,6 @@ if [ -z "${PROOT_LOADER:-}" ]; then
     done
 fi
 
-# Narrow LD_LIBRARY_PATH: libtalloc for host ELF only — never full $PREFIX/lib.
+# Narrow LD_LIBRARY_PATH: host deps only — never full $PREFIX/lib.
 # Do not pass -e (unknown on Termux proot).
 exec env LD_PRELOAD= LD_LIBRARY_PATH="$PROOT_LIBS" "$REAL" "$@"
