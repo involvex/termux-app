@@ -119,3 +119,18 @@ _ivx_cleanup() {
     COMPREPLY=( $(compgen -W "--yes --dry-run --no-color" -- "$cur") )
 }
 complete -F _ivx_cleanup ivx-cleanup
+
+_ivx_disk_analyze() {
+    local cur
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    if [ "$COMP_CWORD" -eq 1 ]; then
+        COMPREPLY=( $(compgen -W "overview df prefix home guests large help --top= --no-color" -- "$cur") )
+        return
+    fi
+    if [ "${COMP_WORDS[1]}" = "large" ]; then
+        COMPREPLY=( $(compgen -d -- "$cur") )
+        return
+    fi
+    COMPREPLY=( $(compgen -W "--top= --no-color" -- "$cur") )
+}
+complete -F _ivx_disk_analyze ivx-disk-analyze

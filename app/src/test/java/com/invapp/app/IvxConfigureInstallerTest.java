@@ -35,6 +35,7 @@ public class IvxConfigureInstallerTest {
         assertTrue(IvxConfigureInstaller.configureFile().getName().equals("ivx-configure"));
         assertTrue(IvxConfigureInstaller.doctorFile().getName().equals("ivx-doctor"));
         assertTrue(IvxConfigureInstaller.cleanupFile().getName().equals("ivx-cleanup"));
+        assertTrue(IvxConfigureInstaller.diskAnalyzeFile().getName().equals("ivx-disk-analyze"));
         assertTrue(IvxConfigureInstaller.fixDpkgFile().getName().equals("ivx-fix-dpkg-scripts"));
         assertTrue(IvxConfigureInstaller.fixDpkgAliasFile().getName()
             .equals("invapp-fix-dpkg-scripts"));
@@ -51,9 +52,21 @@ public class IvxConfigureInstallerTest {
         assertTrue(read("invapp/bin/ivx-configure").startsWith("#!@BASH@"));
         assertTrue(read("invapp/bin/ivx-doctor").startsWith("#!@BASH@"));
         assertTrue(read("invapp/bin/ivx-cleanup").startsWith("#!@BASH@"));
+        assertTrue(read("invapp/bin/ivx-disk-analyze").startsWith("#!@BASH@"));
         assertTrue(read("invapp/bin/ivx-fix-dpkg-scripts").startsWith("#!@BASH@"));
         assertTrue(read("invapp/bin/invapp-fix-dpkg-scripts").startsWith("#!@BASH@"));
         assertTrue(read("invapp/bin/invapp-fix-dpkg-scripts").contains("ivx-fix-dpkg-scripts"));
+    }
+
+    @Test
+    public void diskAnalyze_usesDfAndDu() {
+        String body = read("invapp/bin/ivx-disk-analyze");
+        assertTrue(body.contains("df -h") || body.contains("df -k"));
+        assertTrue(body.contains("du -sk"));
+        assertTrue(body.contains("cmd_guests"));
+        assertTrue(body.contains("cmd_large"));
+        assertTrue(body.contains("debian-container"));
+        assertTrue(body.contains("proot-distro"));
     }
 
     @Test
@@ -123,6 +136,7 @@ public class IvxConfigureInstallerTest {
         assertTrue(completion.contains("complete -F _ivx_configure ivx-configure"));
         assertTrue(completion.contains("complete -F _ivx_doctor ivx-doctor"));
         assertTrue(completion.contains("complete -F _ivx_cleanup ivx-cleanup"));
+        assertTrue(completion.contains("complete -F _ivx_disk_analyze ivx-disk-analyze"));
     }
 
     @Test
@@ -150,6 +164,7 @@ public class IvxConfigureInstallerTest {
             "invapp/bin/ivx-configure",
             "invapp/bin/ivx-doctor",
             "invapp/bin/ivx-cleanup",
+            "invapp/bin/ivx-disk-analyze",
             "invapp/bin/ivx-fix-dpkg-scripts",
             "invapp/banner.sh",
             "invapp/config/profile.d/invapp-banner.sh",

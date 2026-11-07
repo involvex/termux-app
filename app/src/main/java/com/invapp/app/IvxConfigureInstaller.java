@@ -23,6 +23,8 @@ import java.nio.charset.StandardCharsets;
  *       {@code jdk-doctor}</li>
  *   <li>{@code $PREFIX/bin/ivx-cleanup} — interactive cleanup for pkg / cargo /
  *       bun -g / npm -g / pip / uv tool</li>
+ *   <li>{@code $PREFIX/bin/ivx-disk-analyze} — df/du disk report for prefix,
+ *       home, guests, and large files</li>
  *   <li>{@code $PREFIX/bin/ivx-fix-dpkg-scripts} — heal dpkg {@code info/format}
  *       + patch maintainer scripts ({@code invapp-fix-dpkg-scripts} alias)</li>
  *   <li>{@code $PREFIX/lib/invapp/banner.sh} — pre-rendered pixelfont art +
@@ -44,11 +46,12 @@ public final class IvxConfigureInstaller {
     private static final String LOG_TAG = "IvxConfigureInstaller";
 
     /** Bumped when the seeded shell assets change in a user-visible way. */
-    public static final String VERSION = "1.2.0";
+    public static final String VERSION = "1.2.1";
 
     public static final String ASSET_CONFIGURE = "invapp/bin/ivx-configure";
     public static final String ASSET_DOCTOR = "invapp/bin/ivx-doctor";
     public static final String ASSET_CLEANUP = "invapp/bin/ivx-cleanup";
+    public static final String ASSET_DISK = "invapp/bin/ivx-disk-analyze";
     public static final String ASSET_FIX_DPKG = "invapp/bin/ivx-fix-dpkg-scripts";
     public static final String ASSET_FIX_DPKG_ALIAS = "invapp/bin/invapp-fix-dpkg-scripts";
     public static final String ASSET_BANNER = "invapp/banner.sh";
@@ -59,6 +62,7 @@ public final class IvxConfigureInstaller {
     public static final String BIN_CONFIGURE = "ivx-configure";
     public static final String BIN_DOCTOR = "ivx-doctor";
     public static final String BIN_CLEANUP = "ivx-cleanup";
+    public static final String BIN_DISK = "ivx-disk-analyze";
     public static final String BIN_FIX_DPKG = "ivx-fix-dpkg-scripts";
     public static final String BIN_FIX_DPKG_ALIAS = "invapp-fix-dpkg-scripts";
 
@@ -88,6 +92,11 @@ public final class IvxConfigureInstaller {
     @NonNull
     public static File cleanupFile() {
         return new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, BIN_CLEANUP);
+    }
+
+    @NonNull
+    public static File diskAnalyzeFile() {
+        return new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, BIN_DISK);
     }
 
     @NonNull
@@ -147,6 +156,8 @@ public final class IvxConfigureInstaller {
             TermuxBunInstaller.assetWithBashShebang(context, ASSET_DOCTOR, bash));
         ok &= TermuxBunInstaller.writeExec(cleanupFile(),
             TermuxBunInstaller.assetWithBashShebang(context, ASSET_CLEANUP, bash));
+        ok &= TermuxBunInstaller.writeExec(diskAnalyzeFile(),
+            TermuxBunInstaller.assetWithBashShebang(context, ASSET_DISK, bash));
         ok &= TermuxBunInstaller.writeExec(fixDpkgFile(),
             TermuxBunInstaller.assetWithBashShebang(context, ASSET_FIX_DPKG, bash));
         ok &= TermuxBunInstaller.writeExec(fixDpkgAliasFile(),

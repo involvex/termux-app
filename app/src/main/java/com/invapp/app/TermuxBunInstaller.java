@@ -2395,7 +2395,7 @@ public final class TermuxBunInstaller {
             "td-resource", "td-resource-linux", "td-resource-python",
             "td-resource-qemu", "td-resource-bun", "td-resource-ai",
             "cursor-agent-setup", "agent", "cursor-agent", "td-agent-worker", "td-upgrade",
-            "ivx-configure", "ivx-doctor", "ivx-cleanup",
+            "ivx-configure", "ivx-doctor", "ivx-cleanup", "ivx-disk-analyze",
             "ivx-fix-dpkg-scripts", "invapp-fix-dpkg-scripts"
         };
         for (String name : names) {

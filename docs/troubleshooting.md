@@ -10,6 +10,7 @@
 | `pd run` / proot → `execve(bash)` ENOENT or guest `libc.so` / host `libtalloc` missing | Reopen app to reseed `$PREFIX/bin/proot` wrapper (host `LD_LIBRARY_PATH=$PREFIX/lib`, guest `-e LD_LIBRARY_PATH=`). If `libtalloc`/`libandroid-support` missing: `export LD_LIBRARY_PATH=$PREFIX/lib` then reopen app. Incomplete rootfs: `pd reset <distro> && pd install <distro>` |
 | `td-resource-linux --run` → `bad interpreter` or `libandroid-support.so` not found | Reopen app; `--run` rewrites `run.sh` and restores `LD_LIBRARY_PATH=$PREFIX/lib` for host bash |
 | Global tool clutter (pkg / cargo / bun / npm / pip / uv) | `ivx-cleanup` interactive menu |
+| Low disk / find what eats space | `ivx-disk-analyze` (overview) · `ivx-disk-analyze guests` · `ivx-disk-analyze large ~/repos` |
 | OpenCode `Permission denied` / LIBC / postinstall / SIGSYS | Re-run `opencode-setup` (official V2 tarball + glibc). Do not `unset LD_PRELOAD` |
 | OpenCode `AI_APICallError` / “typo in the url or port” | Local `:4096` OK; Zen/provider broken. `rm -rf ~/.cache/opencode`, re-auth, seed glibc DNS/CA, `opencode-setup`, retry from `~/repos/…` (V1 only: fix `@opencode-ai/plugin@local` → `latest`) |
 | OpenCode `getifaddrs returned an error` | Non-fatal for `0.0.0.0` bind; V2 has no `--mdns`. Override `OPENCODE_HOST=127.0.0.1 td-ai` if needed. Preview uses `127.0.0.1:4096` / `/api/info` |
