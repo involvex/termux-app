@@ -9,6 +9,8 @@
 | `dpkg: corrupt info database format file …/info/format` | Older helpers damaged `format` (must be `1\n`). Reopen app or `ivx-fix-dpkg-scripts`, or `printf '1\n' > "$PREFIX/var/lib/dpkg/info/format"` |
 | `pd run` / proot → guest `libc.so` / host `libtalloc` / `libandroid-shmem` / `execve(bash)` ENOENT | Stage host deps into `$PREFIX/libexec/proot-libs` (not full `$PREFIX/lib`); wrapper shebang `#!/system/bin/sh` + `LD_PRELOAD=`. After `pkg reinstall proot`, rewrap (ELF overwrote `bin/proot`). Then `pd reset ubuntu && pd install ubuntu` if rootfs is incomplete. |
 | `td-resource-linux --run` → `libandroid-support` / `libtalloc` / `libandroid-shmem` | Same proot-libs staging; `export LD_LIBRARY_PATH=$PREFIX/lib` for host shell; reopen app to rewrite `run.sh` |
+| Host bash → `libandroid-support` / `libreadline` not found after proot | `LD_LIBRARY_PATH` was left as `libexec/proot-libs` only. Run `export LD_LIBRARY_PATH=$PREFIX/lib` (new sessions auto-heal via `profile.d/invapp.sh`) |
+| `pd login kali-rolling` → `execve("/usr/bin/bash")` ENOENT | Unsupported on this fork. Use `td-proot-nethunter setup` (kali.download), not Hub/`pd` |
 | Global tool clutter (pkg / cargo / bun / npm / pip / uv) | `ivx-cleanup` interactive menu |
 | Low disk / find what eats space | `ivx-disk-analyze` (overview) · `ivx-disk-analyze guests` · `ivx-disk-analyze large ~/repos` |
 | OpenCode `Permission denied` / LIBC / postinstall / SIGSYS | Re-run `opencode-setup` (official V2 tarball + glibc). Do not `unset LD_PRELOAD` |

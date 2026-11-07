@@ -189,9 +189,14 @@ public final class ResourceScriptsInstaller {
             + "  if [ ! -d \"$ROOTFS\" ]; then echo \"td-resource-linux: container missing — run without args first\" >&2; exit 1; fi\n"
             + "  # Always refresh runner (shebang / LD_LIBRARY_PATH fixes from older seeds).\n"
             + "  write_run_sh\n"
-            + "  # Host bash may need Termux libs; run.sh clears LD_LIBRARY_PATH for proot.\n"
+            + "  # Host bash needs \$PREFIX/lib; run.sh sets proot-libs only for the proot process.\n"
+            + "  # Do not exec — restore host lib path after guest exits (avoids libreadline/\n"
+            + "  # libandroid-support CANNOT LINK in the calling session).\n"
             + "  export LD_LIBRARY_PATH=\"$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"\n"
-            + "  exec \"$PREFIX/bin/bash\" \"$RUN_SH\" \"$@\"\n"
+            + "  \"$PREFIX/bin/bash\" \"$RUN_SH\" \"$@\"\n"
+            + "  _ec=\$?\n"
+            + "  export LD_LIBRARY_PATH=\"$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"\n"
+            + "  exit \"\$_ec\"\n"
             + "fi\n"
             + "if [ \"${1-}\" = \"--reinstall\" ]; then rm -rf \"$CONTAINER_DIR\"; shift; fi\n"
             + "if [ -f \"$RUN_SH\" ] && [ -f \"$ROOTFS/bin/bash\" ]; then\n"
@@ -618,11 +623,13 @@ public final class ResourceScriptsInstaller {
     static String catalogBody() {
         return header(ID_CATALOG)
             + "echo \"InVxTermux resources (Ultra-inspired, no tmux):\"\n"
-            + "for h in td-resource-linux td-resource-python td-resource-qemu td-resource-bun td-resource-ai td-resource-litert-lm; do\n"
+            + "for h in td-resource-linux td-proot-linux td-proot-nethunter td-resource-python td-resource-qemu td-resource-bun td-resource-ai td-resource-litert-lm; do\n"
             + "  if command -v \"$h\" >/dev/null 2>&1; then st=\"ready\"; else st=\"missing (reopen app)\"; fi\n"
             + "  printf '  %-24s %s\\n' \"$h\" \"$st\"\n"
             + "done\n"
-            + "echo \"Usage: <helper> --help\"\n";
+            + "echo \"Usage: <helper> --help\"\n"
+            + "echo \"Linux GUI: td-proot-linux --gui  (VNC 127.0.0.1:5902)\"\n"
+            + "echo \"Kali GUI:  td-proot-nethunter setup && td-proot-nethunter  (VNC :5901)\"\n";
     }
 
     static void installBashCompletions(@NonNull String prefix) {

@@ -4,23 +4,25 @@ Optional, **device-only** desktop. Connect with **AVNC**, RealVNC Viewer, or Net
 
 ## Recommended setup (kali.download rootfs)
 
-Docker Hub pulls of `kalilinux/kali-rolling` often fail on Termux/Android (`manifest not found or not authorized`) even with `--platform=linux/arm64`. Use the same official NetHunter rootfs tarballs as [KeX / install-nethunter-termux](https://gitlab.com/kalilinux/nethunter/build-scripts/kali-nethunter-rootless):
+Do **not** use `pd install kalilinux/kali-rolling` / `pd login kali-rolling` on this fork — Hub OCI layers often yield `proot error: execve("/usr/bin/bash"): No such file or directory`. Docker Hub pulls also fail often on Termux/Android. Use the same official NetHunter rootfs tarballs as [KeX / install-nethunter-termux](https://gitlab.com/kalilinux/nethunter/build-scripts/kali-nethunter-rootless):
 
 ```bash
-td-nethunter-setup                 # downloads nano (~170 MiB) + VNC stack
+td-proot-nethunter setup                 # alias: td-nethunter-setup (nano ~170 MiB)
 # or smaller / larger:
-td-nethunter-setup --variant minimal   # ~120 MiB
-td-nethunter-setup --variant full      # ~1.7 GiB
+td-proot-nethunter setup --variant minimal
+td-proot-nethunter setup --variant full
 ```
 
 Then:
 
 ```bash
-td-udocker            # interactive root shell
-td-nethunter          # start VNC on 127.0.0.1:5901
-td-nethunter --stop
-td-nethunter-debug
+td-proot-nethunter shell   # or: td-udocker
+td-proot-nethunter         # start VNC on 127.0.0.1:5901
+td-proot-nethunter stop
+td-proot-nethunter debug
 ```
+
+Ubuntu/Debian desktop (separate from Kali): `td-proot-linux --gui` → **`127.0.0.1:5902`**.
 
 ## PC transfer (when you want the Docker image)
 

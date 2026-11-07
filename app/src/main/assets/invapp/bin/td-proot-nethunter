@@ -1,0 +1,62 @@
+#!@BASH@
+# InVxTermux — Kali NetHunter via kali.download + fork-safe proot (not pd).
+#
+#   td-proot-nethunter              # same as: td-nethunter (start VNC :5901)
+#   td-proot-nethunter setup …      # td-nethunter-setup
+#   td-proot-nethunter start|stop   # td-nethunter / --stop
+#   td-proot-nethunter shell …      # td-udocker [kali] …
+#   td-proot-nethunter debug        # td-nethunter-debug
+#
+# Do NOT use `pd install kalilinux/kali-rolling` on this fork — Hub layers
+# often lack a working /usr/bin/bash under our proot (execve ENOENT). Official
+# path: kali.download rootfs → td-nethunter-setup.
+# rev: 2026.11.07-1
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+export LD_LIBRARY_PATH="$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+log() { printf 'td-proot-nethunter: %s\n' "$*"; }
+
+usage() {
+  cat <<EOF
+usage: td-proot-nethunter [setup|start|stop|shell|debug|help] [args…]
+
+  setup […]   td-nethunter-setup (kali.download nano/minimal/full, or --from-tar)
+  start […]   td-nethunter — VNC on 127.0.0.1:5901 (AVNC / KeX)
+  stop […]    td-nethunter --stop
+  shell […]   td-udocker [kali] — interactive root shell / one-shot
+  debug […]   td-nethunter-debug
+  (default)   start VNC (td-nethunter)
+
+Ubuntu/Debian GUI: td-proot-linux --gui  (port 5902)
+EOF
+  exit 2
+}
+
+cmd="${1-start}"
+[ $# -gt 0 ] && shift
+
+case "$cmd" in
+  -h|--help|help) usage ;;
+  setup|install)
+    exec td-nethunter-setup "$@"
+    ;;
+  start|gui|vnc)
+    exec td-nethunter "$@"
+    ;;
+  stop|gui-stop)
+    exec td-nethunter --stop "$@"
+    ;;
+  shell|sh|udocker|guest)
+    if [ $# -eq 0 ]; then
+      exec td-udocker
+    fi
+    exec td-udocker "$@"
+    ;;
+  debug)
+    exec td-nethunter-debug "$@"
+    ;;
+  *)
+    # Unknown verb → treat as td-nethunter args (name / display).
+    exec td-nethunter "$cmd" "$@"
+    ;;
+esac

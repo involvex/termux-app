@@ -1,0 +1,236 @@
+#!@BASH@
+# InVxTermux — Ubuntu/Debian guest helpers (fork-safe proot).
+#
+#   td-proot-linux              # interactive shell (td-resource-linux --run)
+#   td-proot-linux <cmd…>       # one-shot in guest
+#   td-proot-linux --gui        # install TigerVNC + XFCE/openbox, start :5902
+#   td-proot-linux --gui-stop   # stop VNC
+#   td-proot-linux --setup      # ensure container exists
+#   td-proot-linux --pd         # pd login ubuntu (after rewrap)
+#
+# Do NOT use `pd install kali*` on this fork — use td-proot-nethunter instead.
+# VNC: AVNC / RealVNC / KeX → 127.0.0.1:5902 (NetHunter keeps :5901).
+# rev: 2026.11.07-1
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+# Host bash must see $PREFIX/lib after any proot-libs experiments.
+export LD_LIBRARY_PATH="$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+CONTAINER_DIR="${TD_LINUX_DIR:-$HOME/debian-container}"
+ROOTFS="$CONTAINER_DIR/rootfs"
+RUN_SH="$CONTAINER_DIR/run.sh"
+STATE_DIR="${TD_LINUX_STATE:-$PREFIX/var/td-linux}"
+DISPLAY_NUM="${TD_LINUX_DISPLAY:-2}"
+VNCPORT=$((5900 + DISPLAY_NUM))
+PIDFILE="$STATE_DIR/vnc.pid"
+VNCLOG="$STATE_DIR/vnc-start.log"
+NAME=linux
+
+log() { printf 'td-proot-linux: %s\n' "$*"; }
+die() { printf 'td-proot-linux: ERROR: %s\n' "$*" >&2; exit 1; }
+
+usage() {
+  cat <<EOF
+usage: td-proot-linux [--setup|--gui|--gui-stop|--pd|--help] [cmd…]
+
+  (default)     interactive shell via td-resource-linux --run
+  cmd…          run command inside the guest
+  --setup       install/refresh Ubuntu/Debian container if missing
+  --gui         install VNC desktop (once) + start on 127.0.0.1:$VNCPORT
+  --gui-stop    stop the Linux guest VNC
+  --pd          pd login ubuntu (fork-safe wrapper required)
+
+Kali desktop: td-proot-nethunter   (not pd install kali)
+EOF
+  exit 2
+}
+
+vnc_listening() { (exec 3<>/dev/tcp/127.0.0.1/"$1") 2>/dev/null; }
+
+ensure_container() {
+  if [ -f "$ROOTFS/bin/bash" ] || [ -f "$ROOTFS/bin/sh" ]; then
+    return 0
+  fi
+  log "container missing — running td-resource-linux setup…"
+  td-resource-linux || die "td-resource-linux setup failed"
+  [ -f "$ROOTFS/bin/bash" ] || [ -f "$ROOTFS/bin/sh" ] \
+    || die "rootfs still missing after setup ($ROOTFS)"
+}
+
+run_guest() {
+  ensure_container
+  if [ $# -eq 0 ]; then
+    exec td-resource-linux --run
+  fi
+  exec td-resource-linux --run "$@"
+}
+
+# Run a script inside guest without replacing this process (for GUI setup).
+guest_sh() {
+  ensure_container
+  td-resource-linux --run /bin/sh -c "$1"
+}
+
+ensure_gui_stack() {
+  mkdir -p "$STATE_DIR"
+  if [ -f "$STATE_DIR/gui.ready" ]; then
+    return 0
+  fi
+  log "installing VNC stack inside Ubuntu/Debian (apt; can take a while)…"
+  APT_LOG="$STATE_DIR/apt-install.log"
+  if ! guest_sh '
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq
+    apt-get install -y --no-install-recommends \
+        tigervnc-standalone-server tigervnc-tools tigervnc-common \
+        openbox xterm dbus-x11 x11-xserver-utils xfonts-base \
+        xfce4 xfce4-goodies 2>/dev/null \
+      || apt-get install -y --no-install-recommends \
+        tigervnc-standalone-server openbox xterm dbus-x11 2>/dev/null \
+      || apt-get install -y --no-install-recommends \
+        tightvncserver openbox xterm 2>/dev/null \
+      || apt-get install -y tigervnc-standalone-server openbox xterm
+  ' >"$APT_LOG" 2>&1; then
+    [ -s "$APT_LOG" ] && tail -20 "$APT_LOG" >&2
+    die "VNC apt install failed — see $APT_LOG"
+  fi
+  guest_sh 'mkdir -p /root/.vnc
+cat > /root/.vnc/xstartup <<'\''XSTARTUP'\''
+#!/bin/sh
+unset SESSION_MANAGER
+unset DBUS_SESSION_BUS_ADDRESS
+export XKL_XMODMAP_DISABLE=1
+[ -r "$HOME/.Xresources" ] && xrdb "$HOME/.Xresources"
+xsetroot -solid grey &
+if command -v startxfce4 >/dev/null 2>&1; then
+  exec startxfce4
+elif command -v openbox-session >/dev/null 2>&1; then
+  exec openbox-session
+else
+  openbox &
+  xterm &
+  sleep infinity
+fi
+XSTARTUP
+chmod +x /root/.vnc/xstartup'
+  if ! guest_sh 'test -f /root/.vnc/passwd -o -f /root/.vnc/passwd.vnc' >/dev/null 2>&1; then
+    log "set a VNC password (required by most viewers)"
+    if [ -t 0 ]; then
+      td-resource-linux --run vncpasswd || log "vncpasswd skipped — run: td-proot-linux vncpasswd"
+    else
+      log "no TTY — later: td-proot-linux vncpasswd"
+    fi
+  fi
+  touch "$STATE_DIR/gui.ready"
+  log "GUI stack ready"
+}
+
+start_gui() {
+  ensure_gui_stack
+  mkdir -p "$STATE_DIR"
+  if vnc_listening "$VNCPORT"; then
+    log "VNC already listening on 127.0.0.1:$VNCPORT"
+  else
+    log "starting VNC on :$DISPLAY_NUM → 127.0.0.1:$VNCPORT"
+    _vnc_cmd="
+      chmod +x /root/.vnc/xstartup 2>/dev/null || true
+      mkdir -p /root/.vnc
+      if command -v Xtigervnc >/dev/null 2>&1; then
+        Xtigervnc :$DISPLAY_NUM -localhost yes -geometry 1280x720 -depth 24 \
+          -desktop td-linux -xstartup /root/.vnc/xstartup \
+          >/root/.td-linux-vnc.log 2>&1 &
+      elif command -v Xvnc >/dev/null 2>&1; then
+        Xvnc :$DISPLAY_NUM -localhost yes -geometry 1280x720 -depth 24 \
+          -desktop td-linux -xstartup /root/.vnc/xstartup \
+          >/root/.td-linux-vnc.log 2>&1 &
+      elif command -v vncserver >/dev/null 2>&1; then
+        vncserver -kill :$DISPLAY_NUM >/dev/null 2>&1 || true
+        vncserver :$DISPLAY_NUM -geometry 1280x720 -depth 24 -localhost yes \
+          -xstartup /root/.vnc/xstartup >/root/.td-linux-vnc.log 2>&1
+      else
+        echo NO_VNC_SERVER_FOUND >>/root/.td-linux-vnc.log
+        exit 1
+      fi
+      sleep 2
+    "
+    # Keep Xvnc alive after launcher returns (same as NetHunter).
+    TD_PROOT_KEEP_ALIVE=1
+    export TD_PROOT_KEEP_ALIVE
+    guest_sh "$_vnc_cmd" >"$VNCLOG" 2>&1 || true
+    _i=0
+    while [ "$_i" -lt 25 ] && ! vnc_listening "$VNCPORT"; do
+      sleep 1
+      _i=$((_i + 1))
+    done
+    if ! vnc_listening "$VNCPORT"; then
+      log "VNC did not come up — log:"
+      [ -s "$VNCLOG" ] && tail -20 "$VNCLOG" >&2
+      die "also try: td-proot-linux cat /root/.td-linux-vnc.log"
+    fi
+    log "VNC listening on 127.0.0.1:$VNCPORT"
+  fi
+  echo "vnc:$VNCPORT" >"$PIDFILE"
+  # Best-effort open AVNC / a generic vnc:// intent.
+  if command -v am >/dev/null 2>&1; then
+    am start -a android.intent.action.VIEW -d "vnc://127.0.0.1:$VNCPORT" >/dev/null 2>&1 \
+      || am start -n com.iiordanov.freeaSPICE/.aSPICE >/dev/null 2>&1 \
+      || am start -n com.iiordanov.aSPICE/.aSPICE >/dev/null 2>&1 \
+      || true
+  fi
+  log "connect with a VNC client:"
+  echo "  address: 127.0.0.1"
+  echo "  port:    $VNCPORT"
+  echo "  apps:    AVNC, RealVNC Viewer, or NetHunter KeX"
+  echo "  stop:    td-proot-linux --gui-stop"
+  echo "  shell:   td-proot-linux"
+}
+
+stop_gui() {
+  if [ -f "$PIDFILE" ]; then
+    rm -f "$PIDFILE"
+  fi
+  if [ -d "$ROOTFS" ]; then
+    guest_sh "
+      vncserver -kill :$DISPLAY_NUM >/dev/null 2>&1 || true
+      pkill -f 'Xtigervnc.*:$DISPLAY_NUM' 2>/dev/null || true
+      pkill -f 'Xvnc.*:$DISPLAY_NUM' 2>/dev/null || true
+    " >/dev/null 2>&1 || true
+  fi
+  log "VNC stop requested (was 127.0.0.1:$VNCPORT)"
+}
+
+run_pd_ubuntu() {
+  command -v pd >/dev/null 2>&1 || die "proot-distro (pd) not installed — pkg install proot-distro"
+  # Ensure fork-safe wrapper after any pkg reinstall proot.
+  if command -v td_udocker_ensure_proot >/dev/null 2>&1; then
+    td_udocker_ensure_proot || true
+  elif [ -f "$PREFIX/lib/invapp/env.sh" ]; then
+    # shellcheck disable=SC1090
+    . "$PREFIX/lib/invapp/env.sh"
+    td_udocker_ensure_proot || true
+  fi
+  if ! pd list 2>/dev/null | grep -q 'ubuntu'; then
+    log "installing ubuntu via pd…"
+    pd install ubuntu || die "pd install ubuntu failed"
+  fi
+  export LD_LIBRARY_PATH="$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  exec pd login ubuntu
+}
+
+MODE=
+case "${1-}" in
+  -h|--help) usage ;;
+  --setup) MODE=setup; shift ;;
+  --gui) MODE=gui; shift ;;
+  --gui-stop|--stop-gui) MODE=gui-stop; shift ;;
+  --pd) MODE=pd; shift ;;
+  --) shift ;;
+esac
+
+case "$MODE" in
+  setup) ensure_container; log "OK: $CONTAINER_DIR"; exit 0 ;;
+  gui) start_gui; exit 0 ;;
+  gui-stop) stop_gui; exit 0 ;;
+  pd) run_pd_ubuntu ;;
+  *) run_guest "$@" ;;
+esac

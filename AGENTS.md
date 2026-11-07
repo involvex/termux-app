@@ -57,7 +57,7 @@ See `ROADMAP.md`.
 | Dev server | `td-dev [script]` → `bun run` with Preview/LAN hints |
 | Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`); `pwa` / `pwa-react` add `vite-plugin-pwa` |
 | Clone | `td-clone <url> [name] [--bun-i]` → git clone into `~/repos`; drawer **Clone…** |
-| NetHunter | Optional device-only: `td-nethunter-setup` downloads official **kali.download** NetHunter rootfs into `$PREFIX/var/td-udocker/rootfs/kali` + direct `proot` (not `udocker import` — that fails on this fork). Hub pulls often fail on Android. PC fallback: `docker save` → `td-udocker-setup --from-docker-save`. `td-nethunter` → TigerVNC **`127.0.0.1:5901`** (AVNC/KeX). Docs: `docs/nethunter.md` |
+| NetHunter | Optional device-only: `td-proot-nethunter setup` / `td-nethunter-setup` downloads official **kali.download** NetHunter rootfs into `$PREFIX/var/td-udocker/rootfs/kali` + direct `proot` (not `udocker import` / not `pd install kali*` — Hub/`pd` often `execve(bash)` ENOENT on this fork). PC fallback: `docker save` → `td-udocker-setup --from-docker-save`. `td-proot-nethunter` → TigerVNC **`127.0.0.1:5901`** (AVNC/KeX). Ubuntu GUI: `td-proot-linux --gui` → **`:5902`**. Docs: `docs/nethunter.md` |
 | File share → Edit | Seeds `~/bin/termux-file-editor` (nvim→vim→nano→less) for FileReceiver |
 | Widget scripts | `~/.shortcuts` templates (defaults: `clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, `screen-ocr`, `tasks/td-ai`; optional catalog: camera/wifi/battery/torch/share/settings/vibrate/volume/location/telephony/`stop-ai`/`td-upgrade`/`stop-agent-worker`/`tasks/agent-worker`); Settings / right drawer; matching Widget APK + API/`pkg install termux-api`. `screen-ocr` → `td-screen-ocr`. **2-finger swipe down** (or Ctrl+Alt+T) opens Tools end drawer. Widget tap always shows **Running: name** toast |
 | Workflow | Drawer quick bar (customizable via **⋯**): defaults pull / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize bar / Customize keys (also **Settings → Customize keybinds**; writes text-label `extra-keys` + `extra-keys-style=none`). Extra-keys: page 1 ESC/HOME/CTRL as text; swipe L/R for workflow page; end drawer = Tools. Long-press / Ctrl+Alt+M → actions bottom sheet. AI tap when ready opens Preview and may offer **Copy LAN** if `:4096` is wildcard-bound |
@@ -335,12 +335,13 @@ ivx-cleanup          # interactive remove: pkg / cargo / bun -g / npm -g / pip /
 ivx-disk-analyze     # df/du: prefix, home, guests, large files
 ivx-fix-dpkg-scripts # heal dpkg info/format + maintainer shebangs
 td-ai                # OpenCode on 0.0.0.0:4096 → Preview 127.0.0.1 / LAN Copy
-# Kali NetHunter (optional, device-only): udocker + TigerVNC → AVNC on :5901
-# td-nethunter-setup            # kali.download rootfs (nano) + VNC; not Hub
-# td-udocker-setup --nethunter  # rootfs only; --from-docker-save for PC tar
-# td-nethunter                  # start VNC on 127.0.0.1:5901; --stop to kill
-# td-udocker / td-guest         # interactive root shell (or one-shot cmd)
-# td-nethunter-debug            # paste-back self-test
+# Linux guests (optional, device-only):
+# td-proot-linux                # Ubuntu shell (td-resource-linux)
+# td-proot-linux --gui          # TigerVNC + XFCE/openbox → AVNC on :5902
+# td-proot-nethunter setup      # kali.download rootfs (nano) + VNC; not pd/Hub
+# td-proot-nethunter            # start VNC on 127.0.0.1:5901; --stop to kill
+# td-udocker / td-guest         # interactive Kali root shell
+# If host bash dies with libandroid-support/libreadline: export LD_LIBRARY_PATH=$PREFIX/lib
 # Cursor cloud My Machines (optional):
 # cursor-agent-setup && agent login && td-agent-worker start
 # td-upgrade           # pkg + opencode + agent rewrap + Bun stamp

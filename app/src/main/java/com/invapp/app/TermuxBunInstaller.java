@@ -1568,6 +1568,12 @@ public final class TermuxBunInstaller {
         // Alias → td-udocker (kept for muscle memory after proot-distro → udocker).
         writeExec(new File(binDir, "td-guest"),
                 assetWithBashShebang(context, "invapp/bin/td-guest", bash));
+        // Friendly entry points: Ubuntu/Debian (+ optional VNC :5902) and Kali
+        // NetHunter (kali.download — not `pd install kali*`).
+        writeExec(new File(binDir, "td-proot-linux"),
+                assetWithBashShebang(context, "invapp/bin/td-proot-linux", bash));
+        writeExec(new File(binDir, "td-proot-nethunter"),
+                assetWithBashShebang(context, "invapp/bin/td-proot-nethunter", bash));
 
         // Vite golden-path scaffold under ~/repos (create-vite + host 0.0.0.0).
         // pwa / pwa-react overlay vite-plugin-pwa on vanilla / react bases.
@@ -2443,6 +2449,7 @@ public final class TermuxBunInstaller {
             "bun", "bunx", "node", "proot", "td-ai", "td-dev",
             "td-udocker-setup", "td-udocker", "td-guest",
             "td-nethunter-setup", "td-nethunter", "td-nethunter-debug",
+            "td-proot-linux", "td-proot-nethunter",
             "td-scaffold", "td-clone",
 
             "td-screen-ocr", "termux-screenshot", "termux-api-start", "termux-api-stop",
