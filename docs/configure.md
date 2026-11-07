@@ -115,15 +115,37 @@ package is retried individually so one bad name cannot abort the group. Use
 
 ## Network (DNS + manual proxy)
 
-Go (and some other tools) read `$PREFIX/etc/resolv.conf`. When that file is
-missing or only lists loopback (`127.0.0.1` / `::1`), Go falls back to
-`[::1]:53` and fails with:
+`$PREFIX/etc/resolv.conf` matters for many tools. **Go is special on this
+fork:** Termux’s `golang` package is patched to open the *stock*
+`com.termux` resolv path, and the Go runtime uses raw syscalls — so
+`LD_PRELOAD` cannot rewrite it. Missing that file makes netgo fall back to
+`[::1]:53` even when `$PREFIX/etc/resolv.conf` is perfect:
 
 ```text
-lookup goproxy.io on [::1]:53: … connection refused
+lookup proxy.golang.org on [::1]:53: … connection refused
 ```
 
-That is a **DNS** problem. A free public HTTP proxy list will not fix it.
+`GODEBUG=netdns=cgo` only helps when that `go` binary was built **with cgo**.
+Many Termux builds are **netgo-only** (and `proot` cannot exec Android ELF
+`go` on modern Android). The reliable fix is to **byte-patch** the stock
+resolv path embedded in `$PREFIX/lib/go/bin/go` to a same-length file we
+own (`$PREFIX/../r.conf` → `…/files/r.conf`), then wrap `$PREFIX/bin/go`:
+
+```bash
+pkg install golang python
+ivx-configure network dns fix    # seeds resolv + patches go
+# or explicitly:
+ivx-configure network go wrap
+go env GOOS
+make tidy
+```
+
+Re-run `network go wrap` after `pkg upgrade golang`. The patcher runs
+with `LD_PRELOAD=` empty and decodes the stock package id from base64 —
+the redirector rewrites that package-id token even inside scripts
+(47→60). Sets `GOTOOLCHAIN=local` so `go` does not download a linux
+toolchain. A free public HTTP proxy / swapping `GOPROXY` alone will not
+fix `[::1]:53`.
 
 ```bash
 ivx-configure network status
@@ -140,7 +162,8 @@ ivx-configure network test                 # opt-in DNS/curl smoke test
 
 | Subcommand | Effect |
 |---|---|
-| `dns fix` | Seed `$PREFIX/etc/resolv.conf` (and `$PREFIX/glibc/etc/resolv.conf` when glibc exists). Refuses loopback nameservers. |
+| `dns fix` | Seed `$PREFIX/etc/resolv.conf` (+ glibc twin + `files/r.conf`), enable `GODEBUG=netdns=cgo`, and patch/wrap `go` when golang is present. |
+| `go wrap` | Patch `$PREFIX/lib/go/bin/go` → `$PREFIX/libexec/invapp/go` (stock resolv path → `files/r.conf`) and install a thin `$PREFIX/bin/go` launcher. Needs `python`. `go unwrap` restores the symlink. |
 | `proxy set` / `socks` | Store a **manual** URL in config; `$PREFIX/etc/profile.d/invapp-network.sh` exports `HTTP(S)_PROXY` / `ALL_PROXY` / `NO_PROXY` on new sessions. |
 | `goproxy preset` | `google` → `https://proxy.golang.org,direct`; `goproxyio` → `https://goproxy.io,direct`; `direct` → `direct`. Also runs `go env -w` when `go` is installed. DNS must work first. |
 
@@ -193,6 +216,7 @@ IVX_NO_PROXY=localhost,127.0.0.1,::1,.local
 IVX_GOPROXY=…         # optional Go module proxy
 IVX_DNS_NS1=8.8.8.8   # preferred nameservers for `network dns fix`
 IVX_DNS_NS2=1.1.1.1
+IVX_GO_NETDNS=cgo     # cgo (default) | off — Go DNS on Android
 ```
 
 A broken config cannot break login: the renderer ignores read/source errors and

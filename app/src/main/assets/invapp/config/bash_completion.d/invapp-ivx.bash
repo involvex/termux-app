@@ -27,7 +27,7 @@ _ivx_configure() {
                 fi
                 return
                 ;;
-            goproxy|go)
+            goproxy)
                 if [ "$cword" -eq 3 ]; then
                     COMPREPLY=( $(compgen -W "status preset set clear" -- "$cur") )
                 elif [ "$cword" -eq 4 ] && [ "${words[3]}" = "preset" ]; then
@@ -35,9 +35,15 @@ _ivx_configure() {
                 fi
                 return
                 ;;
+            go)
+                if [ "$cword" -eq 3 ]; then
+                    COMPREPLY=( $(compgen -W "status wrap unwrap" -- "$cur") )
+                fi
+                return
+                ;;
             *)
                 if [ "$cword" -eq 2 ]; then
-                    COMPREPLY=( $(compgen -W "status dns proxy goproxy apply test" -- "$cur") )
+                    COMPREPLY=( $(compgen -W "status dns proxy goproxy go apply test" -- "$cur") )
                 fi
                 return
                 ;;
@@ -66,7 +72,7 @@ _ivx_configure() {
             return
             ;;
         network|net)
-            COMPREPLY=( $(compgen -W "status dns proxy goproxy apply test" -- "$cur") )
+            COMPREPLY=( $(compgen -W "status dns proxy goproxy go apply test" -- "$cur") )
             return
             ;;
         ai)

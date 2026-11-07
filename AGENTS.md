@@ -143,13 +143,21 @@ See `ROADMAP.md`.
   login still prints. `ivx-configure doctor` names the syntax error and
   `ivx-configure reset` removes the config + custom art. Do not add parsing or
   a fallback config copy: user edits must win.
-- Go `lookup … on [::1]:53` / `connection refused` — empty or loopback
-  `$PREFIX/etc/resolv.conf`; Go falls back to a local DNS stub. Fix with
-  `ivx-configure network dns fix` (seeds `8.8.8.8` / `1.1.1.1`, syncs glibc
-  twin when present). **Not** fixed by free public HTTP proxy lists or
-  `GOPROXY` alone. Optional manual proxy: `ivx-configure network proxy set
-  http://host:port` or `… socks socks5://…` (exported by
-  `profile.d/invapp-network.sh` on a **new** session).
+- Go `lookup … on [::1]:53` / `connection refused` — often **not** a bad
+  `$PREFIX/etc/resolv.conf`. Termux `golang` hardcodes the stock package
+  resolv path; Go opens it via raw syscall so LD_PRELOAD cannot rewrite it.
+  `GODEBUG=netdns=cgo` is a no-op for **netgo-only** binaries (still
+  `[::1]:53`). `proot` cannot exec Android ELF `go` (linkerconfig). Fix:
+  `pkg install python` then `ivx-configure network go wrap` (also from
+  `network dns fix`): byte-patch the stock-package resolv path inside
+  `lib/go/bin/go` to same-length `…/files/r.conf`, copy resolv there, thin
+  `$PREFIX/bin/go` launcher. Patch runs under `LD_PRELOAD=` (empty) and
+  decodes the stock package id from base64 inside Python — the path
+  redirector rewrites that package-id token even in scripts/argv
+  (47→60). Never embed the stock id as plain ASCII in assets. Re-wrap
+  after `pkg upgrade golang`. Keep `GOTOOLCHAIN=local`. Opt out of
+  GODEBUG nudge: `IVX_GO_NETDNS=off`. **Not** fixed by free HTTP
+  proxies or swapping `GOPROXY` alone.
 - Go `module lookup disabled by GOPROXY=off` — DNS is fine; Go itself has
   fetch disabled (`go env GOPROXY` / often `go env -w`). Fix:
   `ivx-configure network goproxy preset google` (also `go env -w`), or

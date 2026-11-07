@@ -40,7 +40,38 @@ if [ -n "${IVX_NO_PROXY:-}" ]; then
     export no_proxy="$IVX_NO_PROXY"
 fi
 
-# Go module proxy (after DNS works; empty = leave Go defaults alone).
+# Go module proxy (empty = leave Go / go env alone).
 if [ -n "${IVX_GOPROXY:-}" ]; then
     export GOPROXY="$IVX_GOPROXY"
 fi
+
+# Do not let `go` auto-download a linux toolchain (netgo → [::1]:53).
+if [ -z "${GOTOOLCHAIN:-}" ]; then
+    export GOTOOLCHAIN=local
+fi
+
+# Go DNS on this fork: Termux's golang is patched to open the stock-package
+# resolv.conf path, but the Go runtime uses raw syscalls so LD_PRELOAD
+# cannot rewrite it. Missing file → netgo falls back to [::1]:53.
+# GODEBUG=netdns=cgo helps only when the go binary was built with cgo;
+# otherwise install the proot wrapper: ivx-configure network go wrap
+# Opt out of GODEBUG nudge: IVX_GO_NETDNS=off
+case "${IVX_GO_NETDNS:-cgo}" in
+    off|OFF|0|go|netgo) : ;;
+    *)
+        case ",${GODEBUG:-}," in
+            *,netdns=*) : ;;
+            *)
+                if [ -n "${GODEBUG:-}" ]; then
+                    export GODEBUG="${GODEBUG},netdns=cgo"
+                else
+                    export GODEBUG=netdns=cgo
+                fi
+                ;;
+        esac
+        # Empty LOCALDOMAIN (when set) prefers the cgo resolver if available.
+        if [ -z "${LOCALDOMAIN+x}" ]; then
+            export LOCALDOMAIN=
+        fi
+        ;;
+esac

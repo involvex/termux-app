@@ -66,6 +66,8 @@ public class IvxConfigureInstallerTest {
         assertTrue(hook.contains("IVX_GOPROXY"));
         assertTrue(hook.contains("export HTTP_PROXY"));
         assertTrue(hook.contains("export GOPROXY"));
+        assertTrue("must force cgo DNS for Go on this fork",
+            hook.contains("netdns=cgo"));
         assertTrue("must not scrape free proxy lists",
             !hook.contains("proxy-list") && !hook.contains("proxifly"));
         assertTrue("must source user config", hook.contains("invapp/config"));

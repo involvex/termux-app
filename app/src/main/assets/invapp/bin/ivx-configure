@@ -17,7 +17,7 @@
 
 set -u
 
-IVX_VERSION=1.1.1
+IVX_VERSION=1.1.9
 
 # $PREFIX is exported by Termux and by the seeded wrappers. Fall back to the
 # script's own location ($PREFIX/bin/ivx-configure) so a bare `bash
@@ -120,6 +120,7 @@ cfg_load() {
     : "${IVX_GOPROXY:=}"
     : "${IVX_DNS_NS1:=8.8.8.8}"
     # IVX_DNS_NS2: leave unset vs empty distinct (empty = user chose a single NS).
+    : "${IVX_GO_NETDNS:=cgo}"
 }
 
 # cfg_set KEY VALUE -- replace the key, keep every unrelated line.
@@ -773,7 +774,316 @@ network_dns_fix() {
     else
         dim "glibc not installed — skipped $RESOLV_GLIBC"
     fi
-    dim "open a new session (or re-run go) so resolvers re-read the file"
+    # Go on this fork: netgo reads com.termux resolv via raw syscall (bypass
+    # LD_PRELOAD) → [::1]:53. Prefer cgo/Bionic unless the user opted out.
+    cfg_load
+    case "${IVX_GO_NETDNS:-cgo}" in
+        off|OFF|0|go|netgo) dim "IVX_GO_NETDNS=${IVX_GO_NETDNS} — not forcing netdns=cgo" ;;
+        *)
+            cfg_set IVX_GO_NETDNS cgo || true
+            _net_export_godebug_cgo
+            ok "GODEBUG=netdns=cgo (helps only if go was built with cgo)"
+            ;;
+    esac
+    _net_sync_go_resolv 2>/dev/null || true
+    # netgo go ignores GODEBUG=cgo / proot can't exec Android ELF —
+    # patch the embedded stock resolv path to files/r.conf.
+    if [ -x "$PREFIX/lib/go/bin/go" ]; then
+        network_go_wrap_install || true
+    fi
+    dim "open a new session, or: eval \"\$(ivx-configure network apply)\""
+}
+
+# Merge netdns=cgo into GODEBUG for the current shell (and for `network apply`).
+_net_export_godebug_cgo() {
+    case ",${GODEBUG:-}," in
+        *,netdns=*) : ;;
+        *)
+            if [ -n "${GODEBUG:-}" ]; then
+                export GODEBUG="${GODEBUG},netdns=cgo"
+            else
+                export GODEBUG=netdns=cgo
+            fi
+            ;;
+    esac
+    if [ -z "${GOTOOLCHAIN:-}" ]; then
+        export GOTOOLCHAIN=local
+    fi
+    if [ -z "${LOCALDOMAIN+x}" ]; then
+        export LOCALDOMAIN=
+    fi
+}
+
+# Real Termux go binary (never the wrapper).
+_net_go_real() {
+    if [ -x "$PREFIX/lib/go/bin/go" ]; then
+        printf '%s\n' "$PREFIX/lib/go/bin/go"
+        return 0
+    fi
+    return 1
+}
+
+# Same-length path under *our* files/ that we can write (Go syscalls need this).
+# len(stock com.termux resolv)==47; len(.../files/r.conf)==47 for this app id.
+_net_ivx_go_resolv_path() {
+    _ivx_files=$(cd "$PREFIX/.." 2>/dev/null && pwd -P) || _ivx_files=''
+    if [ -z "$_ivx_files" ]; then
+        return 1
+    fi
+    printf '%s/r.conf\n' "$_ivx_files"
+}
+
+# Copy PREFIX resolv into the patched short path Go will open.
+_net_sync_go_resolv() {
+    _ivx_dst=$(_net_ivx_go_resolv_path) || return 1
+    if [ ! -s "$RESOLV_FILE" ]; then
+        return 1
+    fi
+    if [ "$OPT_DRY" = 1 ]; then
+        info "would copy $RESOLV_FILE → $_ivx_dst"
+        return 0
+    fi
+    cp -f "$RESOLV_FILE" "$_ivx_dst" || return 1
+    chmod 644 "$_ivx_dst" 2>/dev/null || true
+    return 0
+}
+
+# True if $PREFIX/bin/go is our wrap or a leftover proot wrap we may replace.
+_net_go_wrap_is_ours() {
+    _ivx_f=$1
+    [ -f "$_ivx_f" ] || return 1
+    [ -L "$_ivx_f" ] && return 1
+    grep -qE 'invapp-go-wrap|proot.*(resolv|/lib/go/bin/go)' "$_ivx_f" 2>/dev/null
+}
+
+# Replace stock resolv path bytes inside a Go ELF (same length only).
+# The path redirector rewrites the stock package id token even inside scripts
+# (…/com.<stock>… → this app id, 47→60). Never embed that package id as plain
+# ASCII: decode from base64 under LD_PRELOAD= (empty; do not unset).
+_net_patch_go_elf() {
+    _ivx_src=$1
+    _ivx_dst=$2
+    if ! command -v python3 >/dev/null 2>&1 && ! command -v python >/dev/null 2>&1; then
+        err "python3 required to patch go (pkg install python)"
+        return 1
+    fi
+    _ivx_py=$(command -v python3 2>/dev/null || command -v python)
+    # Prefer the real ELF if bin/python3 is a wrapper that re-exports LD_PRELOAD.
+    if [ -x "$PREFIX/bin/python3" ] && ! head -c 2 "$PREFIX/bin/python3" 2>/dev/null | grep -q '#!'; then
+        _ivx_py="$PREFIX/bin/python3"
+    fi
+    if [ "$OPT_DRY" = 1 ]; then
+        info "would patch $_ivx_src → $_ivx_dst (resolv path rewrite)"
+        return 0
+    fi
+    # Empty LD_PRELOAD (do not unset — redirector reinjects when absent).
+    LD_PRELOAD= "$_ivx_py" - "$_ivx_src" "$_ivx_dst" <<'PY'
+import base64, os, sys
+src, dst = sys.argv[1:3]
+# stock package id — base64 so redirector cannot rewrite the token in-source
+pkg = base64.b64decode("Y29tLnRlcm11eA==").decode("ascii")
+old = ("/data/data/%s/files/usr/etc/resolv.conf" % pkg).encode("ascii")
+files = os.path.dirname(os.environ.get("PREFIX", ""))
+if not files:
+    print("PREFIX unset", file=sys.stderr)
+    sys.exit(1)
+new = (files + "/r.conf").encode("ascii")
+if len(old) != len(new):
+    print(
+        "path length mismatch (%d vs %d) old=%r new=%r"
+        % (len(old), len(new), old, new),
+        file=sys.stderr,
+    )
+    sys.exit(1)
+data = open(src, "rb").read()
+count = data.count(old)
+if count == 0:
+    if data.count(new) > 0:
+        open(dst, "wb").write(data)
+        print("already patched (%d hit(s))" % data.count(new), file=sys.stderr)
+        sys.exit(0)
+    # Fallback: locate …/files/usr/etc/resolv.conf under /data/data/ in ELF
+    marker = b"/files/usr/etc/resolv.conf"
+    i = data.find(marker)
+    if i > 0:
+        p = data.rfind(b"/data/data/", 0, i)
+        if p >= 0:
+            cand = data[p : i + len(marker)]
+            print(
+                "stock path not exact; ELF has %r (len %d)" % (cand, len(cand)),
+                file=sys.stderr,
+            )
+    print("stock resolv path not found in binary — wrong go build?", file=sys.stderr)
+    sys.exit(2)
+open(dst, "wb").write(data.replace(old, new))
+print("patched %d occurrence(s)" % count, file=sys.stderr)
+PY
+}
+
+network_go_wrap_install() {
+    _ivx_real=$(_net_go_real) || {
+        err "Termux golang missing ($PREFIX/lib/go/bin/go) — pkg install golang"
+        return 1
+    }
+    if [ ! -s "$RESOLV_FILE" ]; then
+        warn "resolv.conf empty — run: ivx-configure network dns fix first"
+    fi
+    # proot cannot exec Android ELF go (linkerconfig). Patch the embedded
+    # resolv path to a same-length file under our files/ directory instead.
+    _ivx_patch_dir="$PREFIX/libexec/invapp"
+    _ivx_patched="$_ivx_patch_dir/go"
+    _ivx_wrap="$PREFIX/bin/go"
+    _ivx_go_resolv=$(_net_ivx_go_resolv_path) || {
+        err "cannot derive go resolv path from PREFIX=$PREFIX"
+        return 1
+    }
+    if [ "$OPT_DRY" = 1 ]; then
+        info "would patch $_ivx_real → $_ivx_patched and wrap $_ivx_wrap"
+        info "would seed $_ivx_go_resolv"
+        return 0
+    fi
+    # Drop leftover proot / prior wrap before installing the thin launcher.
+    if [ -f "$_ivx_wrap" ] && [ ! -L "$_ivx_wrap" ] \
+        && grep -qE 'proot|invapp-go-wrap' "$_ivx_wrap" 2>/dev/null; then
+        info "removing leftover go wrapper"
+        rm -f "$_ivx_wrap"
+        ln -sfr "$_ivx_real" "$_ivx_wrap" 2>/dev/null \
+            || ln -sf "$_ivx_real" "$_ivx_wrap" || true
+    fi
+    mkdir -p "$_ivx_patch_dir" || return 1
+    _net_sync_go_resolv || warn "could not seed $_ivx_go_resolv"
+    if ! _net_patch_go_elf "$_ivx_real" "$_ivx_patched"; then
+        err "go ELF patch failed"
+        return 1
+    fi
+    chmod 755 "$_ivx_patched" || return 1
+    # Thin launcher (no proot).
+    _ivx_tmp="$_ivx_wrap.tmp.$$"
+    cat > "$_ivx_tmp" <<EOF
+#!${PREFIX}/bin/bash
+# invapp-go-wrap — run path-patched go (netgo opens our files/r.conf).
+# Installed by: ivx-configure network go wrap | network dns fix
+set -u
+PREFIX="\${PREFIX:-$PREFIX}"
+PATCHED="\${INVAPP_PATCHED_GO:-$_ivx_patched}"
+REAL_GO="\${INVAPP_REAL_GO:-$_ivx_real}"
+# Re-seed short resolv from PREFIX if present (dns fix / upgrades).
+if [ -s "\${PREFIX}/etc/resolv.conf" ]; then
+  _ivx_files=\$(cd "\${PREFIX}/.." 2>/dev/null && pwd -P) || _ivx_files=""
+  if [ -n "\$_ivx_files" ]; then
+    cp -f "\${PREFIX}/etc/resolv.conf" "\$_ivx_files/r.conf" 2>/dev/null || true
+  fi
+fi
+# Patched copy lives outside lib/go/bin — trimmed go cannot infer GOROOT.
+export GOROOT="\${GOROOT:-\${PREFIX}/lib/go}"
+export GOTOOLCHAIN="\${GOTOOLCHAIN:-local}"
+case ",\${GODEBUG:-}," in
+  *,netdns=*) : ;;
+  *)
+    if [ -n "\${GODEBUG:-}" ]; then export GODEBUG="\${GODEBUG},netdns=cgo"
+    else export GODEBUG=netdns=cgo; fi ;;
+esac
+if [ -z "\${LOCALDOMAIN+x}" ]; then export LOCALDOMAIN=; fi
+if [ -x "\$PATCHED" ]; then
+  exec "\$PATCHED" "\$@"
+fi
+echo "invapp-go-wrap: patched go missing — ivx-configure network go wrap" >&2
+exec "\$REAL_GO" "\$@"
+EOF
+    chmod 755 "$_ivx_tmp" || { rm -f "$_ivx_tmp"; return 1; }
+    if [ -L "$_ivx_wrap" ] || [ -e "$_ivx_wrap" ]; then
+        # Replace symlink, our wrap, or leftover proot wrap — nothing else.
+        if [ -f "$_ivx_wrap" ] && [ ! -L "$_ivx_wrap" ] \
+            && ! _net_go_wrap_is_ours "$_ivx_wrap"; then
+            if ! cmp -s "$_ivx_wrap" "$_ivx_real" 2>/dev/null; then
+                err "$_ivx_wrap is not the Termux go symlink/wrapper — leave it alone"
+                rm -f "$_ivx_tmp"
+                return 1
+            fi
+        fi
+        rm -f "$_ivx_wrap" || { rm -f "$_ivx_tmp"; return 1; }
+    fi
+    mv -f "$_ivx_tmp" "$_ivx_wrap" || return 1
+    ok "patched go → $_ivx_patched"
+    ok "resolv for go → $_ivx_go_resolv"
+    ok "wrapper → $_ivx_wrap"
+    dim "verify: go env GOOS && make tidy"
+    dim "re-run wrap after: pkg upgrade golang"
+}
+
+network_go_wrap_remove() {
+    _ivx_wrap="$PREFIX/bin/go"
+    _ivx_real=$(_net_go_real) || true
+    _ivx_patched="$PREFIX/libexec/invapp/go"
+    if [ "$OPT_DRY" = 1 ]; then
+        info "would remove go wrapper/patch and restore symlink"
+        return 0
+    fi
+    if _net_go_wrap_is_ours "$_ivx_wrap" 2>/dev/null \
+        || { [ -f "$_ivx_wrap" ] && grep -q 'invapp-go-wrap' "$_ivx_wrap" 2>/dev/null; }; then
+        rm -f "$_ivx_wrap"
+    fi
+    # Also drop a plain proot launcher left from 1.1.4-era wraps.
+    if [ -f "$_ivx_wrap" ] && [ ! -L "$_ivx_wrap" ] \
+        && grep -q 'proot' "$_ivx_wrap" 2>/dev/null; then
+        rm -f "$_ivx_wrap"
+    fi
+    rm -f "$_ivx_patched" 2>/dev/null || true
+    if [ -n "${_ivx_real:-}" ] && [ -x "$_ivx_real" ]; then
+        ln -sfr "$_ivx_real" "$_ivx_wrap" 2>/dev/null \
+            || ln -sf "$_ivx_real" "$_ivx_wrap" \
+            || true
+        ok "restored $_ivx_wrap → $_ivx_real"
+    else
+        ok "removed go wrapper/patch"
+    fi
+}
+
+network_go_status() {
+    printf '\n  %sGo toolchain / DNS wrap%s\n' "$C_B" "$C_RST"
+    hr
+    _ivx_go_resolv=$(_net_ivx_go_resolv_path 2>/dev/null || true)
+    _ivx_patched="$PREFIX/libexec/invapp/go"
+    if [ -n "${_ivx_go_resolv:-}" ] && [ -s "$_ivx_go_resolv" ]; then
+        ok "go resolv file: $_ivx_go_resolv"
+    else
+        warn "go resolv file missing/empty (${_ivx_go_resolv:-?})"
+        dim "fix: ivx-configure network dns fix && network go wrap"
+    fi
+    if [ -x "$_ivx_patched" ]; then
+        ok "patched go binary: $_ivx_patched"
+    else
+        warn "patched go missing — netgo may hit [::1]:53"
+        dim "fix: ivx-configure network go wrap  (needs python)"
+    fi
+    if ! command -v go >/dev/null 2>&1; then
+        warn "go not on PATH (pkg install golang)"
+        printf '\n'
+        return 0
+    fi
+    _ivx_which=$(command -v go)
+    printf '  %-14s %s\n' "which go" "$_ivx_which"
+    if [ -f "$_ivx_which" ] && grep -q 'invapp-go-wrap' "$_ivx_which" 2>/dev/null; then
+        ok "invapp go wrapper installed"
+    elif [ -f "$_ivx_which" ] && grep -q 'proot' "$_ivx_which" 2>/dev/null; then
+        err "bin/go is a leftover proot wrap — run: ivx-configure network go wrap"
+    else
+        warn "bin/go is not the invapp wrapper"
+    fi
+    printf '  %-14s %s\n' "go version" "$(go version 2>/dev/null || echo '?')"
+    printf '  %-14s %s\n' "GOOS" "$(go env GOOS 2>/dev/null || echo '?')"
+    printf '  %-14s %s\n' "GOTOOLCHAIN" "$(go env GOTOOLCHAIN 2>/dev/null || echo '?')"
+    printf '  %-14s %s\n' "GOROOT" "$(go env GOROOT 2>/dev/null || echo '?')"
+    printf '  %-14s %s\n' "GODEBUG" "${GODEBUG:-(unset)}"
+    _ivx_goos=$(go env GOOS 2>/dev/null || true)
+    case "$_ivx_goos" in
+        android) ok "GOOS=android" ;;
+        '') : ;;
+        *)
+            err "GOOS=$_ivx_goos — not android (export GOTOOLCHAIN=local)"
+            ;;
+    esac
+    printf '\n'
 }
 
 network_dns_set() {
@@ -911,6 +1221,14 @@ _net_warn_goproxy_off() {
 # Persist GOPROXY into both invapp config and `go env -w` when go is present.
 _net_goproxy_persist() {
     _ivx_val=$1
+    # Reject Windows-style escapes — go url.Parse fails on "https://host\\"
+    case "$_ivx_val" in
+        *\\*)
+            err "GOPROXY must not contain backslashes: $_ivx_val"
+            dim "example: https://proxy.golang.org,direct"
+            return 1
+            ;;
+    esac
     cfg_set_quoted IVX_GOPROXY "$_ivx_val" || return 1
     export GOPROXY="$_ivx_val"
     if command -v go >/dev/null 2>&1; then
@@ -926,17 +1244,26 @@ _net_goproxy_persist() {
 
 network_goproxy_status() {
     cfg_load
-    printf '\n  %sGOPROXY%s\n' "$C_B" "$C_RST"
+    printf '\n  %sGOPROXY / Go DNS%s\n' "$C_B" "$C_RST"
     hr
     printf '  %-14s %s\n' "IVX_GOPROXY" "${IVX_GOPROXY:-"(unset — shell export off)"}"
+    printf '  %-14s %s\n' "IVX_GO_NETDNS" "${IVX_GO_NETDNS:-cgo}"
+    printf '  %-14s %s\n' "GODEBUG" "${GODEBUG:-(unset)}"
     if command -v go >/dev/null 2>&1; then
         _ivx_ge=$(_net_go_goproxy)
         printf '  %-14s %s\n' "go env" "${_ivx_ge:-?}"
         _net_warn_goproxy_off || true
+        case ",${GODEBUG:-}," in
+            *,netdns=cgo,*) : ;;
+            *)
+                warn "without netdns=cgo, Go often fails with lookup … on [::1]:53"
+                dim "eval \"\$(ivx-configure network apply)\" then retry go"
+                ;;
+        esac
     else
         dim "go not installed (pkg install golang)"
     fi
-    dim "presets: google | goproxyio | direct  (DNS must work first)"
+    dim "presets: google | goproxyio | direct  (also need GODEBUG=netdns=cgo)"
     printf '\n'
 }
 
@@ -992,12 +1319,17 @@ network_status() {
     network_dns_status
     network_proxy_status
     network_goproxy_status
+    if command -v go >/dev/null 2>&1 || [ -x "$PREFIX/lib/go/bin/go" ]; then
+        network_go_status
+    fi
 }
 
 # Print export lines suitable for: eval "$(ivx-configure network apply)"
 network_apply() {
     cfg_load
+    _ivx_any=0
     if [ -n "${IVX_HTTP_PROXY:-}" ]; then
+        _ivx_any=1
         printf "export HTTP_PROXY=%q\n" "$IVX_HTTP_PROXY"
         printf "export http_proxy=%q\n" "$IVX_HTTP_PROXY"
         if [ -z "${IVX_HTTPS_PROXY:-}" ]; then
@@ -1006,22 +1338,36 @@ network_apply() {
         fi
     fi
     if [ -n "${IVX_HTTPS_PROXY:-}" ]; then
+        _ivx_any=1
         printf "export HTTPS_PROXY=%q\n" "$IVX_HTTPS_PROXY"
         printf "export https_proxy=%q\n" "$IVX_HTTPS_PROXY"
     fi
     if [ -n "${IVX_ALL_PROXY:-}" ]; then
+        _ivx_any=1
         printf "export ALL_PROXY=%q\n" "$IVX_ALL_PROXY"
         printf "export all_proxy=%q\n" "$IVX_ALL_PROXY"
     fi
     if [ -n "${IVX_NO_PROXY:-}" ]; then
+        _ivx_any=1
         printf "export NO_PROXY=%q\n" "$IVX_NO_PROXY"
         printf "export no_proxy=%q\n" "$IVX_NO_PROXY"
     fi
     if [ -n "${IVX_GOPROXY:-}" ]; then
+        _ivx_any=1
         printf "export GOPROXY=%q\n" "$IVX_GOPROXY"
     fi
-    if [ -z "${IVX_HTTP_PROXY:-}${IVX_HTTPS_PROXY:-}${IVX_ALL_PROXY:-}${IVX_GOPROXY:-}" ]; then
-        info "no proxy/GOPROXY keys set — nothing to export" >&2
+    case "${IVX_GO_NETDNS:-cgo}" in
+        off|OFF|0|go|netgo) : ;;
+        *)
+            _ivx_any=1
+            # Emit a merge that preserves any existing GODEBUG flags.
+            printf '%s\n' 'case ",${GODEBUG:-}," in *,netdns=*) : ;; *)'
+            printf '%s\n' '  if [ -n "${GODEBUG:-}" ]; then export GODEBUG="${GODEBUG},netdns=cgo";'
+            printf '%s\n' '  else export GODEBUG=netdns=cgo; fi ;; esac'
+            ;;
+    esac
+    if [ "$_ivx_any" = 0 ]; then
+        info "nothing to export (proxy/GOPROXY unset; GO_NETDNS off)" >&2
     fi
 }
 
@@ -1079,6 +1425,13 @@ network_test() {
                 ok "go env GOPROXY=$_ivx_ge"
                 ;;
         esac
+        case ",${GODEBUG:-}," in
+            *,netdns=cgo,*) ok "GODEBUG has netdns=cgo (ignored if go is netgo-only)" ;;
+            *)
+                warn "GODEBUG missing netdns=cgo"
+                ;;
+        esac
+        network_go_status
     fi
     printf '\n'
 }
@@ -1117,7 +1470,7 @@ cmd_network() {
                     ;;
             esac
             ;;
-        goproxy|go)
+        goproxy)
             _ivx_go=${1:-status}
             [ $# -gt 0 ] && shift
             case "$_ivx_go" in
@@ -1131,8 +1484,21 @@ cmd_network() {
                     ;;
             esac
             ;;
+        go)
+            _ivx_go=${1:-status}
+            [ $# -gt 0 ] && shift
+            case "$_ivx_go" in
+                status|show) network_go_status ;;
+                wrap|install) network_go_wrap_install ;;
+                unwrap|remove) network_go_wrap_remove ;;
+                *)
+                    err "usage: ivx-configure network go status|wrap|unwrap"
+                    return 1
+                    ;;
+            esac
+            ;;
         *)
-            err "usage: ivx-configure network status|dns|proxy|goproxy|apply|test"
+            err "usage: ivx-configure network status|dns|proxy|goproxy|go|apply|test"
             return 1
             ;;
     esac
@@ -1366,6 +1732,12 @@ doc_dns() {
                 pass "go env GOPROXY=$_ivx_ge"
                 ;;
         esac
+        case ",${GODEBUG:-}," in
+            *,netdns=cgo,*) pass "GODEBUG netdns=cgo" ;;
+            *)
+                docwarn "GODEBUG missing netdns=cgo (Go [::1]:53 — network apply / new session)"
+                ;;
+        esac
     fi
 }
 
@@ -1577,8 +1949,9 @@ COMMANDS
   network proxy status|set <url>|socks <url>|clear
                                  manual HTTP(S)/SOCKS only (no free-proxy lists)
   network goproxy status|preset <google|goproxyio|direct>|set <val>|clear
+  network go status|wrap|unwrap  patch go ELF so netgo opens files/r.conf
   network apply                  print exports for: eval "$(… network apply)"
-  network test                   opt-in DNS/curl/(proxy) smoke test
+  network test                   opt-in DNS/curl/go smoke test
   doctor [--strict] [--network]  read-only health report
   ai [status|opencode|agent]     OpenCode / Cursor Agent hints
   reset                          remove user config + custom art
@@ -1721,13 +2094,19 @@ network_menu() {
         fi
         printf '   HTTP     %s\n' "${IVX_HTTP_PROXY:-"(unset)"}"
         printf '   SOCKS    %s\n' "${IVX_ALL_PROXY:-"(unset)"}"
-        printf '   GOPROXY  %s\n' "${IVX_GOPROXY:-"(Go default)"}"
+        _ivx_menu_gp="${IVX_GOPROXY:-}"
+        if [ -z "$_ivx_menu_gp" ] && command -v go >/dev/null 2>&1; then
+            _ivx_menu_gp=$(go env GOPROXY 2>/dev/null || true)
+            [ -n "$_ivx_menu_gp" ] && _ivx_menu_gp="go:$_ivx_menu_gp"
+        fi
+        printf '   GOPROXY  %s\n' "${_ivx_menu_gp:-"(Go default)"}"
         hr
         printf '   1) DNS status\n   2) DNS fix (8.8.8.8 / 1.1.1.1)\n'
         printf '   3) set DNS nameservers…\n'
         printf '   4) set HTTP(S) proxy…\n   5) set SOCKS5 proxy…\n   6) clear proxy\n'
         printf '   7) GOPROXY preset…\n   8) clear GOPROXY\n'
-        printf '   9) smoke test\n   s) full status\n   b) back\n'
+        printf '   9) patch go for DNS (fixes [::1]:53; needs python)\n'
+        printf '   0) smoke test\n   s) full status\n   b) back\n'
         ask '> '
         case "${IVX_REPLY:-}" in
             1) network_dns_status; pause ;;
@@ -1757,7 +2136,8 @@ network_menu() {
                 pause
                 ;;
             8) network_goproxy_clear; pause ;;
-            9) network_test; pause ;;
+            9) network_go_wrap_install; pause ;;
+            0) network_test; pause ;;
             s|S) network_status; pause ;;
             b|B|back|q) return 0 ;;
             '') : ;;
