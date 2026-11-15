@@ -18,6 +18,8 @@ buildscript {
             classpath 'org.bouncycastle:bcprov-jdk18on:1.85'
             classpath 'org.bouncycastle:bcpkix-jdk18on:1.85'
             classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.20'
+            // GHSA-xxph-c9ww-hj94 — AGP/lint pull guava-jre transitively
+            classpath 'com.google.guava:guava:33.7.2-jre'
         }
     }
 }
@@ -55,5 +57,21 @@ subprojects {
             'org.bouncycastle:bcpkix-jdk18on:1.85',
             'org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.20'
         )
+        // GHSA-xxph-c9ww-hj94: keep Android modules on guava-android, build/test
+        // classpath (AGP lint / Robolectric) on patched guava-jre. Dependabot
+        // previously reported transitive 33.4.0-jre via settings.gradle graph.
+        resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == 'com.google.guava'
+                    && details.requested.name == 'guava') {
+                def ver = details.requested.version ?: ''
+                if (ver.endsWith('-android')) {
+                    details.useVersion '33.7.2-android'
+                    details.because 'GHSA-xxph-c9ww-hj94'
+                } else {
+                    details.useVersion '33.7.2-jre'
+                    details.because 'GHSA-xxph-c9ww-hj94'
+                }
+            }
+        }
     }
 }

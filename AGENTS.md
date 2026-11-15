@@ -571,6 +571,17 @@ termux-app/
 
 ### Release (maintainers)
 
+Preferred (Windows):
+
+```powershell
+.\scripts\release.ps1 -Bump patch -Yes            # bump, commit, tag, push, gh release
+.\scripts\release.ps1 -Version 0.207.0 -Yes       # explicit version
+.\scripts\release.ps1 -Bump patch -DryRun         # preview only
+.\scripts\release.ps1 -Bump patch -Yes -WaitForApks 45   # poll CI APK attach
+```
+
+Manual:
+
 1. Bump `versionName` (semver) + `versionCode`; sync library publish versions.
 2. Tag `vX.Y.Z`; CI builds APKs; `attach_debug_apks_to_release.yml` attaches
    universal + per-ABI APKs.
