@@ -25,9 +25,11 @@ opencode-server stop    # or: td-ai-stop / drawer → Stop AI
 Drawer → **AI** probes missing / installed / ready (`GET /api/info` with
 Basic auth, falling back to V1 `GET /global/health`); starts only when
 needed; opens Preview **after** health succeeds.
-Long-press **AI** or drawer **Stop AI** stops the service on `:4000`.
+Long-press **AI** → Stop / **AI Doctor…**; drawer **Stop AI** or Settings →
+**AI Doctor** also stop the service on `:4000`. AI Doctor shows binary/shim/CA
+status, Repair (`opencode-setup`), host bind, and optional version pin.
 
-Optional pin: `OPENCODE_VERSION=2.0.6 opencode-setup`
+Optional pin: `OPENCODE_VERSION=2.0.6 opencode-setup` (or AI Doctor → pin)
 (empty = live lookup via `https://opencode.ai/update/api/latest/cli/npm`,
 fallback `2.0.6`; `1.x` still resolves to the old GitHub
 `anomalyco/opencode` tarball for rollback).

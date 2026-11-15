@@ -138,4 +138,23 @@ public class AiSessionHelperTest {
             wrap.delete();
         }
     }
+
+    @Test
+    public void doctorReport_holdsFields() {
+        AiSessionHelper.DoctorReport report = new AiSessionHelper.DoctorReport(
+            AiSessionHelper.Status.MISSING,
+            null,
+            false,
+            true,
+            false,
+            false,
+            "http://127.0.0.1:4000/api/info");
+        assertEquals(AiSessionHelper.Status.MISSING, report.status);
+        assertNull(report.binaryPath);
+        assertTrue(!report.shimPresent);
+        assertTrue(report.certPresent);
+        assertTrue(!report.stubPresent);
+        assertTrue(!report.healthy);
+        assertTrue(report.infoUrl.contains("/api/info"));
+    }
 }

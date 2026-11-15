@@ -87,6 +87,7 @@
                             android:minWidth="72dp"
                             android:layout_marginEnd="6dp"
                             android:text="@string/action_workflow_git_pull"
+                            android:contentDescription="@string/desc_workflow_git_pull"
                             android:textAllCaps="false" />
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/workflow_bun_install_button"
@@ -96,6 +97,7 @@
                             android:minWidth="72dp"
                             android:layout_marginEnd="6dp"
                             android:text="@string/action_workflow_bun_install"
+                            android:contentDescription="@string/desc_workflow_bun_install"
                             android:textAllCaps="false" />
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/workflow_bun_dev_button"
@@ -105,6 +107,7 @@
                             android:minWidth="72dp"
                             android:layout_marginEnd="6dp"
                             android:text="@string/action_workflow_bun_dev"
+                            android:contentDescription="@string/desc_workflow_bun_dev"
                             android:textAllCaps="false" />
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/workflow_repos_button"
@@ -114,6 +117,7 @@
                             android:minWidth="72dp"
                             android:layout_marginEnd="6dp"
                             android:text="@string/action_workflow_repos"
+                            android:contentDescription="@string/desc_workflow_repos"
                             android:textAllCaps="false" />
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/workflow_run_button"
@@ -123,6 +127,7 @@
                             android:minWidth="72dp"
                             android:layout_marginEnd="6dp"
                             android:text="@string/action_workflow_run"
+                            android:contentDescription="@string/desc_workflow_run"
                             android:textAllCaps="false" />
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/workflow_clone_button"
@@ -132,6 +137,7 @@
                             android:minWidth="72dp"
                             android:layout_marginEnd="6dp"
                             android:text="@string/action_workflow_clone"
+                            android:contentDescription="@string/desc_workflow_clone"
                             android:textAllCaps="false" />
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/workflow_new_button"
@@ -141,6 +147,7 @@
                             android:minWidth="72dp"
                             android:layout_marginEnd="6dp"
                             android:text="@string/action_workflow_new"
+                            android:contentDescription="@string/desc_workflow_new"
                             android:textAllCaps="false" />
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/workflow_ai_button"
@@ -150,6 +157,7 @@
                             android:minWidth="72dp"
                             android:layout_marginEnd="6dp"
                             android:text="@string/action_workflow_ai"
+                            android:contentDescription="@string/desc_workflow_ai"
                             android:textAllCaps="false" />
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/workflow_ai_stop_button"
@@ -159,6 +167,7 @@
                             android:minWidth="72dp"
                             android:layout_marginEnd="6dp"
                             android:text="@string/action_workflow_ai_stop"
+                            android:contentDescription="@string/desc_workflow_ai_stop"
                             android:textAllCaps="false" />
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/workflow_setup_button"
@@ -168,6 +177,7 @@
                             android:minWidth="72dp"
                             android:layout_marginEnd="6dp"
                             android:text="@string/action_workflow_setup"
+                            android:contentDescription="@string/desc_workflow_setup"
                             android:textAllCaps="false" />
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/workflow_more_button"
@@ -176,6 +186,7 @@
                             android:layout_height="48dp"
                             android:minWidth="56dp"
                             android:text="@string/action_workflow_more"
+                            android:contentDescription="@string/desc_workflow_more"
                             android:textAllCaps="false" />
                     </LinearLayout>
                 </HorizontalScrollView>

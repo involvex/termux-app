@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <Preference
+        app:key="ai_status"
+        app:title="@string/title_ai_doctor_status"
+        app:summary="@string/summary_ai_doctor_status_loading"
+        app:selectable="false"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="ai_run_checks"
+        app:title="@string/title_ai_doctor_run_checks"
+        app:summary="@string/summary_ai_doctor_run_checks"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="ai_repair"
+        app:title="@string/title_ai_doctor_repair"
+        app:summary="@string/summary_ai_doctor_repair"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="ai_start"
+        app:title="@string/title_ai_doctor_start"
+        app:summary="@string/summary_ai_doctor_start"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="ai_open_preview"
+        app:title="@string/title_ai_doctor_preview"
+        app:summary="@string/summary_ai_doctor_preview"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="ai_stop"
+        app:title="@string/title_ai_doctor_stop"
+        app:summary="@string/summary_ai_doctor_stop"
+        app:persistent="false"/>
+
+    <SwitchPreferenceCompat
+        app:key="ai_host_loopback"
+        app:title="@string/title_ai_doctor_host_loopback"
+        app:summary="@string/summary_ai_doctor_host_loopback"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="ai_version_pin"
+        app:title="@string/title_ai_doctor_version"
+        app:summary="@string/summary_ai_doctor_version"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="ai_doctor_hint"
+        app:title="@string/title_ai_doctor_hint"
+        app:summary="@string/summary_ai_doctor_hint"
+        app:selectable="false"
+        app:persistent="false"/>
+
+</PreferenceScreen>

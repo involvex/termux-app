@@ -71,7 +71,7 @@ https://github.com/involvex/termux-app
   `0.0.0.0:5173` for Preview / Copy LAN; seeds `.gitignore` + README;
   flags `--here` / `--no-install`
 - Drawer **New…** → name + template → runs `td-scaffold`
-- Drawer **AI** → `td-ai` in the current session + open Preview on `:4096`
+- Drawer **AI** → `td-ai` in the current session + open Preview on `:4000`
 ### 8. Vite-PWA scaffold (done)
 
 - `td-scaffold [name] pwa` / `pwa-react` — create-vite base + `vite-plugin-pwa`
@@ -82,9 +82,9 @@ https://github.com/involvex/termux-app
 
 ### 9. AI session status + control (done)
 
-- Drawer **AI** probes OpenCode: missing / installed / ready (listening on `:4096`)
+- Drawer **AI** probes OpenCode: missing / installed / ready (listening on `:4000`)
 - Start `td-ai` only when needed; if ready, jump straight to Preview
-- Drawer **Stop AI** — SIGTERM listeners on `:4096` (+ `pkill` OpenCode fallback)
+- Drawer **Stop AI** — SIGTERM listeners on `:4000` (+ `pkill` OpenCode fallback)
 - Optional Snackbar: recent terminal error → copy for paste into OpenCode
 
 ### 10. Clone into ~/repos (done)
@@ -132,7 +132,7 @@ https://github.com/involvex/termux-app
 
 ### 12d. AI polish + release 0.202.0 (done)
 
-- Drawer AI when already ready: snackbar **Copy LAN** if `:4096` is wildcard-bound
+- Drawer AI when already ready: snackbar **Copy LAN** if `:4000` is wildcard-bound
 - `AiSessionHelper` ignores leftover bun JS `opencode` stubs; also finds
   `$PREFIX/libexec/opencode`
 - `tasks/td-ai` exits early when `/global/health` is already healthy
@@ -211,6 +211,18 @@ https://github.com/involvex/termux-app
 - Preview **QR LAN** (ZXing encoder) beside Copy LAN; same wildcard-bind gate;
   caption “same Wi‑Fi only, no public tunnel”
 - Quick-bar customize preserves user order; **Reorder…** (tap to move up)
+
+### 18. Support UX — AI Doctor + Preview diagnostics (done)
+
+- Settings → **AI Doctor**: status card (binary / shim / TLS cert / stub /
+  `:4000` health), Run checks, Repair (`opencode-setup`), Start (`td-ai`),
+  Open Preview, Stop AI; `OPENCODE_HOST` loopback toggle + optional
+  `OPENCODE_VERSION` pin (shell env on inject)
+- Drawer **⋯** → **AI Doctor…**; long-press **AI** → Stop / AI Doctor
+- Preview error page: error code/description + tappable Scan / Reload /
+  Copy LAN / QR LAN (`invapp://preview/…`); OpenCode hint when port is 4000
+- TalkBack `contentDescription` on quick-bar + Preview toolbar
+- Docs: `:4096` → `:4000` hygiene; [litert.md](docs/litert.md) for on-device LLM
 
 ## Non-goals (for now)
 

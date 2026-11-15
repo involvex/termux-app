@@ -17,6 +17,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:hint="@string/hint_localhost_port"
+            android:contentDescription="@string/desc_preview_port_input"
             android:inputType="textUri"
             android:maxLength="256"
             android:selectAllOnFocus="true"
@@ -26,7 +27,8 @@
             android:id="@+id/preview_go_button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/action_preview_go" />
+            android:text="@string/action_preview_go"
+            android:contentDescription="@string/desc_preview_go" />
     </LinearLayout>
 
     <HorizontalScrollView
@@ -48,49 +50,57 @@
                 android:id="@+id/preview_back_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/action_preview_back" />
+                android:text="@string/action_preview_back"
+                android:contentDescription="@string/desc_preview_back" />
 
             <Button
                 android:id="@+id/preview_forward_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/action_preview_forward" />
+                android:text="@string/action_preview_forward"
+                android:contentDescription="@string/desc_preview_forward" />
 
             <Button
                 android:id="@+id/preview_reload_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/action_preview_reload" />
+                android:text="@string/action_preview_reload"
+                android:contentDescription="@string/desc_preview_reload" />
 
             <Button
                 android:id="@+id/preview_scan_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/action_preview_scan" />
+                android:text="@string/action_preview_scan"
+                android:contentDescription="@string/desc_preview_scan" />
 
             <Button
                 android:id="@+id/preview_copy_lan_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/action_preview_copy_lan" />
+                android:text="@string/action_preview_copy_lan"
+                android:contentDescription="@string/desc_preview_copy_lan" />
 
             <Button
                 android:id="@+id/preview_qr_lan_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/action_preview_show_qr" />
+                android:text="@string/action_preview_show_qr"
+                android:contentDescription="@string/desc_preview_qr_lan" />
 
             <Button
                 android:id="@+id/preview_clear_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/action_preview_clear_data" />
+                android:text="@string/action_preview_clear_data"
+                android:contentDescription="@string/desc_preview_clear" />
 
             <Button
                 android:id="@+id/preview_browser_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/action_preview_open_browser" />
+                android:text="@string/action_preview_open_browser"
+                android:contentDescription="@string/desc_preview_browser" />
         </LinearLayout>
     </HorizontalScrollView>
 

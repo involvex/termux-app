@@ -160,6 +160,9 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
                 if (url == null) {
                     return true;
                 }
+                if (handlePreviewActionUrl(url)) {
+                    return true;
+                }
                 if (WorkflowHelper.isAllowedPreviewUrl(url)) {
                     return false;
                 }
@@ -170,6 +173,9 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
 
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                if (url != null && url.startsWith("invapp://")) {
+                    return;
+                }
                 mShowingErrorPage = false;
                 updatePathFromUrl(url);
                 syncUrlBar(url);
@@ -195,7 +201,16 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             public void onReceivedError(WebView view, WebResourceRequest request,
                                         WebResourceError error) {
                 if (request != null && request.isForMainFrame()) {
-                    showPreviewErrorPage(mCurrentPort);
+                    String desc = null;
+                    int code = -1;
+                    if (android.os.Build.VERSION.SDK_INT >= 23 && error != null) {
+                        CharSequence description = error.getDescription();
+                        if (description != null) {
+                            desc = description.toString();
+                        }
+                        code = error.getErrorCode();
+                    }
+                    showPreviewErrorPage(mCurrentPort, code, desc);
                 }
             }
 
@@ -204,7 +219,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             public void onReceivedError(WebView view, int errorCode, String description,
                                         String failingUrl) {
                 // API < 23 fallback
-                showPreviewErrorPage(mCurrentPort);
+                showPreviewErrorPage(mCurrentPort, errorCode, description);
             }
 
             @Override
@@ -212,7 +227,9 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
                                             android.webkit.WebResourceResponse errorResponse) {
                 if (request != null && request.isForMainFrame()
                     && errorResponse != null && errorResponse.getStatusCode() >= 400) {
-                    showPreviewErrorPage(mCurrentPort);
+                    String reason = errorResponse.getReasonPhrase();
+                    showPreviewErrorPage(mCurrentPort, errorResponse.getStatusCode(),
+                        reason != null ? reason : ("HTTP " + errorResponse.getStatusCode()));
                 }
             }
         });
@@ -803,6 +820,10 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
     }
 
     private void showPreviewErrorPage(int port) {
+        showPreviewErrorPage(port, -1, null);
+    }
+
+    private void showPreviewErrorPage(int port, int errorCode, @Nullable String description) {
         if (mWebView == null) {
             return;
         }
@@ -812,6 +833,19 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             mProgress.setVisibility(View.GONE);
         }
         refreshStatusIndicator();
+        String detail = "";
+        if (description != null && !description.trim().isEmpty()) {
+            detail = "<p><b>Error</b>"
+                + (errorCode >= 0 ? " (" + errorCode + ")" : "")
+                + ": <code>" + escapeHtml(description.trim()) + "</code></p>";
+        } else if (errorCode >= 0) {
+            detail = "<p><b>Error code:</b> <code>" + errorCode + "</code></p>";
+        }
+        String aiHint = "";
+        if (port == WorkflowHelper.AI_PREVIEW_PORT) {
+            aiHint = "<li>OpenCode: Settings → <b>AI Doctor</b>, or <code>td-ai</code> / "
+                + "<code>opencode-setup</code> → health on <code>:4000</code>.</li>";
+        }
         String html = ""
             + "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
             + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
@@ -819,18 +853,27 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             + "<style>body{font-family:sans-serif;background:#111;color:#ddd;"
             + "padding:1.2rem;line-height:1.45}h1{font-size:1.1rem;color:#9f9}"
             + "code{background:#222;padding:.1rem .3rem;border-radius:3px}"
-            + "li{margin:.4rem 0}</style></head><body>"
+            + "a.action{display:inline-block;margin:.25rem .4rem .25rem 0;padding:.45rem .7rem;"
+            + "background:#1e3a2f;color:#9f9;text-decoration:none;border-radius:4px;"
+            + "border:1px solid #2d5a45}li{margin:.4rem 0}</style></head><body>"
             + "<h1>Nothing on :" + port + "</h1>"
             + "<p>Preview could not load "
             + "<code>" + escapeHtml(mCurrentScheme) + "://"
             + escapeHtml(mCurrentHost) + ":" + port
             + escapeHtml(mCurrentPathAndQuery)
             + "</code>.</p>"
+            + detail
+            + "<p>"
+            + "<a class=\"action\" href=\"invapp://preview/scan\">Scan</a>"
+            + "<a class=\"action\" href=\"invapp://preview/reload\">Reload</a>"
+            + "<a class=\"action\" href=\"invapp://preview/lan\">Copy LAN</a>"
+            + "<a class=\"action\" href=\"invapp://preview/qr\">QR LAN</a>"
+            + "</p>"
             + "<ul>"
             + "<li>Is <code>bun run dev</code> / <code>td-dev</code> running?</li>"
             + "<li>Bind on <code>0.0.0.0</code> (not only loopback) for Copy LAN.</li>"
             + "<li>Use <b>Scan</b> to find listening ports, then <b>Reload</b>.</li>"
-            + "<li>OpenCode: <code>td-ai</code> / <code>opencode-server</code> → health on <code>:4000</code>.</li>"
+            + aiHint
             + "<li>Pull down to retry. Use <b>Clear</b> if you see a stale app shell.</li>"
             + "</ul>"
             + "<p>Toolbar: Back · Fwd · Reload · Scan · Copy LAN · QR LAN · Clear · Browser</p>"
@@ -841,6 +884,42 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         mWebView.loadDataWithBaseURL(null,
             html, "text/html", "utf-8", null);
         updateNavButtons();
+    }
+
+    /**
+     * Handle {@code invapp://preview/{scan|reload|lan|qr}} action links from the
+     * error page. Returns true when the URL was consumed.
+     */
+    private boolean handlePreviewActionUrl(@Nullable String url) {
+        if (url == null || !url.startsWith("invapp://preview/")) {
+            return false;
+        }
+        String action = url.substring("invapp://preview/".length());
+        int q = action.indexOf('?');
+        if (q >= 0) {
+            action = action.substring(0, q);
+        }
+        int hash = action.indexOf('#');
+        if (hash >= 0) {
+            action = action.substring(0, hash);
+        }
+        action = action.toLowerCase(java.util.Locale.US);
+        switch (action) {
+            case "scan":
+                scanPortsAsync(false);
+                return true;
+            case "reload":
+                reloadCurrent();
+                return true;
+            case "lan":
+                copyLanUrlForCurrentPort();
+                return true;
+            case "qr":
+                showQrLanForCurrentPort();
+                return true;
+            default:
+                return true;
+        }
     }
 
     @NonNull

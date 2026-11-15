@@ -263,6 +263,14 @@ public final class AiSessionHelper {
      * Ignores leftover bun JS stubs that print “postinstall script was not run”.
      */
     public static boolean isOpenCodeInstalled() {
+        return resolveOpenCodeBinary() != null;
+    }
+
+    /**
+     * Absolute path of a usable {@code opencode} binary, or null when missing/stub.
+     */
+    @Nullable
+    public static String resolveOpenCodeBinary() {
         String bin = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH;
         String home = TermuxConstants.TERMUX_HOME_DIR_PATH;
         String[] candidates = {
@@ -274,7 +282,7 @@ public final class AiSessionHelper {
         for (String path : candidates) {
             File f = new File(path);
             if (isUsableOpenCodeBinary(f)) {
-                return true;
+                return f.getAbsolutePath();
             }
         }
         File libexec = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, "libexec/opencode");
@@ -286,18 +294,86 @@ public final class AiSessionHelper {
                         continue;
                     }
                     if ("opencode".equals(kid.getName()) && isUsableOpenCodeBinary(kid)) {
-                        return true;
+                        return kid.getAbsolutePath();
                     }
                     if (kid.isDirectory()) {
                         File nested = new File(kid, "opencode");
                         if (isUsableOpenCodeBinary(nested)) {
-                            return true;
+                            return nested.getAbsolutePath();
                         }
                     }
                 }
             }
         }
-        return false;
+        return null;
+    }
+
+    /** DNS/CA shim shipped in the APK for glibc OpenCode. */
+    public static boolean isOpenCodeShimPresent() {
+        File shim = new File(TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH,
+            "libinvapp-opencode-shim.so");
+        return shim.isFile();
+    }
+
+    /** Termux TLS bundle used by OpenCode / node ({@code SSL_CERT_FILE}). */
+    public static boolean isTlsCertPresent() {
+        File cert = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, "etc/tls/cert.pem");
+        return cert.isFile() && cert.length() > 0;
+    }
+
+    /**
+     * True when {@code $PREFIX/bin/opencode} exists but looks like a bun/npm stub.
+     */
+    public static boolean isOpenCodeStubPresent() {
+        File f = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, "opencode");
+        if (!f.isFile()) {
+            f = new File(TermuxConstants.TERMUX_HOME_DIR_PATH, ".bun/bin/opencode");
+        }
+        return f.isFile() && isLikelyOpenCodeStub(f);
+    }
+
+    /**
+     * Snapshot for the Settings AI Doctor status card (call off the UI thread).
+     */
+    @NonNull
+    public static DoctorReport collectDoctorReport(int port) {
+        Status status = probe(port);
+        return new DoctorReport(
+            status,
+            resolveOpenCodeBinary(),
+            isOpenCodeShimPresent(),
+            isTlsCertPresent(),
+            isOpenCodeStubPresent(),
+            status == Status.READY,
+            WorkflowHelper.aiInfoUrl(port > 0 ? port : WorkflowHelper.AI_PREVIEW_PORT)
+        );
+    }
+
+    /** Immutable AI Doctor diagnostics. */
+    public static final class DoctorReport {
+        @NonNull public final Status status;
+        @Nullable public final String binaryPath;
+        public final boolean shimPresent;
+        public final boolean certPresent;
+        public final boolean stubPresent;
+        public final boolean healthy;
+        @NonNull public final String infoUrl;
+
+        public DoctorReport(@NonNull Status status,
+                            @Nullable String binaryPath,
+                            boolean shimPresent,
+                            boolean certPresent,
+                            boolean stubPresent,
+                            boolean healthy,
+                            @NonNull String infoUrl) {
+            this.status = status;
+            this.binaryPath = binaryPath;
+            this.shimPresent = shimPresent;
+            this.certPresent = certPresent;
+            this.stubPresent = stubPresent;
+            this.healthy = healthy;
+            this.infoUrl = infoUrl;
+        }
     }
 
     /**

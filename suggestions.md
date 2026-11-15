@@ -1,18 +1,20 @@
 # InVxTermux — Feature Suggestions Report
 
-> Generated: 2026-09-22 · Updated: 2026-11-15 (Phase 17) · Scope: `com.involvex.termux_app`
-> Pillars: Terminal-first · PC ↔ phone (`~/repos`) · Preview (`127.0.0.1`) · AI CLI (`td-ai` → OpenCode `:4096`)
+> Generated: 2026-09-22 · Updated: 2026-11-15 (Phase 18) · Scope: `com.involvex.termux_app`
+> Pillars: Terminal-first · PC ↔ phone (`~/repos`) · Preview (`127.0.0.1`) · AI CLI (`td-ai` → OpenCode `:4000`)
 > Non-goals respected: no full in-app IDE / multi-tab browser, no public tunnels by default, no per-npm wrappers.
 > Sources: `README.md`, `ROADMAP.md`, `AGENTS.md`, `docs/*.md`, `app/build.gradle`, `app/src/main/java/com/invapp/...`, `terminal-emulator`, `termux-shared`, `termux-api`.
 
 ## Feature Suggestions Report
 
-### Done (Phase 17 / earlier)
+### Done (Phase 17–18 / earlier)
 
 | ID | Status | Notes |
 |----|--------|-------|
 | FEAT-002 | **done** | Recent/starred ports, 3s auto-scan, swipe-refresh — `PreviewPortPrefs` / `LocalhostPreviewActivity` |
+| FEAT-003 | **done (Phase 18)** | Error page + Scan/Reload/LAN/QR actions + error detail |
 | FEAT-004 | **done (Phase 17)** | QR LAN via ZXing encoder; live Wi-Fi IP watcher still optional |
+| FEAT-005 | **done (Phase 18)** | Settings AI Doctor (status, repair, host, version pin) |
 | FEAT-007 | **done (Phase 17)** | Git badges + branch sheet + safe pull + `td-sync` |
 | FEAT-011 | **done** | Copy/export last error in workflow More menu |
 
@@ -21,8 +23,6 @@
 | ID | Category | Description | Impact | Effort |
 |----|----------|-------------|--------|--------|
 | FEAT-001 | Platform / Maintainability | Bump `targetSdkVersion` 28 → 34/35 + edge-to-edge | High | High |
-| FEAT-003 | Preview | Useful error page + diagnostics (refused / 404 / LAN hint) | High | Low |
-| FEAT-005 | AI | First-run AI setup wizard (version pin, auth, DNS/CA check) | High | Medium |
 | FEAT-006 | Workflow | Bun update checker (`bun-upgrade`) with SHA verify | High | Medium |
 | FEAT-008 | Reliability | Terminal session persist + crash recovery | High | High |
 | FEAT-009 | Backup | One-tap backup/restore (`~/repos` manifest + dotfiles) | High | Medium |
@@ -64,7 +64,7 @@
   1. Bump in a branch: `targetSdk 34` (then 35), test `TermuxService` foreground types (`dataSync`/`connectedDevice` as needed), `RUN_COMMAND` + Boot receiver `RECEIVER_EXPORTED` flags, `POST_NOTIFICATIONS` runtime ask.
   2. Migrate `KeyboardUtils` + `FullScreenWorkAround` to `WindowInsetsCompat` / `WindowInsetsControllerCompat`; enable edge-to-edge (`enableEdgeToEdge()`) in `TermuxActivity` + `LocalhostPreviewActivity` + `SettingsActivity`.
   3. Migrate `onBackPressed` deprecation in `LocalhostPreviewActivity:297` to `OnBackPressedDispatcher`.
-  4. Full matrix: `assembleDebug` × 4 ABIs + `:app:assembleDebug`, `./gradlew test lint`, install on Android 8 / 12 / 14 / 15, check Preview, AI `:4096`, Widget, API screenshot.
+  4. Full matrix: `assembleDebug` × 4 ABIs + `:app:assembleDebug`, `./gradlew test lint`, install on Android 8 / 12 / 14 / 15, check Preview, AI `:4000`, Widget, API screenshot.
 - **Security/perf:** Reduces background-kill + permission regressions; no hot-path cost.
 - **Keep:** `minSdk 21` path still tested; keep `apt-android-5` deprecated note.
 
@@ -129,7 +129,7 @@
 
 ### FEAT-010 — LAN exposure guard + lock (Confidence: 83%)
 - **Files:** `LocalhostPreviewActivity.java:274-284` (loopback allowlist), `LanShareHelper`, `AiSessionHelper`, `docs/ai.md:40-43`.
-- **Current:** Preview WebView loopback-only (good); `td-ai` binds `0.0.0.0:4096` by default for LAN.
+- **Current:** Preview WebView loopback-only (good); `td-ai` binds `0.0.0.0:4000` by default for LAN.
 - **Suggestion:** (1) Pre-Copy-LAN / pre-`td-ai` confirm sheet first time ("Exposes to same Wi-Fi"), (2) optional biometric/app lock for Preview + AI screens (`BiometricPrompt`, `SET` flag), (3) auto-Stop-AI on app background toggle, (4) audit `shouldOverrideUrlLoading` + `cleartext` to ensure no `https→http` downgrade outside localhost.
 - **Why:** Test-key APKs + wildcard bind = LAN neighbor risk on public Wi-Fi.
 
@@ -231,10 +231,10 @@
 
 ## Suggested Next Steps (for maintainers)
 
-> Phase 17 shipped FEAT-004 / FEAT-007 (and FEAT-002 / FEAT-011 were already done).
+> Phase 18 shipped FEAT-003 / FEAT-005 (Preview error actions + AI Doctor). Phase 17 shipped FEAT-004 / FEAT-007.
 
 1. Accept/reject FEAT-001 scope first (targetSdk bump blocks Play + Android 15 work) — branch + device matrix.
-2. Pick low-effort wins: FEAT-003 (richer Preview error diagnostics) and/or FEAT-005 (AI doctor Settings).
+2. Next polish candidates: FEAT-006 (Bun version card), FEAT-012 (preferred-port notification), FEAT-017 (widget run-with-args).
 3. File issues for FEAT-020 emulator FIXMEs individually with xterm vectors.
 
 ## Appendix — Where to Implement

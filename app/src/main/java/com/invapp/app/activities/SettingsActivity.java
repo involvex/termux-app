@@ -1,6 +1,7 @@
 package com.invapp.app.activities;
 
 import android.content.Context;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Environment;
 
@@ -11,6 +12,7 @@ import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 
 import com.invapp.R;
+import com.invapp.app.fragments.settings.AiPreferencesFragment;
 import com.invapp.app.utils.SettingsSearchHelper;
 import com.invapp.shared.activities.ReportActivity;
 import com.invapp.shared.file.FileUtils;
@@ -30,6 +32,18 @@ import com.invapp.shared.theme.NightMode;
 
 public class SettingsActivity extends AppCompatActivity {
 
+    /** Open a nested settings page instead of the root list. */
+    public static final String EXTRA_OPEN_FRAGMENT = "com.invapp.settings.open_fragment";
+    /** Value for {@link #EXTRA_OPEN_FRAGMENT}: AI Doctor screen. */
+    public static final String FRAGMENT_AI = "ai";
+
+    @NonNull
+    public static Intent createAiDoctorIntent(@NonNull Context context) {
+        Intent intent = new Intent(context, SettingsActivity.class);
+        intent.putExtra(EXTRA_OPEN_FRAGMENT, FRAGMENT_AI);
+        return intent;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -38,9 +52,14 @@ public class SettingsActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_settings);
         if (savedInstanceState == null) {
+            PreferenceFragmentCompat initial = new RootPreferencesFragment();
+            Intent launch = getIntent();
+            if (launch != null && FRAGMENT_AI.equals(launch.getStringExtra(EXTRA_OPEN_FRAGMENT))) {
+                initial = new AiPreferencesFragment();
+            }
             getSupportFragmentManager()
                 .beginTransaction()
-                .replace(R.id.settings, new RootPreferencesFragment())
+                .replace(R.id.settings, initial)
                 .commit();
         }
 

@@ -35,6 +35,8 @@ public final class WorkflowHelper {
     public static final String CMD_BUN_INSTALL = "bun install\n";
     public static final String CMD_BUN_RUN_DEV = "bun run dev\n";
     public static final String CMD_TD_AI = "td-ai\n";
+    /** Re-install / repair OpenCode V2 wrapper (does not wipe {@code ~/.config/opencode}). */
+    public static final String CMD_OPENCODE_SETUP = "opencode-setup\n";
     private static final long GIT_STATUS_CACHE_MS = 10_000L;
     private static final Map<String, CachedGitStatus> sGitStatusCache = new ConcurrentHashMap<>();
     /** First-run setup: banner / completions / packages / doctor (pure bash). */

@@ -15,7 +15,7 @@
 | Global tool clutter (pkg / cargo / bun / npm / pip / uv) | `ivx-cleanup` interactive menu |
 | Low disk / find what eats space | `ivx-disk-analyze` (overview) · `ivx-disk-analyze guests` · `ivx-disk-analyze large ~/repos` |
 | OpenCode `Permission denied` / LIBC / postinstall / SIGSYS | Re-run `opencode-setup` (official V2 tarball + glibc). Do not `unset LD_PRELOAD` |
-| OpenCode `AI_APICallError` / “typo in the url or port” | Local `:4096` OK; Zen/provider broken. `rm -rf ~/.cache/opencode`, re-auth, seed glibc DNS/CA, `opencode-setup`, retry from `~/repos/…` (V1 only: fix `@opencode-ai/plugin@local` → `latest`) |
+| OpenCode `AI_APICallError` / “typo in the url or port” | Local `:4000` OK; Zen/provider broken. `rm -rf ~/.cache/opencode`, re-auth, seed glibc DNS/CA, `opencode-setup` / Settings → **AI Doctor** → Repair, retry from `~/repos/…` (V1 only: fix `@opencode-ai/plugin@local` → `latest`) |
 | OpenCode `getifaddrs returned an error` | Non-fatal for `0.0.0.0` bind; V2 has no `--mdns`. Override `OPENCODE_HOST=127.0.0.1 td-ai` if needed. Preview uses `127.0.0.1:4000` / `/api/info` |
 | Preview blank / wrong port | OpenCode is `:4000` — there is no `/api` on `:5000`. Drawer **AI** opens Preview after health; tap Reload if early |
 | `opencode-v2: missing …/.opencode/bin/opencode` | Remove legacy shims: `rm -f $PREFIX/bin/opencode-v2*`; use `opencode` + `opencode-server` / `td-ai` |

@@ -108,6 +108,13 @@ import java.util.concurrent.Executors;
 public final class TermuxActivity extends AppCompatActivity implements ServiceConnection {
 
     /**
+     * Inject a shell command into the current session (AI Doctor Repair/Start).
+     * Consumed once from {@link #onNewIntent} / {@link #onServiceConnected}.
+     */
+    public static final String EXTRA_INJECT_SHELL_COMMAND =
+        "com.invapp.termux.inject_shell_command";
+
+    /**
      * The connection to the {@link TermuxService}. Requested in {@link #onCreate(Bundle)} with a call to
      * {@link #bindService(Intent, ServiceConnection, int)}, and obtained and stored in
      * {@link #onServiceConnected(ComponentName, IBinder)}.
@@ -182,6 +189,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     /** Background probes for AI OpenCode status / stop. */
     private final ExecutorService mAiExecutor = Executors.newSingleThreadExecutor();
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
+
+    /** Pending AI Doctor shell inject until a session is ready. */
+    @Nullable
+    private String mPendingInjectShellCommand;
 
     /**
      * If between onResume() and onStop(). Note that only one session is in the foreground of the terminal view at the
@@ -362,6 +373,45 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mPreferredPortWatcher != null) {
             mPreferredPortWatcher.start();
         }
+
+        stashInjectShellCommand(getIntent());
+        flushPendingInjectShellCommand();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        stashInjectShellCommand(intent);
+        flushPendingInjectShellCommand();
+    }
+
+    private void stashInjectShellCommand(@Nullable Intent intent) {
+        if (intent == null) {
+            return;
+        }
+        String cmd = intent.getStringExtra(EXTRA_INJECT_SHELL_COMMAND);
+        if (cmd == null || cmd.isEmpty()) {
+            return;
+        }
+        intent.removeExtra(EXTRA_INJECT_SHELL_COMMAND);
+        mPendingInjectShellCommand = cmd;
+    }
+
+    private void flushPendingInjectShellCommand() {
+        String cmd = mPendingInjectShellCommand;
+        if (cmd == null || cmd.isEmpty()) {
+            return;
+        }
+        if (mTermuxService == null || getCurrentSession() == null) {
+            return;
+        }
+        mPendingInjectShellCommand = null;
+        if (WorkflowHelper.writeToSession(getCurrentSession(), cmd)) {
+            showToast(getString(R.string.msg_ai_doctor_inject_ok), true);
+        } else {
+            showToast(getString(R.string.msg_ai_doctor_inject_no_session), false);
+        }
     }
 
     @Override
@@ -444,7 +494,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         setTermuxSessionsListView();
 
         final Intent intent = getIntent();
-        setIntent(null);
+        // Keep inject extras until sessions exist; cleared in consumeInjectShellCommand.
+        if (intent == null || !intent.hasExtra(EXTRA_INJECT_SHELL_COMMAND)) {
+            setIntent(null);
+        }
 
         if (mTermuxService.isTermuxSessionsEmpty()) {
             if (mIsVisible) {
@@ -496,6 +549,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         // Update the {@link TerminalSession} and {@link TerminalEmulator} clients.
         mTermuxService.setTermuxTerminalSessionClient(mTermuxTerminalSessionActivityClient);
+
+        stashInjectShellCommand(intent);
+        // Bootstrap may still be creating the first session — retry shortly.
+        mMainHandler.postDelayed(this::flushPendingInjectShellCommand, 400);
     }
 
     @Override
@@ -672,7 +729,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (ai != null) {
             ai.setOnClickListener(v -> startAiSession());
             ai.setOnLongClickListener(v -> {
-                stopAiSession();
+                showAiLongPressMenu();
                 return true;
             });
         }
@@ -743,7 +800,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (ai != null) {
             ai.setOnClickListener(v -> startAiSession());
             ai.setOnLongClickListener(v -> {
-                stopAiSession();
+                showAiLongPressMenu();
                 return true;
             });
         }
@@ -821,6 +878,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         final String[] items = new String[] {
             getString(R.string.action_workflow_run),
             getString(R.string.action_workflow_ai_stop),
+            getString(R.string.action_workflow_ai_doctor),
             getString(R.string.action_workflow_copy_last_error),
             getString(R.string.action_workflow_export_last_error),
             getString(R.string.action_workflow_customize),
@@ -834,16 +892,41 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 switch (which) {
                     case 0: showReposPicker(true); break;
                     case 1: stopAiSession(); break;
-                    case 2: copyLastTerminalError(false); break;
-                    case 3: exportLastTerminalError(); break;
-                    case 4: showCustomizeWorkflowBarDialog(); break;
-                    case 5: showReorderWorkflowBarDialog(); break;
-                    case 6: showCustomizeExtraKeysDialog(); break;
-                    case 7:
+                    case 2: openAiDoctorSettings(); break;
+                    case 3: copyLastTerminalError(false); break;
+                    case 4: exportLastTerminalError(); break;
+                    case 5: showCustomizeWorkflowBarDialog(); break;
+                    case 6: showReorderWorkflowBarDialog(); break;
+                    case 7: showCustomizeExtraKeysDialog(); break;
+                    case 8:
                         WorkflowBarHelper.resetToDefault(this);
                         applyWorkflowBarVisibility();
                         break;
                     default: break;
+                }
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    private void openAiDoctorSettings() {
+        getDrawer().closeDrawers();
+        ActivityUtils.startActivity(this, SettingsActivity.createAiDoctorIntent(this));
+    }
+
+    private void showAiLongPressMenu() {
+        getDrawer().closeDrawers();
+        final String[] items = new String[] {
+            getString(R.string.action_workflow_ai_stop),
+            getString(R.string.action_workflow_ai_doctor)
+        };
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.action_workflow_ai)
+            .setItems(items, (dialog, which) -> {
+                if (which == 0) {
+                    stopAiSession();
+                } else {
+                    openAiDoctorSettings();
                 }
             })
             .setNegativeButton(android.R.string.cancel, null)
