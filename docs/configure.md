@@ -14,7 +14,7 @@ ivx-configure network dns fix   # fix Go lookup … on [::1]:53
 ivx-doctor               # same as: ivx-configure doctor
 ivx-cleanup              # remove global pkg / cargo / bun / npm / pip / uv installs
 ivx-disk-analyze         # df/du report: prefix, home, guests, large files
-ivx-fix-dpkg-scripts     # heal dpkg info/format + maintainer script shebangs
+ivx-fix-dpkg-scripts     # heal dpkg info/format, *.triggers, maintainer shebangs
 ```
 
 Open it from the terminal, **Settings → Setup**, or the right drawer's

@@ -429,8 +429,11 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
     }
 
     /**
-     * Strip a leading {@code #!$PREFIX/bin/sh} line left by older dpkg-fix
-     * helpers on non-script dpkg info files.
+     * Strip a leading {@code #!} shebang line left by older dpkg-fix helpers
+     * on non-script dpkg info files ({@code *.triggers}, {@code *.list}, …).
+     * Prefer matching {@code #!$PREFIX/bin/sh}, but any {@code #!…\\n} counts —
+     * glued shebang+body is what triggers dpkg's
+     * {@code too-long line or missing newline}.
      */
     @NonNull
     public static String stripAccidentalDpkgShebang(@NonNull String text, @NonNull String prefix) {
@@ -442,7 +445,29 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
         if (text.startsWith(markerCr)) {
             return text.substring(markerCr.length());
         }
+        if (text.startsWith("#!")) {
+            int nl = text.indexOf('\n');
+            if (nl >= 0) {
+                return text.substring(nl + 1);
+            }
+            // Shebang with no newline at all — drop the whole line.
+            return "";
+        }
         return text;
+    }
+
+    /**
+     * Line-oriented dpkg info metadata ({@code *.triggers}, {@code *.list}, …)
+     * that must end with a newline and must never start with a shebang.
+     */
+    public static boolean isDpkgLineMetaFileName(@NonNull String fileName) {
+        return fileName.endsWith(".triggers")
+            || fileName.endsWith(".list")
+            || fileName.endsWith(".conffiles")
+            || fileName.endsWith(".md5sums")
+            || fileName.endsWith(".shlibs")
+            || fileName.endsWith(".symbols")
+            || fileName.endsWith(".templates");
     }
 
     /**
@@ -480,24 +505,30 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
         boolean genericBody = fileName.isEmpty();
         if (!maint && !genericBody) {
             String stripped = stripAccidentalDpkgShebang(text, prefix);
-            boolean needsListNewline = fileName.endsWith(".list")
+            boolean lineMeta = isDpkgLineMetaFileName(fileName);
+            boolean needsNewline = lineMeta
                 && !stripped.isEmpty() && !stripped.endsWith("\n");
-            if (!stripped.contains(oldPkg) && !needsListNewline && stripped.equals(text)) {
+            // Irreparable triggers: empty after shebang strip (incl. glued #!).
+            if (fileName.endsWith(".triggers") && isCorruptDpkgTriggersBody(stripped)) {
+                return "";
+            }
+            if (!stripped.contains(oldPkg) && !needsNewline && stripped.equals(text)) {
                 return text;
             }
             String patched = stripped.contains(oldPkg)
                 ? stripped.replace(oldPkg, newPkg) : stripped;
-            if (needsListNewline && !patched.endsWith("\n")) {
+            if (needsNewline && !patched.endsWith("\n")) {
                 patched = patched + "\n";
             }
             return patched;
         }
-        boolean needsListNewline = fileName.endsWith(".list") && !text.isEmpty() && !text.endsWith("\n");
+        boolean needsNewline = isDpkgLineMetaFileName(fileName)
+            && !text.isEmpty() && !text.endsWith("\n");
         boolean needsShebang = maint && !text.isEmpty() && !text.startsWith("#!");
         if (!text.contains(oldPkg)
             && !text.startsWith("#!/bin/sh")
             && !text.startsWith("#!/bin/bash")
-            && !needsListNewline
+            && !needsNewline
             && !needsShebang) {
             return text;
         }
@@ -511,10 +542,22 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
         } else if (patched.startsWith("#!/bin/bash\n") || patched.startsWith("#!/bin/bash\r\n")) {
             patched = "#!" + prefix + "/bin/bash" + patched.substring("#!/bin/bash".length());
         }
-        if (needsListNewline && !patched.endsWith("\n")) {
+        if (needsNewline && !patched.endsWith("\n")) {
             patched = patched + "\n";
         }
         return patched;
+    }
+
+    /**
+     * {@code true} when a {@code *.triggers} body cannot be healed in place
+     * (empty after shebang strip, or still starts with {@code #!}). Missing
+     * trailing newlines are healed separately — not treated as corrupt.
+     */
+    public static boolean isCorruptDpkgTriggersBody(@NonNull String text) {
+        if (text.isEmpty()) {
+            return true;
+        }
+        return text.startsWith("#!");
     }
 
     private static int fixDpkgScriptsInDirectory(@NonNull File dir, @NonNull String prefix) {
@@ -537,6 +580,14 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
             String text = contents.toString();
             String patched = patchDpkgMaintainerScriptText(text, prefix, name);
             if (patched.equals(text)) {
+                continue;
+            }
+            // Empty patch for corrupt *.triggers → delete so the next unpack
+            // recreates a clean file (matches ivx-fix-dpkg-scripts).
+            if (patched.isEmpty() && name.endsWith(".triggers")) {
+                if (file.delete()) {
+                    fixed++;
+                }
                 continue;
             }
             Error writeError = FileUtils.writeTextToFile(name, file.getAbsolutePath(),

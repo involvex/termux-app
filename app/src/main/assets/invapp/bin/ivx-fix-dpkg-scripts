@@ -1,9 +1,12 @@
 #!@BASH@
-# ivx-fix-dpkg-scripts — heal dpkg info/format and patch maintainer scripts.
+# ivx-fix-dpkg-scripts — heal dpkg info/ metadata + patch maintainer scripts.
 #
-# Only touches dpkg maintainer scripts (preinst/postinst/…). Never info/format,
-# *.list, *.md5sums. Older invapp-fix-dpkg-scripts prepended #!$PREFIX/bin/sh
-# to every info/* file and corrupted format (dpkg expects exactly "1\n").
+# Fixes:
+#   - info/format must be exactly "1\n" (older helpers prepended a shebang)
+#   - maintainer scripts (preinst/…) stock shebangs + com.termux → this package id
+#   - *.triggers / *.list / other metadata: strip accidental shebangs, ensure
+#     trailing newlines (dpkg: "too-long line or missing newline in …triggers")
+#   - irreparable *.triggers → remove so the next unpack recreates them
 #
 # Compat: invapp-fix-dpkg-scripts is a thin alias to this command.
 
@@ -20,6 +23,7 @@ NEW=$(basename "$(dirname "$(dirname "$PREFIX")")" 2>/dev/null || true)
 [ -n "$NEW" ] || NEW="com.involvex.termux_app"
 
 INFO="$PREFIX/var/lib/dpkg/info"
+TRIGDB="$PREFIX/var/lib/dpkg/triggers"
 FORMAT="$INFO/format"
 mkdir -p "$INFO"
 
@@ -37,12 +41,96 @@ is_maint() {
     esac
 }
 
-strip_accidental_shebang() {
+# Metadata that dpkg parses line-oriented (must end with \n; no shebang).
+is_line_meta() {
+    case "$1" in
+        *.triggers|*.list|*.conffiles|*.md5sums|*.shlibs|*.symbols|*.templates)
+            return 0 ;;
+        format) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Strip one leading #!… line (any shebang — not only #!$PREFIX/bin/sh).
+strip_leading_shebang() {
     local f="$1" line
     line="$(head -1 "$f" 2>/dev/null || true)"
-    if [ "$line" = "#!$PREFIX/bin/sh" ]; then
-        tail -n +2 "$f" > "$f.new" && mv "$f.new" "$f"
+    case "$line" in
+        '#!'*)
+            tail -n +2 "$f" > "$f.new" && mv "$f.new" "$f"
+            ;;
+    esac
+}
+
+# Ensure every non-empty file ends with a newline (dpkg fgets requires it).
+ensure_trailing_newline() {
+    local f="$1" hex
+    [ -s "$f" ] || return 0
+    hex=$(tail -c 1 "$f" 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n')
+    case "$hex" in
+        *0a*) return 0 ;;
+    esac
+    printf '\n' >> "$f"
+}
+
+# True when a triggers body looks unreadable to dpkg (still a shebang, or
+# non-empty with zero newline-terminated lines → "too-long line or missing newline").
+# Empty files return false here — callers decide whether empty *.triggers should go.
+triggers_looks_corrupt() {
+    local f="$1" line lines
+    [ -f "$f" ] || return 1
+    [ -s "$f" ] || return 1
+    line="$(head -1 "$f" 2>/dev/null || true)"
+    case "$line" in
+        '#!'*) return 0 ;;
+    esac
+    lines=$(wc -l < "$f" 2>/dev/null | tr -d ' ')
+    if [ "${lines:-0}" = "0" ]; then
+        return 0
     fi
+    return 1
+}
+
+heal_meta_file() {
+    local f="$1" base="$2"
+    strip_leading_shebang "$f"
+    # Path rewrite can leave stock package id in .list paths — safe for redirects,
+    # but keep .triggers free of accidental shebang-only debris.
+    if [ -s "$f" ] && grep -q "$OLD" "$f" 2>/dev/null; then
+        sed -i "s|$OLD|$NEW|g" "$f" 2>/dev/null || true
+    fi
+    ensure_trailing_newline "$f"
+    case "$base" in
+        *.triggers)
+            # Glued shebang (no \\n) → strip leaves empty; empty/corrupt → delete so
+            # the next unpack recreates a clean triggers file from the deb.
+            if [ ! -s "$f" ] || triggers_looks_corrupt "$f"; then
+                rm -f "$f"
+                echo "ivx-fix-dpkg-scripts: removed corrupt $base (reinstall package to recreate)"
+            fi
+            ;;
+    esac
+}
+
+# Global triggers DB under var/lib/dpkg/triggers/ (File, ldconfig, …).
+heal_triggers_db() {
+    local f base
+    [ -d "$TRIGDB" ] || return 0
+    for f in "$TRIGDB"/*; do
+        [ -f "$f" ] || continue
+        base="${f##*/}"
+        case "$base" in
+            Lock|Unincorp|await) continue ;;
+        esac
+        strip_leading_shebang "$f"
+        ensure_trailing_newline "$f"
+        if triggers_looks_corrupt "$f"; then
+            # Empty File is OK; corrupt Lock-like names we skip. For named
+            # interest files, move aside so dpkg can rebuild.
+            mv -f "$f" "$f.bad.$$" 2>/dev/null || rm -f "$f"
+            echo "ivx-fix-dpkg-scripts: quarantined corrupt triggers/$base"
+        fi
+    done
 }
 
 fixdir() {
@@ -52,22 +140,31 @@ fixdir() {
         [ -f "$f" ] || continue
         base="${f##*/}"
         [ "$base" = "format" ] && continue
-        if ! is_maint "$base"; then
-            strip_accidental_shebang "$f"
+        if is_maint "$base"; then
+            if ! head -1 "$f" 2>/dev/null | grep -q '^#!'; then
+                { echo "#!$PREFIX/bin/sh"; cat "$f"; } > "$f.new" && mv "$f.new" "$f"
+            fi
+            sed -i "s|$OLD|$NEW|g" "$f" 2>/dev/null || true
+            case "$(head -1 "$f" 2>/dev/null)" in
+                '#!/bin/sh'*) sed -i "1s|^#!/bin/sh|#!$PREFIX/bin/sh|" "$f" 2>/dev/null || true ;;
+                '#!/bin/bash'*) sed -i "1s|^#!/bin/bash|#!$PREFIX/bin/bash|" "$f" 2>/dev/null || true ;;
+            esac
+            chmod 700 "$f" 2>/dev/null || true
             continue
         fi
-        if ! head -1 "$f" 2>/dev/null | grep -q '^#!'; then
-            { echo "#!$PREFIX/bin/sh"; cat "$f"; } > "$f.new" && mv "$f.new" "$f"
+        if is_line_meta "$base"; then
+            heal_meta_file "$f" "$base"
+            continue
         fi
-        sed -i "s|$OLD|$NEW|g" "$f" 2>/dev/null || true
-        case "$(head -1 "$f" 2>/dev/null)" in
-            '#!/bin/sh'*) sed -i "1s|^#!/bin/sh|#!$PREFIX/bin/sh|" "$f" 2>/dev/null || true ;;
-            '#!/bin/bash'*) sed -i "1s|^#!/bin/bash|#!$PREFIX/bin/bash|" "$f" 2>/dev/null || true ;;
-        esac
-        chmod 700 "$f" 2>/dev/null || true
+        # Unknown info/* : still strip accidental shebang + trailing newline.
+        strip_leading_shebang "$f"
+        ensure_trailing_newline "$f"
     done
 }
 
 fixdir "$PREFIX/var/lib/dpkg/tmp.ci"
 fixdir "$INFO"
-echo "ivx-fix-dpkg-scripts: patched maintainer scripts under tmp.ci and info"
+heal_triggers_db
+echo "ivx-fix-dpkg-scripts: patched maintainer scripts + healed info/*.triggers|list under tmp.ci and info"
+echo "hint: if pkg upgrade still fails on a named .triggers file, remove it then reinstall:"
+echo "  rm -f \"\$PREFIX/var/lib/dpkg/info/<pkg>.triggers\" && pkg install -f <pkg>"

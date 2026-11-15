@@ -88,7 +88,13 @@ public class IvxConfigureInstallerTest {
         assertTrue(body.contains("info/format"));
         assertTrue(body.contains("is_maint"));
         assertTrue(body.contains("printf '1\\n'"));
-        assertTrue(body.contains("strip_accidental_shebang"));
+        assertTrue(body.contains("strip_leading_shebang")
+            || body.contains("strip_accidental_shebang"));
+        assertTrue("must heal *.triggers (dpkg too-long line / missing newline)",
+            body.contains(".triggers"));
+        assertTrue(body.contains("ensure_trailing_newline"));
+        assertTrue(body.contains("heal_triggers_db")
+            || body.contains("triggers_looks_corrupt"));
     }
 
     @Test

@@ -86,4 +86,35 @@ public class DpkgMaintainerScriptFixTest {
         assertEquals("hello",
             TermuxShellEnvironment.stripAccidentalDpkgShebang("hello", PREFIX));
     }
+
+    @Test
+    public void triggers_stripsShebangAndAddsNewline() {
+        String damaged = "#!" + PREFIX + "/bin/sh\n"
+            + "interest /data/data/com.termux/files/usr/share/applications";
+        String out = TermuxShellEnvironment.patchDpkgMaintainerScriptText(
+            damaged, PREFIX, "desktop-file-utils.triggers");
+        assertFalse(out.startsWith("#!"));
+        assertTrue(out.endsWith("\n"));
+        assertTrue(out.contains("com.involvex.termux_app"));
+        assertFalse(out.contains("com.termux/"));
+    }
+
+    @Test
+    public void triggers_gluedShebangIsCorruptEmpty() {
+        String glued = "#!" + PREFIX + "/bin/sh"
+            + "interest /usr/share/applications";
+        String out = TermuxShellEnvironment.patchDpkgMaintainerScriptText(
+            glued, PREFIX, "desktop-file-utils.triggers");
+        assertEquals("", out);
+        assertTrue(TermuxShellEnvironment.isCorruptDpkgTriggersBody(""));
+        assertTrue(TermuxShellEnvironment.isDpkgLineMetaFileName("pkg.triggers"));
+    }
+
+    @Test
+    public void triggers_addsMissingTrailingNewline() {
+        String body = "interest /usr/share/applications";
+        String out = TermuxShellEnvironment.patchDpkgMaintainerScriptText(
+            body, PREFIX, "desktop-file-utils.triggers");
+        assertEquals("interest /usr/share/applications\n", out);
+    }
 }
