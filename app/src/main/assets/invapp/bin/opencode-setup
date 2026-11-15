@@ -12,6 +12,11 @@
 set -e
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 
+# Drop broken official-install shims (point at ~/.opencode/bin).
+rm -f "$PREFIX/bin/opencode-v2" "$PREFIX/bin/opencode-v2-server" \
+  "$HOME/.bun/bin/opencode-v2" "$HOME/.bun/bin/opencode-v2-server" \
+  "$HOME/.local/bin/opencode-v2" "$HOME/.local/bin/opencode-v2-server" 2>/dev/null || true
+
 case "$(uname -m)" in
     aarch64|arm64) OC_ASSET=opencode-linux-arm64.tar.gz; OC_LD=ld-linux-aarch64.so.1 ;;
     x86_64|amd64)  OC_ASSET=opencode-linux-x64.tar.gz;  OC_LD=ld-linux-x86-64.so.2 ;;
@@ -235,7 +240,7 @@ write_wrapper
 
 echo "opencode-setup: probing opencode --version…"
 if "$PREFIX/bin/opencode" --version; then
-    echo "OK (v${OPENCODE_INSTALLED_VERSION:-unknown}). Run: td-ai   # serve 0.0.0.0:4096"
+    echo "OK (v${OPENCODE_INSTALLED_VERSION:-unknown}). Run: td-ai / opencode-server   # service 0.0.0.0:4000"
 else
     echo "opencode-setup: wrapper installed but the binary failed under glibc" >&2
     exit 1

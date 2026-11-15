@@ -38,7 +38,7 @@ https://github.com/involvex/termux-app
 ### 3. AI tools (done — bootstrap)
 
 - `opencode-setup` — download official `opencode-linux-*.tar.gz` + glibc wrapper
-- `td-ai [port]` — install if needed, start `opencode web` (default **4096**), print Preview hint
+- `td-ai [port]` — install if needed, start OpenCode (now `opencode-server` / service, default **4000**)
 - Not baked into the APK; installs into the Termux prefix on demand
 
 ### 4. Workflow UX (done)
@@ -230,8 +230,8 @@ td-dev                    # vite on :5173
 
 ```bash
 # AI web UI in Preview
-td-ai          # or: drawer → AI (skips start if :4096 already up)
-# Preview opens on :4096
+td-ai          # or: drawer → AI (skips start if :4000 already up)
+# Preview opens on :4000
 # drawer → Stop AI   # when done
 ```
 

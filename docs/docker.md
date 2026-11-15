@@ -30,14 +30,14 @@ docker run --rm ghcr.io/involvex/termux-docker:x86_64 td-info
 td-clone https://github.com/involvex/termux-app myapp   # clone into ~/repos
 td-scaffold myapp react-ts                              # vite project
 cd ~/repos/myapp && td-dev                              # dev server
-td-ai                                                    # OpenCode on :4096
+td-ai                                                    # OpenCode service on :4000
 ```
 
 Ports are published on the **host** side, because the app's Preview WebView has
 no container equivalent:
 
 ```bash
-docker run -it --rm -p 5173:5173 -p 4096:4096 ghcr.io/involvex/termux-docker:x86_64
+docker run -it --rm -p 5173:5173 -p 4000:4000 ghcr.io/involvex/termux-docker:x86_64
 ```
 
 `td-dev` and `td-scaffold` bind `0.0.0.0` for exactly this reason. There is also

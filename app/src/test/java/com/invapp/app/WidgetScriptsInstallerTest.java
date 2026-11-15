@@ -162,8 +162,8 @@ public class WidgetScriptsInstallerTest {
         String tdAi = WidgetScriptsInstaller.scriptBody(
             WidgetScriptsInstaller.ID_TD_AI);
         assertNotNull(tdAi);
-        assertTrue(tdAi.contains("td-ai &"));
-        assertTrue(tdAi.contains("command -v td-ai"));
+        assertTrue(tdAi.contains("opencode-server") || tdAi.contains("td-ai"));
+        assertTrue(tdAi.contains("4000"));
         assertTrue(tdAi.contains("OpenCode ready"));
         assertTrue(tdAi.contains("already ready"));
         assertTrue(tdAi.contains("global/health"));

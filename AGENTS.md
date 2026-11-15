@@ -52,7 +52,7 @@ See `ROADMAP.md`.
 | node shim | `$PREFIX/bin/node` → bun if `nodejs` package not installed |
 | Default cwd | `~/repos` (exec-capable). `~/storage/shared` is browse/sync only (**noexec**) |
 | Preview | Drawer **Preview** → Scan + chips (loopback by default); any `http`/`https` URL in the bar/WebView; **Copy LAN** / **QR LAN** / long-press chip → `http://<wifi-ip>:<port>` when bound on `0.0.0.0` |
-| AI helper | `opencode-setup` / `td-ai [port]` → OpenCode V2 `serve` on `:4096` (binds **`0.0.0.0`** by default for LAN; Preview still uses `127.0.0.1`). Setup downloads official V2 `opencode-linux-*.tar.gz` from `opencode.ai/files/bin` (live lookup via update API, fallback `2.0.6`; no `bun install` / no postinstall), then `glibc` + ld-linux wrapper with **`LD_PRELOAD=` empty** and DNS shim via **`ld-linux --preload $PREFIX/lib/libinvapp-opencode-shim.so`** (arm64 shipped in APK assets). Optional `OPENCODE_VERSION=2.0.6` (`1.x` still uses old GitHub tarball); bind override `OPENCODE_HOST=127.0.0.1`. Drawer **AI** probes missing/installed/ready (`GET /api/info` + Basic auth); long-press / **Stop AI** kills `:4096`. On-demand into `$PREFIX`, not baked into APK |
+| AI helper | `opencode-setup` / `td-ai` → `opencode-server` → OpenCode V2 **`service start`** on `:4000` (binds **`0.0.0.0`** by default; Preview uses `127.0.0.1`). Removes legacy `opencode-v2*` shims. Setup downloads official V2 `opencode-linux-*.tar.gz` from `opencode.ai/files/bin` (live lookup, fallback `2.0.6`), then `glibc` + ld-linux wrapper with **`LD_PRELOAD=` empty** and DNS shim via **`ld-linux --preload $PREFIX/lib/libinvapp-opencode-shim.so`**. Override `OPENCODE_HOST` / port arg. Drawer **AI** probes missing/installed/ready (`GET /api/info` + Basic auth); **Stop AI** / `opencode-server stop`. On-demand into `$PREFIX`, not baked into APK |
 | Cursor Agent | `cursor-agent-setup` → official `agent-cli-package.tar.gz` (glibc Node 24; **never** Bun / `curl\|bash`). `$PREFIX/bin/agent` runs bundled `node` via `ld-linux` + same DNS shim. Cloud My Machines: `agent login` then `td-agent-worker start` → https://cursor.com/agents. Pin `CURSOR_AGENT_VERSION=…`; after `agent update` run `cursor-agent-setup --wrap-only`. Stack refresh: `td-upgrade` (pkg + opencode + agent rewrap + Bun stamp; no `bun upgrade`) |
 | Dev server | `td-dev [script]` → `bun run` with Preview/LAN hints |
 | Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`); `pwa` / `pwa-react` add `vite-plugin-pwa` |
@@ -61,7 +61,7 @@ See `ROADMAP.md`.
 | NetHunter | Optional device-only: `td-proot-nethunter setup` / `td-nethunter-setup` downloads official **kali.download** NetHunter rootfs into `$PREFIX/var/td-udocker/rootfs/kali` + direct `proot` (not `udocker import` / not `pd install kali*` — Hub/`pd` often `execve(bash)` ENOENT on this fork). PC fallback: `docker save` → `td-udocker-setup --from-docker-save`. `td-proot-nethunter` → TigerVNC **`127.0.0.1:5901`** (AVNC/KeX). Ubuntu GUI: `td-proot-linux --gui` → **`:5902`**. Docs: `docs/nethunter.md` |
 | File share → Edit | Seeds `~/bin/termux-file-editor` (nvim→vim→nano→less) for FileReceiver |
 | Widget scripts | `~/.shortcuts` templates (defaults: `clipboard-speak`, `clipboard-to-file`, `git-pull-repos`, `screen-ocr`, `tasks/td-ai`; optional catalog: camera/wifi/battery/torch/share/settings/vibrate/volume/location/telephony/`stop-ai`/`td-upgrade`/`stop-agent-worker`/`tasks/agent-worker`); Settings / right drawer; matching Widget APK + API/`pkg install termux-api`. `screen-ocr` → `td-screen-ocr`. **2-finger swipe down** (or Ctrl+Alt+T) opens Tools end drawer. Widget tap always shows **Running: name** toast |
-| Workflow | Drawer quick bar (customizable + reorderable via **⋯**): defaults td-sync / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize / Reorder / Customize keys (also **Settings → Customize keybinds**; writes text-label `extra-keys` + `extra-keys-style=none`). Extra-keys: page 1 ESC/HOME/CTRL as text; swipe L/R for workflow page; end drawer = Tools. Long-press / Ctrl+Alt+M → actions bottom sheet. AI tap when ready opens Preview and may offer **Copy LAN** if `:4096` is wildcard-bound |
+| Workflow | Drawer quick bar (customizable + reorderable via **⋯**): defaults td-sync / bun i / bun run dev / Repos / Clone… / New… / AI; overflow has Run… / Stop AI / Customize / Reorder / Customize keys (also **Settings → Customize keybinds**; writes text-label `extra-keys` + `extra-keys-style=none`). Extra-keys: page 1 ESC/HOME/CTRL as text; swipe L/R for workflow page; end drawer = Tools. Long-press / Ctrl+Alt+M → actions bottom sheet. AI tap when ready opens Preview and may offer **Copy LAN** if `:4000` is wildcard-bound |
 | Completions | App installs `$PREFIX/etc/profile.d/invapp-completions.sh` + `bash_completion.d` for bun/pkg/npm/gh/git. Prefer `pkg install bash-completion` for richer git. **New session** after update. Never edit `~/.bashrc` |
 | Setup / banner | `ivx-configure` (pure bash: appearance, completions, package groups, **network** DNS/proxy/`GOPROXY`, doctor, AI hints, reset) + `ivx-doctor` + `ivx-cleanup` (global pkg/cargo/bun/npm/pip/uv) + `ivx-disk-analyze` (toybox `df`/`du`) + `ivx-fix-dpkg-scripts` (+ `invapp-` alias) + login banner. Art = pre-rendered pyfiglet **pixelfont** output for "InvolveX" in `$PREFIX/lib/invapp/banner.sh` (the GPL `.flf` font is **not** shipped); hooks = `$PREFIX/etc/profile.d/invapp-banner.sh` + `invapp-network.sh` (manual proxy exports); config user-owned in `${XDG_CONFIG_HOME:-~/.config}/invapp/` (`config`, `art.txt`); managed completions `$PREFIX/etc/bash_completion.d/ivx-<tool>.bash`. Banner guarded by `BASH_VERSION` + interactive `$-` + `[ -t 1 ]` + `TERM!=dumb` + empty `SSH_ORIGINAL_COMMAND`, so widgets/`ssh host cmd`/`bash -lc` stay silent. Reseeded every app start by `IvxConfigureInstaller` (+ after bootstrap in `TermuxInstaller`); drawer **Setup** + opt-in quick-bar catalog entry. Docs: `docs/configure.md` |
 | Container | `app/src/main/assets/invapp/` = container twin of the seeded env (bun, `td-*`, configs, `~/.shortcuts`, opencode/cursor installers). Built by the `involvex/termux-docker` fork: `INVAPP_SRC=../termux-app/app/src/main/assets/invapp ./generate.sh --invapp` → `ghcr.io/involvex/termux-docker:<arch>`. Dropped vs APK: path redirector, bun seccomp shim, OpenCode DNS shim, fork-safe `proot` wrapper (`seed.sh` skips it). Kept: `--os=android` (prefix is bionic!) + Termux glibc wrappers. Details: `docker/README.md` |
@@ -114,7 +114,10 @@ See `ROADMAP.md`.
   Ensure `$PREFIX/lib/libinvapp-opencode-shim.so` exists (APK ships arm64),
   wrapper uses `--preload`, seed resolv/CA under `$PREFIX/glibc/etc`, export
   `SSL_CERT_FILE` / `NODE_EXTRA_CA_CERTS`. Ready check is
-  `GET http://127.0.0.1:4096/global/health` (not `:5000/api`).
+  `GET http://127.0.0.1:4000/api/info` (not `:5000/api`).
+- Leftover `opencode-v2` / `opencode-v2-server` → missing `~/.opencode/bin/opencode`
+  — remove those shims (`opencode-setup` / `opencode-server` do it) and use
+  `$PREFIX/bin/opencode` + `opencode-server` / `td-ai` only.
 - `getifaddrs returned an error` — non-fatal for web bind on `0.0.0.0`;
   never use `--mdns`. Override with `OPENCODE_HOST=127.0.0.1 td-ai` if needed.
   Firewall/VPN may block LAN clients; Preview defaults to loopback and can open any http(s) URL.
@@ -192,6 +195,11 @@ See `ROADMAP.md`.
   including `format` (dpkg expects exactly `1\n`). Reopen the app (session
   healer restores it) or run `ivx-fix-dpkg-scripts`, or manually:
   `printf '1\n' > "$PREFIX/var/lib/dpkg/info/format"`.
+- `dpkg: too-long line or missing newline in …/info/<pkg>.triggers` — same
+  older helpers (or a missing final newline) corrupt line-oriented metadata.
+  `ivx-fix-dpkg-scripts` strips shebangs, appends newlines, and removes
+  irreparable `*.triggers`. If unpack still fails: 
+  `rm -f "$PREFIX/var/lib/dpkg/info/<pkg>.triggers" && pkg install -f <pkg>`.
 - `pd run …` / `proot-distro` → `execve("/usr/bin/bash"): No such file or
   directory`, guest `libc.so` missing, or `unknown option '-e'` — stock
   `proot` under the path redirector breaks guest execve. The fork-safe
@@ -335,7 +343,7 @@ ivx-doctor           # read-only health report (--strict, --network)
 ivx-cleanup          # interactive remove: pkg / cargo / bun -g / npm -g / pip / uv
 ivx-disk-analyze     # df/du: prefix, home, guests, large files
 ivx-fix-dpkg-scripts # heal dpkg info/format + maintainer shebangs
-td-ai                # OpenCode on 0.0.0.0:4096 → Preview 127.0.0.1 / LAN Copy
+td-ai                # OpenCode service on 0.0.0.0:4000 → Preview 127.0.0.1 / LAN Copy
 # Linux guests (optional, device-only):
 # td-proot-linux                # Ubuntu shell (td-resource-linux)
 # td-proot-linux --gui          # TigerVNC + XFCE/openbox → AVNC on :5902
@@ -360,7 +368,7 @@ TERMUX_ARCH=x86_64 ./generate.sh --invapp            # pick the ABI
 TERMUX_DOCKER__INVAPP_WITH_AI=1 ./generate.sh --invapp   # bake in opencode + cursor agent
 
 docker run -it ghcr.io/involvex/termux-docker:aarch64
-docker run -it --rm -p 5173:5173 -p 4096:4096 ghcr.io/involvex/termux-docker:x86_64
+docker run -it --rm -p 5173:5173 -p 4000:4000 ghcr.io/involvex/termux-docker:x86_64
 docker run --rm ghcr.io/involvex/termux-docker:x86_64 td-info
 # OR the root compose file (same working tree via docker/ bind mounts):
 docker compose up -d && docker compose exec invtermux bash

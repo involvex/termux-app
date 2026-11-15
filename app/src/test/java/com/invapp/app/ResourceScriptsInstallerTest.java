@@ -89,7 +89,7 @@ public class ResourceScriptsInstallerTest {
         assertTrue(body.contains("opencode-setup"));
         assertTrue(body.contains("opencode-fix-net"));
         assertTrue(body.contains("td-ai"));
-        assertTrue(body.contains("4096"));
+        assertTrue(body.contains("4000"));
         assertTrue(body.contains("cursor-agent"));
     }
 

@@ -64,7 +64,7 @@ public final class AiSessionHelper {
     @NonNull
     public static Status probe(int port) {
         // Prefer V2 OpenAPI info (GET /api/info, {"data":...}) over bare TCP —
-        // Preview must talk to a live OpenCode server, not an unrelated :4096.
+        // Preview must talk to a live OpenCode server, not an unrelated :4000.
         // V1 /global/health is kept as a fallback for 1.18.x binaries.
         if (isOpenCodeHealthy(port)) {
             return Status.READY;
@@ -431,7 +431,9 @@ public final class AiSessionHelper {
         try {
             ProcessBuilder pb = new ProcessBuilder(
                 bash.getAbsolutePath(), "-c",
-                "pkill -f '[o]pencode web' 2>/dev/null;"
+                "opencode-server stop 2>/dev/null;"
+                    + " opencode service stop 2>/dev/null;"
+                    + " pkill -f '[o]pencode web' 2>/dev/null;"
                     + " pkill -f '[o]pencode serve' 2>/dev/null;"
                     + " true"
             );

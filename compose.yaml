@@ -42,9 +42,9 @@ services:
       - ./docker/repos:/data/data/com.termux/files/home/repos
       - ./docker/home-cache:/data/data/com.termux/files/home/.cache
     ports:
-      # td-dev / vite (5173), td-ai (4096)
+      # td-dev / vite (5173), td-ai / opencode-server (4000)
       - "5173:5173"
-      - "4096:4096"
+      - "4000:4000"
       # "3000:3000" # other dev servers
     # Only needed if bun reports "Bad system call" (Docker's default seccomp
     # profile can reject openat2/fchmodat2). See docker/README.md.

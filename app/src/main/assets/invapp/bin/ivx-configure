@@ -1841,10 +1841,11 @@ cmd_ai() {
                 docwarn "opencode DNS shim missing (opencode-setup installs it on arm64)"
             fi
             if command -v curl >/dev/null 2>&1; then
-                if curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:4096/global/health 2>/dev/null; then
-                    ok "OpenCode API responding on :4096"
+                if curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:4000/api/info 2>/dev/null \
+                    || curl -fsS --max-time 2 -o /dev/null http://127.0.0.1:4000/global/health 2>/dev/null; then
+                    ok "OpenCode API responding on :4000"
                 else
-                    dim "OpenCode API not answering on :4096"
+                    dim "OpenCode API not answering on :4000"
                 fi
             fi
             ;;

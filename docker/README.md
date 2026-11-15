@@ -12,14 +12,15 @@ string literals. On device, the same asset files are installed with
 `writeExecutableAsset` (`ShellLibraryInstaller`, `ResourceScriptsInstaller`,
 `TermuxHackerThemeInstaller`).
 
-Note: `bin/bun`, `bin/bunx`, `bin/bun-doctor`, `bin/node` and `td-dev` are now
-installed from the shared `bin/` assets on both device and container. What is
-still a Java string literal in `TermuxBunInstaller.java` is `opencode-setup`
-(glibc/`ld-linux` wrapper plus the Android DNS shim) and the `td-*` helpers
-whose device and container UX intentionally differ — they carry on-device hints
-("reopen the app", "drawer → Preview") that are meaningless in a container, so
-they are a reconciliation rather than a copy. Those stay gated on an on-device
-validation pass: the glibc/`ld-linux` glue cannot be runtime-checked here.
+Note: `bin/bun`, `bin/bunx`, `bin/bun-doctor`, `bin/node`, `td-dev`, `td-ai`,
+`td-ai-stop`, and `opencode-server` are installed from shared `bin/` assets on
+both device and container. What remains a Java string literal in
+`TermuxBunInstaller.java` is mainly `opencode-setup` (glibc/`ld-linux` wrapper
+plus the Android DNS shim) and a few `td-*` helpers whose device and container
+UX intentionally differ — they carry on-device hints ("reopen the app",
+"drawer → Preview") that are meaningless in a container. Those stay gated on
+an on-device validation pass: the glibc/`ld-linux` glue cannot be runtime-checked
+here.
 
 ## What is in here
 
@@ -74,7 +75,7 @@ Build knobs (all optional):
 
 ```sh
 docker run -it ghcr.io/involvex/termux-docker:aarch64
-docker run -it --rm -p 5173:5173 -p 4096:4096 ghcr.io/involvex/termux-docker:x86_64
+docker run -it --rm -p 5173:5173 -p 4000:4000 ghcr.io/involvex/termux-docker:x86_64
 td-info          # inside: what this image can and cannot do
 ```
 
@@ -256,7 +257,7 @@ password on start; it persists it nowhere. So the container pins one:
 `td-ai` exports it before exec'ing `opencode serve`, prints the matching
 `curl -u opencode:<password> …` line, and detects an already-running server on
 later invocations. Without this, a second `td-ai` could not authenticate and
-would report your own healthy server as a foreign listener on `:4096`.
+would report your own healthy server as a foreign listener on `:4000`.
 
 ## Keeping this in sync with the app
 
@@ -277,5 +278,5 @@ Parity checks worth running after a change:
 docker run --rm ghcr.io/involvex/termux-docker:x86_64 td-info
 docker run --rm ghcr.io/involvex/termux-docker:x86_64 bun-doctor
 docker run --rm ghcr.io/involvex/termux-docker:x86_64 bash -lc 'cd ~/repos && td-scaffold smoke react-ts --no-install'
-docker run --rm ghcr.io/involvex/termux-docker:x86_64 bash -lc 'td-ai 4096 & sleep 8; curl -fsS http://127.0.0.1:4096/global/health || curl -fsS http://127.0.0.1:4096/api/info'
+docker run --rm ghcr.io/involvex/termux-docker:x86_64 bash -lc 'td-ai 4000; sleep 2; curl -fsS -u opencode:$OPENCODE_SERVER_PASSWORD http://127.0.0.1:4000/api/info || curl -fsS http://127.0.0.1:4000/global/health'
 ```

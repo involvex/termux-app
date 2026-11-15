@@ -23,7 +23,7 @@ Package id: `com.involvex.termux_app` · Latest: **v0.205.0** · Docs:
 - **Bun 1.4.4 (Android)** — embedded; `$PREFIX/libexec/bun` + `$PREFIX/bin/bun` shim (seccomp + `--os=android`)
 - **Default cwd** — `~/repos` (executable). Prefer over `~/storage/shared` (**noexec**)
 - **Localhost Preview** — drawer → **Preview** (port scan / chips / Copy LAN)
-- **OpenCode helper** — `opencode-setup` then `td-ai` (web UI on `:4096`) → Preview
+- **OpenCode helper** — `opencode-setup` then `td-ai` / `opencode-server` (service on `:4000`) → Preview
 - **Cursor Agent worker** — `cursor-agent-setup` then `td-agent-worker start` → Cursor cloud My Machines
 - **Workflow helpers** — `td-scaffold`, `td-dev`, `td-clone`, `td-upgrade`, customizable drawer quick bar
 - **First-run setup** — `ivx-configure`: login banner (pixelfont art), bash
@@ -90,7 +90,7 @@ td-dev                    # then drawer → Preview → Scan
 ```
 
 ```bash
-td-ai                     # OpenCode on :4096 → Preview
+td-ai                     # OpenCode service on :4000 → Preview
 cursor-agent-setup        # Cursor Agent CLI (glibc)
 td-agent-worker start     # Cursor cloud My Machines
 td-upgrade                # pkg + opencode + agent + bun stamp

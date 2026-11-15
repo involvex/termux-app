@@ -20,7 +20,7 @@ public final class PreviewPortPrefs {
 
     /** Default preferred ports (Vite / Expo / OpenCode / common frameworks). */
     public static final int[] DEFAULT_PREFERRED = {
-        4096, 3000, 3001, 4173, 5000, 5173, 8000, 8080, 8081, 8888, 19000, 19006
+        4000, 4096, 3000, 3001, 4173, 5000, 5173, 8000, 8080, 8081, 8888, 19000, 19006
     };
 
     private static final String PREFS = "invapp_preview_ports";

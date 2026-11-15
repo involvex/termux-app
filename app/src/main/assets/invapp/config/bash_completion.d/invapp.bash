@@ -24,7 +24,7 @@ _td_clone() {
 complete -F _td_clone td-clone
 
 _td_ai() {
-    COMPREPLY=( $(compgen -W "4096 5000 8080" -- "${COMP_WORDS[COMP_CWORD]}") )
+    COMPREPLY=( $(compgen -W "4000 4096 5000 8080" -- "${COMP_WORDS[COMP_CWORD]}") )
 }
 complete -F _td_ai td-ai
 

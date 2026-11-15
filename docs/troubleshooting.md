@@ -7,6 +7,7 @@
 | `Permission denied` on `tsc` / bins | Project is under shared storage (**noexec**). Move to `~/repos` |
 | OpenJDK install stuck / `java` dlopen / Bad system call | Run `td-jdk-setup` (installs recommends incl. `libandroid-shmem`). `jdk-doctor` for details. See [OpenJDK 17](openjdk.md) |
 | `dpkg: corrupt info database format file …/info/format` | Older helpers damaged `format` (must be `1\n`). Reopen app or `ivx-fix-dpkg-scripts`, or `printf '1\n' > "$PREFIX/var/lib/dpkg/info/format"` |
+| `dpkg: too-long line or missing newline in …/*.triggers` | Corrupt `info/*.triggers` (often a glued shebang from older fixers). Run `ivx-fix-dpkg-scripts`, then `rm -f "$PREFIX/var/lib/dpkg/info/<pkg>.triggers" && pkg install -f <pkg>` |
 | `pd run` / proot → guest `libc.so` / host `libtalloc` / `libandroid-shmem` / `execve(bash)` ENOENT | Stage host deps into `$PREFIX/libexec/proot-libs` (not full `$PREFIX/lib`); wrapper shebang `#!/system/bin/sh` + `LD_PRELOAD=`. After `pkg reinstall proot`, rewrap (ELF overwrote `bin/proot`). Then `pd reset ubuntu && pd install ubuntu` if rootfs is incomplete. |
 | `td-resource-linux --run` → `libandroid-support` / `libtalloc` / `libandroid-shmem` | Same proot-libs staging; `export LD_LIBRARY_PATH=$PREFIX/lib` for host shell; reopen app to rewrite `run.sh` |
 | Host bash → `libandroid-support` / `libreadline` not found after proot | `LD_LIBRARY_PATH` was left as `libexec/proot-libs` only. Run `export LD_LIBRARY_PATH=$PREFIX/lib` (new sessions auto-heal via `profile.d/invapp.sh`) |
@@ -15,8 +16,9 @@
 | Low disk / find what eats space | `ivx-disk-analyze` (overview) · `ivx-disk-analyze guests` · `ivx-disk-analyze large ~/repos` |
 | OpenCode `Permission denied` / LIBC / postinstall / SIGSYS | Re-run `opencode-setup` (official V2 tarball + glibc). Do not `unset LD_PRELOAD` |
 | OpenCode `AI_APICallError` / “typo in the url or port” | Local `:4096` OK; Zen/provider broken. `rm -rf ~/.cache/opencode`, re-auth, seed glibc DNS/CA, `opencode-setup`, retry from `~/repos/…` (V1 only: fix `@opencode-ai/plugin@local` → `latest`) |
-| OpenCode `getifaddrs returned an error` | Non-fatal for `0.0.0.0` bind; V2 has no `--mdns`. Override `OPENCODE_HOST=127.0.0.1 td-ai` if needed. Preview uses `127.0.0.1:4096` / `/api/info` |
-| Preview blank / wrong port | OpenCode is `:4096` — there is no `/api` on `:5000`. Drawer **AI** opens Preview after health; tap Reload if early |
+| OpenCode `getifaddrs returned an error` | Non-fatal for `0.0.0.0` bind; V2 has no `--mdns`. Override `OPENCODE_HOST=127.0.0.1 td-ai` if needed. Preview uses `127.0.0.1:4000` / `/api/info` |
+| Preview blank / wrong port | OpenCode is `:4000` — there is no `/api` on `:5000`. Drawer **AI** opens Preview after health; tap Reload if early |
+| `opencode-v2: missing …/.opencode/bin/opencode` | Remove legacy shims: `rm -f $PREFIX/bin/opencode-v2*`; use `opencode` + `opencode-server` / `td-ai` |
 | Tab completion missing for bun/pkg/npm | Open a **new** session after app update. Optional: `pkg install bash-completion`. Completers live under `$PREFIX/etc/bash_completion.d/` |
 | Banner missing on login | `ivx-configure status` — hook must exist and the shell must be interactive (`bash -lc` and `ssh host cmd` are silent by design). `IVX_FORCE`-free repro: `ivx-configure banner preview`. Reopen the app if the hook is missing |
 | Banner shows garbled blocks / wraps | Terminal too narrow for `pixelfont`; it falls back automatically. Pin it: `ivx-configure banner style mini` (or `plain`) |

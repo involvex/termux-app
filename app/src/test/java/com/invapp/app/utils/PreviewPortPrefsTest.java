@@ -32,6 +32,7 @@ public class PreviewPortPrefsTest {
     public void defaultPreferred_includesViteAndOpenCode() {
         List<Integer> defaults = PreviewPortPrefs.defaultPreferredList();
         assertTrue(defaults.contains(5173));
+        assertTrue(defaults.contains(4000));
         assertTrue(defaults.contains(4096));
         assertEquals(PreviewPortPrefs.DEFAULT_PREFERRED.length, defaults.size());
     }

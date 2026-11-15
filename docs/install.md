@@ -73,7 +73,7 @@ On first launch the app seeds templates under `~/.shortcuts` (and
 | `volume-info` | `termux-volume` → clipboard (optional) |
 | `location` | `termux-location` → clipboard + toast (optional) |
 | `telephony-info` | `termux-telephony-deviceinfo` → clipboard (optional) |
-| `stop-ai` | Stop OpenCode on `:4096` (optional) |
+| `stop-ai` | Stop OpenCode on `:4000` (optional) |
 | `td-upgrade` | `pkg` + OpenCode refresh + Cursor Agent update/rewrap + Bun stamp (optional) |
 | `stop-agent-worker` | Stop Cursor `agent worker` + wake-unlock (optional) |
 | `tasks/td-ai` | Background: start OpenCode via `td-ai` (skips if already healthy) |

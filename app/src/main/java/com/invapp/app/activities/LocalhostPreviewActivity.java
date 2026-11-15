@@ -66,7 +66,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class LocalhostPreviewActivity extends AppCompatActivity {
 
     public static final String EXTRA_PORT = "com.invapp.preview.port";
-    /** OpenCode default web port ({@code http://127.0.0.1:4096/}). */
+    /** OpenCode default service port ({@code http://127.0.0.1:4000/}). */
     private static final int DEFAULT_PORT = WorkflowHelper.AI_PREVIEW_PORT;
     private static final long AUTO_SCAN_INTERVAL_MS = 3000L;
 
@@ -629,7 +629,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         }
         if (targetChanged) {
             // Drop stale history so Back never resurrects another host/port's SPA shell
-            // (the "ghost OpenCode UI" when :4096 is actually down).
+            // (the "ghost OpenCode UI" when :4000 is actually down).
             mWebView.clearHistory();
         }
         syncUrlBar(url);
@@ -830,7 +830,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             + "<li>Is <code>bun run dev</code> / <code>td-dev</code> running?</li>"
             + "<li>Bind on <code>0.0.0.0</code> (not only loopback) for Copy LAN.</li>"
             + "<li>Use <b>Scan</b> to find listening ports, then <b>Reload</b>.</li>"
-            + "<li>OpenCode: <code>td-ai</code> → health on <code>:4096</code>.</li>"
+            + "<li>OpenCode: <code>td-ai</code> / <code>opencode-server</code> → health on <code>:4000</code>.</li>"
             + "<li>Pull down to retry. Use <b>Clear</b> if you see a stale app shell.</li>"
             + "</ul>"
             + "<p>Toolbar: Back · Fwd · Reload · Scan · Copy LAN · QR LAN · Clear · Browser</p>"

@@ -39,8 +39,8 @@ public final class WorkflowHelper {
     private static final Map<String, CachedGitStatus> sGitStatusCache = new ConcurrentHashMap<>();
     /** First-run setup: banner / completions / packages / doctor (pure bash). */
     public static final String CMD_IVX_CONFIGURE = "ivx-configure\n";
-    /** OpenCode web/serve default ({@code http://127.0.0.1:4096/}). */
-    public static final int AI_PREVIEW_PORT = 4096;
+    /** OpenCode service default ({@code http://127.0.0.1:4000/}). */
+    public static final int AI_PREVIEW_PORT = 4000;
     /** OpenCode V2 API probe — see https://opencode.ai/v2/docs/api */
     public static final String AI_INFO_PATH = "/api/info";
     /** OpenCode V1 health probe (kept as fallback) — see https://opencode.ai/docs/server/#apis */
@@ -66,9 +66,9 @@ public final class WorkflowHelper {
     }
 
     /**
-     * Parse Preview input that may be a bare port ({@code 4096}),
+     * Parse Preview input that may be a bare port ({@code 4000}),
      * {@code host:port}, or a full URL
-     * ({@code http://127.0.0.1:4096/path?q=1}, {@code https://example.com:443/}).
+     * ({@code http://127.0.0.1:4000/path?q=1}, {@code https://example.com:443/}).
      *
      * @return parsed target, or null when invalid
      */

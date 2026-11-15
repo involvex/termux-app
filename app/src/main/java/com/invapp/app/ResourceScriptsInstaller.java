@@ -409,7 +409,7 @@ public final class ResourceScriptsInstaller {
             + "ls -la \"$PREFIX/bin/agent\" 2>&1 || true\n"
             + "echo \"\"\n"
             + "echo \"Fixes: opencode-fix-net   # DNS/CA + shim rebuild\"\n"
-            + "echo \"Serve: td-ai   # binds 0.0.0.0:4096; Preview → http://127.0.0.1:4096/\"\n"
+            + "echo \"Serve: td-ai / opencode-server   # service 0.0.0.0:4000; Preview → http://127.0.0.1:4000/\"\n"
             + "echo \"Chat API fail ('typo in the url or port'): rm -rf ~/.cache/opencode && opencode-fix-net && td-ai\"\n";
     }
 

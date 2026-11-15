@@ -61,35 +61,35 @@ public class WorkflowHelperTest {
         assertTrue(pwaReact);
         assertEquals("react-ts", WorkflowHelper.VITE_TEMPLATES[0]);
         assertEquals("react-ts", WorkflowHelper.DEFAULT_VITE_TEMPLATE);
-        assertEquals(4096, WorkflowHelper.AI_PREVIEW_PORT);
+        assertEquals(4000, WorkflowHelper.AI_PREVIEW_PORT);
         assertEquals(5173, WorkflowHelper.VITE_DEFAULT_PORT);
         assertEquals("/global/health", WorkflowHelper.AI_HEALTH_PATH);
         assertEquals("/api/info", WorkflowHelper.AI_INFO_PATH);
-        assertEquals("http://127.0.0.1:4096/global/health",
-            WorkflowHelper.aiHealthUrl(4096));
-        assertEquals("http://127.0.0.1:4096/api/info",
-            WorkflowHelper.aiInfoUrl(4096));
-        assertEquals("http://127.0.0.1:4096", WorkflowHelper.aiBaseUrl(0));
+        assertEquals("http://127.0.0.1:4000/global/health",
+            WorkflowHelper.aiHealthUrl(4000));
+        assertEquals("http://127.0.0.1:4000/api/info",
+            WorkflowHelper.aiInfoUrl(4000));
+        assertEquals("http://127.0.0.1:4000", WorkflowHelper.aiBaseUrl(0));
     }
 
     @Test
     public void parsePreviewInput_acceptsPortHostPortAndFullUrl() {
         WorkflowHelper.ParsedPreviewUrl bare =
-            WorkflowHelper.parsePreviewInput("4096");
-        assertTrue(bare != null && bare.port == 4096 && bare.isLoopback());
+            WorkflowHelper.parsePreviewInput("4000");
+        assertTrue(bare != null && bare.port == 4000 && bare.isLoopback());
 
         WorkflowHelper.ParsedPreviewUrl hostPort =
             WorkflowHelper.parsePreviewInput("127.0.0.1:5173");
         assertTrue(hostPort != null && hostPort.port == 5173 && hostPort.isLoopback());
 
         WorkflowHelper.ParsedPreviewUrl full =
-            WorkflowHelper.parsePreviewInput("http://127.0.0.1:4096/chat?x=1");
-        assertTrue(full != null && full.port == 4096 && full.isLoopback());
+            WorkflowHelper.parsePreviewInput("http://127.0.0.1:4000/chat?x=1");
+        assertTrue(full != null && full.port == 4000 && full.isLoopback());
         assertEquals("/chat?x=1", full.pathAndQuery);
 
         WorkflowHelper.ParsedPreviewUrl lan =
-            WorkflowHelper.parsePreviewInput("http://192.168.1.10:4096/");
-        assertTrue(lan != null && lan.port == 4096 && !lan.isLoopback());
+            WorkflowHelper.parsePreviewInput("http://192.168.1.10:4000/");
+        assertTrue(lan != null && lan.port == 4000 && !lan.isLoopback());
         assertEquals("192.168.1.10", lan.loadHost());
         assertEquals("http", lan.scheme);
 
@@ -140,7 +140,7 @@ public class WorkflowHelperTest {
     public void isAllowedPreviewUrl_allowsHttpHttpsAndInertSchemes() {
         assertTrue(WorkflowHelper.isAllowedPreviewUrl("http://127.0.0.1:5173/"));
         assertTrue(WorkflowHelper.isAllowedPreviewUrl("https://example.com/"));
-        assertTrue(WorkflowHelper.isAllowedPreviewUrl("http://192.168.1.10:4096/"));
+        assertTrue(WorkflowHelper.isAllowedPreviewUrl("http://192.168.1.10:4000/"));
         assertTrue(WorkflowHelper.isAllowedPreviewUrl("about:blank"));
         assertTrue(WorkflowHelper.isAllowedPreviewUrl("data:text/html,hi"));
         assertTrue(!WorkflowHelper.isAllowedPreviewUrl("file:///sdcard/x.html"));

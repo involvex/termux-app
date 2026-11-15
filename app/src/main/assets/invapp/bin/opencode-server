@@ -1,0 +1,265 @@
+#!@BASH@
+# InVxTermux — opencode-server [port|stop|status]
+#
+# Start/stop the OpenCode V2 *background service* (preferred), with defaults
+# hostname 0.0.0.0 and port 4000. Replaces legacy opencode-v2-server shims that
+# pointed at ~/.opencode/bin (broken under this package id).
+#
+#   opencode-server           # start on :4000
+#   opencode-server 4000      # start on a custom port
+#   OPENCODE_HOST=127.0.0.1 opencode-server
+#   opencode-server stop
+#   opencode-server status
+#
+# Falls back to foreground `opencode serve` when `opencode service` is missing.
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+PORT_DEFAULT=4000
+HOST="${OPENCODE_HOST:-0.0.0.0}"
+PW_FILE="$PREFIX/var/lib/invapp/opencode-password"
+
+remove_legacy_v2_shims() {
+    local f
+    for f in \
+        "$PREFIX/bin/opencode-v2" \
+        "$PREFIX/bin/opencode-v2-server" \
+        "$HOME/.bun/bin/opencode-v2" \
+        "$HOME/.bun/bin/opencode-v2-server" \
+        "$HOME/.local/bin/opencode-v2" \
+        "$HOME/.local/bin/opencode-v2-server" \
+        "$HOME/.opencode/bin/opencode-v2" \
+        "$HOME/.opencode/bin/opencode-v2-server"
+    do
+        [ -e "$f" ] || [ -L "$f" ] || continue
+        rm -f "$f" 2>/dev/null || true
+        echo "opencode-server: removed legacy $f"
+    done
+}
+
+resolve_password() {
+    if [ -n "${OPENCODE_SERVER_PASSWORD:-}" ]; then
+        printf '%s' "$OPENCODE_SERVER_PASSWORD"
+        return 0
+    fi
+    if [ -s "$PW_FILE" ]; then
+        tr -d '[:space:]' < "$PW_FILE"
+        return 0
+    fi
+    if [ -f "$HOME/.config/opencode/service.json" ]; then
+        sed -n 's/.*"password"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+            "$HOME/.config/opencode/service.json" | head -1
+    fi
+}
+
+ensure_password() {
+    local pw
+    pw=$(resolve_password)
+    if [ -z "$pw" ]; then
+        pw=$(head -c 48 /dev/urandom 2>/dev/null | base64 2>/dev/null | tr -dc 'A-Za-z0-9' | cut -c1-32)
+        if [ -z "$pw" ]; then
+            pw="invapp-$(date +%s)"
+        fi
+        mkdir -p "$PREFIX/var/lib/invapp"
+        (umask 077; printf '%s\n' "$pw" > "$PW_FILE")
+        echo "opencode-server: generated password → $PW_FILE"
+    fi
+    export OPENCODE_SERVER_PASSWORD="$pw"
+    printf '%s' "$pw"
+}
+
+ensure_opencode() {
+    if [ ! -x "$PREFIX/bin/opencode" ] && [ -x "$HOME/.bun/bin/opencode" ]; then
+        cp -f "$HOME/.bun/bin/opencode" "$PREFIX/bin/opencode" 2>/dev/null || true
+        chmod 700 "$PREFIX/bin/opencode" 2>/dev/null || true
+    fi
+    if [ ! -x "$HOME/.bun/bin/opencode" ] && [ -x "$PREFIX/bin/opencode" ]; then
+        mkdir -p "$HOME/.bun/bin"
+        cp -f "$PREFIX/bin/opencode" "$HOME/.bun/bin/opencode" 2>/dev/null || true
+        chmod 700 "$HOME/.bun/bin/opencode" 2>/dev/null || true
+    fi
+    if ! command -v opencode >/dev/null 2>&1; then
+        if [ -x "$PREFIX/bin/opencode-setup" ]; then
+            echo "opencode not found — running opencode-setup…"
+            opencode-setup || return $?
+            hash -r 2>/dev/null || true
+        fi
+    fi
+    if ! command -v opencode >/dev/null 2>&1; then
+        echo "opencode-server: opencode still missing (aarch64/x64 only)" >&2
+        return 127
+    fi
+    return 0
+}
+
+api_healthy() {
+    local port="$1" auth="$2" local="http://127.0.0.1:$port"
+    if curl -fsS $auth --connect-timeout 1 --max-time 2 "$local/api/info" 2>/dev/null \
+        | grep -qi '"data"\|version'; then
+        return 0
+    fi
+    if curl -fsS --connect-timeout 1 --max-time 2 "$local/global/health" 2>/dev/null \
+        | grep -qi healthy; then
+        return 0
+    fi
+    return 1
+}
+
+wait_healthy() {
+    local port="$1" auth="$2" i
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+        if api_healthy "$port" "$auth"; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+
+do_stop() {
+    remove_legacy_v2_shims
+    local stopped=0
+    if command -v opencode >/dev/null 2>&1 && opencode service --help >/dev/null 2>&1; then
+        if opencode service stop 2>/dev/null; then
+            stopped=1
+        fi
+    fi
+    pkill -f '[o]pencode serve' 2>/dev/null && stopped=1
+    pkill -f '[o]pencode web' 2>/dev/null && stopped=1
+    pkill -f '[o]pencode.*service' 2>/dev/null && stopped=1
+    sleep 1
+    if [ "$stopped" = 1 ]; then
+        echo "opencode-server: stopped"
+        return 0
+    fi
+    echo "opencode-server: nothing to stop"
+    return 0
+}
+
+do_status() {
+    local port="${OPENCODE_PORT:-$PORT_DEFAULT}"
+    local pw auth=""
+    pw=$(resolve_password)
+    [ -n "$pw" ] && auth="-u opencode:$pw"
+    if command -v opencode >/dev/null 2>&1 && opencode service status >/dev/null 2>&1; then
+        opencode service status || true
+    fi
+    if api_healthy "$port" "$auth"; then
+        echo "opencode-server: healthy on http://127.0.0.1:$port/"
+        return 0
+    fi
+    echo "opencode-server: not healthy on :$port"
+    return 1
+}
+
+do_start() {
+    local port="$1"
+    local host="$HOST"
+    local local="http://127.0.0.1:$port"
+    local pw auth=""
+
+    remove_legacy_v2_shims
+    ensure_opencode || return $?
+
+    # Prefer a project dir (V2 refuses $HOME as workspace root).
+    if [ "$(pwd -P 2>/dev/null)" = "$HOME" ] || [ "$(pwd -P 2>/dev/null)" = "$HOME/" ]; then
+        mkdir -p "$HOME/repos"
+        cd "$HOME/repos" || true
+    fi
+
+    # Seed glibc DNS/CA hints (harmless in containers).
+    mkdir -p "$PREFIX/glibc/etc/ssl/certs" 2>/dev/null || true
+    if [ ! -s "$PREFIX/etc/resolv.conf" ]; then
+        printf '%s\n' 'nameserver 8.8.8.8' 'nameserver 1.1.1.1' > "$PREFIX/etc/resolv.conf"
+    fi
+    cp -f "$PREFIX/etc/resolv.conf" "$PREFIX/glibc/etc/resolv.conf" 2>/dev/null || true
+    export SSL_CERT_FILE="${SSL_CERT_FILE:-$PREFIX/etc/tls/cert.pem}"
+    export NODE_EXTRA_CA_CERTS="${NODE_EXTRA_CA_CERTS:-$PREFIX/etc/tls/cert.pem}"
+    export CURL_CA_BUNDLE="${CURL_CA_BUNDLE:-$PREFIX/etc/tls/cert.pem}"
+
+    pw=$(ensure_password)
+    auth="-u opencode:$pw"
+
+    if api_healthy "$port" "$auth"; then
+        echo "opencode-server: already healthy → $local/"
+        echo "  auth: opencode:$pw"
+        return 0
+    fi
+
+    echo ""
+    echo "OpenCode → service $host:$port"
+    echo "  Preview  $local/"
+    echo "  api      GET $local/api/info (Basic opencode:…)"
+    echo "  stop     opencode-server stop   # or: drawer → Stop AI"
+    echo "  Override OPENCODE_HOST / OPENCODE_PORT / OPENCODE_SERVER_PASSWORD"
+    echo ""
+
+    if opencode service --help >/dev/null 2>&1; then
+        opencode service set hostname "$host" 2>/dev/null || true
+        opencode service set port "$port" 2>/dev/null || true
+        if [ -n "$pw" ]; then
+            opencode service set password "$pw" 2>/dev/null \
+                || export OPENCODE_SERVER_PASSWORD="$pw"
+        fi
+        if ! opencode service start; then
+            echo "opencode-server: service start failed — trying foreground serve" >&2
+        else
+            if wait_healthy "$port" "$auth"; then
+                echo "opencode-server: ready → $local/"
+                echo "  auth: opencode:$pw"
+                return 0
+            fi
+            echo "opencode-server: started but /api/info not ready yet — open Preview and Reload" >&2
+            return 0
+        fi
+    fi
+
+    # Fallback: foreground serve (blocks the terminal).
+    if opencode serve --help >/dev/null 2>&1; then
+        echo "opencode-server: falling back to foreground opencode serve"
+        exec opencode serve --port "$port" --hostname "$host" --print-logs
+    fi
+    if opencode web --help >/dev/null 2>&1; then
+        echo "opencode-server: 'serve' missing — V1 web fallback" >&2
+        exec opencode web --port "$port" --hostname "$host" --print-logs
+    fi
+    echo "opencode-server: no service/serve/web — try: opencode --help" >&2
+    exec opencode --help
+}
+
+remove_legacy_v2_shims
+
+case "${1:-}" in
+    -h|--help)
+        cat <<'EOF'
+usage: opencode-server [port]
+       opencode-server stop
+       opencode-server status
+
+Starts the OpenCode V2 background service (opencode service start).
+Defaults: hostname 0.0.0.0, port 4000.
+EOF
+        exit 0
+        ;;
+    stop|--stop)
+        do_stop
+        exit $?
+        ;;
+    status|--status)
+        do_status
+        exit $?
+        ;;
+    '' )
+        do_start "$PORT_DEFAULT"
+        exit $?
+        ;;
+    * )
+        case "$1" in
+            *[!0-9]*)
+                echo "usage: opencode-server [port|stop|status]" >&2
+                exit 2
+                ;;
+        esac
+        do_start "$1"
+        exit $?
+        ;;
+esac
