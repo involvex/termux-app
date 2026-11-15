@@ -66,9 +66,9 @@ public class WidgetScriptsInstallerTest {
         String pull = WidgetScriptsInstaller.scriptBody(
             WidgetScriptsInstaller.ID_GIT_PULL_REPOS);
         assertNotNull(pull);
-        assertTrue(pull.contains("git pull --ff-only"));
+        assertTrue(pull.contains("td-sync"));
         assertTrue(pull.contains("/repos"));
-        assertTrue(pull.contains("git pull ~/repos"));
+        assertTrue(pull.contains("git pull --ff-only"));
 
         String ocr = WidgetScriptsInstaller.scriptBody(
             WidgetScriptsInstaller.ID_SCREEN_OCR);

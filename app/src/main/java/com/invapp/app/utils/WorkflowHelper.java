@@ -8,24 +8,35 @@ import com.invapp.terminal.TerminalSession;
 
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Terminal Dev workflow helpers: inject shell commands, list {@code ~/repos},
- * read {@code package.json} scripts.
+ * read {@code package.json} scripts, git status for the Repos picker.
  */
 public final class WorkflowHelper {
 
-    public static final String CMD_GIT_PULL = "git pull\n";
+    /** Fast-forward only — avoids merge commits / dirty surprises from the quick bar. */
+    public static final String CMD_GIT_PULL = "git pull --ff-only\n";
+    /** Fetch + ff-only pull every git repo under {@code ~/repos}. */
+    public static final String CMD_TD_SYNC = "td-sync\n";
     public static final String CMD_BUN_INSTALL = "bun install\n";
     public static final String CMD_BUN_RUN_DEV = "bun run dev\n";
     public static final String CMD_TD_AI = "td-ai\n";
+    private static final long GIT_STATUS_CACHE_MS = 10_000L;
+    private static final Map<String, CachedGitStatus> sGitStatusCache = new ConcurrentHashMap<>();
     /** First-run setup: banner / completions / packages / doctor (pure bash). */
     public static final String CMD_IVX_CONFIGURE = "ivx-configure\n";
     /** OpenCode web/serve default ({@code http://127.0.0.1:4096/}). */
@@ -404,8 +415,285 @@ public final class WorkflowHelper {
         return projectDir.getName();
     }
 
+    /**
+     * {@code cd} into {@code projectDir} and {@code git pull --ff-only}.
+     */
+    @NonNull
+    public static String safePullInRepo(@NonNull File projectDir) {
+        return "cd " + shellSingleQuote(projectDir.getAbsolutePath())
+            + " && git pull --ff-only\n";
+    }
+
+    /**
+     * {@code cd} into {@code projectDir} and check out {@code branch} (local name).
+     */
+    @NonNull
+    public static String checkoutBranch(@NonNull File projectDir, @NonNull String branch) {
+        return "cd " + shellSingleQuote(projectDir.getAbsolutePath())
+            + " && git checkout " + shellSingleQuote(branch) + "\n";
+    }
+
+    /**
+     * Label for the Repos picker: {@code name · branch · dirty[+N] · ↑a↓b}.
+     */
+    @NonNull
+    public static String formatRepoLabel(@NonNull File projectDir,
+                                         @Nullable GitRepoStatus status) {
+        String name = displayRepoName(projectDir);
+        if (status == null || !status.isGitRepo) {
+            return name;
+        }
+        StringBuilder sb = new StringBuilder(name);
+        if (status.branch != null && !status.branch.isEmpty()) {
+            sb.append(" · ").append(status.branch);
+        }
+        if (status.dirtyCount > 0) {
+            sb.append(" · dirty+").append(status.dirtyCount);
+        }
+        if (status.ahead > 0 || status.behind > 0) {
+            sb.append(" ·");
+            if (status.ahead > 0) {
+                sb.append(" ↑").append(status.ahead);
+            }
+            if (status.behind > 0) {
+                sb.append(" ↓").append(status.behind);
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Read {@code git status --porcelain=v1 -b} for {@code projectDir} (cached ~10s).
+     * Safe to call off the UI thread.
+     */
+    @NonNull
+    public static GitRepoStatus readGitStatus(@NonNull File projectDir) {
+        String key = projectDir.getAbsolutePath();
+        CachedGitStatus cached = sGitStatusCache.get(key);
+        long now = System.currentTimeMillis();
+        if (cached != null && now - cached.atMs < GIT_STATUS_CACHE_MS) {
+            return cached.status;
+        }
+        GitRepoStatus status = readGitStatusUncached(projectDir);
+        sGitStatusCache.put(key, new CachedGitStatus(status, now));
+        return status;
+    }
+
+    /** Drop cached status (e.g. after a pull / checkout command is queued). */
+    public static void invalidateGitStatus(@NonNull File projectDir) {
+        sGitStatusCache.remove(projectDir.getAbsolutePath());
+    }
+
+    @NonNull
+    static GitRepoStatus readGitStatusUncached(@NonNull File projectDir) {
+        File gitDir = new File(projectDir, ".git");
+        if (!gitDir.exists()) {
+            return GitRepoStatus.notGit();
+        }
+        File gitBin = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, "git");
+        if (!gitBin.isFile()) {
+            return GitRepoStatus.notGit();
+        }
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                gitBin.getAbsolutePath(),
+                "-c", "color.ui=false",
+                "status", "--porcelain=v1", "-b"
+            );
+            pb.directory(projectDir);
+            pb.environment().put("PATH", TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH);
+            pb.environment().put("HOME", TermuxConstants.TERMUX_HOME_DIR_PATH);
+            pb.environment().put("PREFIX", TermuxConstants.TERMUX_PREFIX_DIR_PATH);
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            StringBuilder out = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (out.length() > 0) {
+                        out.append('\n');
+                    }
+                    out.append(line);
+                }
+            }
+            waitBriefly(p, 4);
+            return parseGitStatusPorcelain(out.toString(), true);
+        } catch (Exception e) {
+            return GitRepoStatus.notGit();
+        }
+    }
+
+    /**
+     * Local branch names ({@code git branch --format=%(refname:short)}), sorted.
+     */
+    @NonNull
+    public static List<String> listLocalBranches(@NonNull File projectDir) {
+        File gitBin = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, "git");
+        if (!gitBin.isFile() || !new File(projectDir, ".git").exists()) {
+            return Collections.emptyList();
+        }
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                gitBin.getAbsolutePath(),
+                "branch", "--format=%(refname:short)"
+            );
+            pb.directory(projectDir);
+            pb.environment().put("PATH", TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH);
+            pb.environment().put("HOME", TermuxConstants.TERMUX_HOME_DIR_PATH);
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            List<String> names = new ArrayList<>();
+            try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String t = line.trim();
+                    if (!t.isEmpty()) {
+                        names.add(t);
+                    }
+                }
+            }
+            waitBriefly(p, 4);
+            Collections.sort(names, String::compareToIgnoreCase);
+            return names;
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Parse {@code git status --porcelain=v1 -b} stdout.
+     * Visible for unit tests.
+     */
+    @NonNull
+    public static GitRepoStatus parseGitStatusPorcelain(@Nullable String output,
+                                                        boolean isGitRepo) {
+        if (!isGitRepo) {
+            return GitRepoStatus.notGit();
+        }
+        if (output == null || output.isEmpty()) {
+            return new GitRepoStatus(true, "HEAD", 0, 0, 0);
+        }
+        String branch = "HEAD";
+        int ahead = 0;
+        int behind = 0;
+        int dirty = 0;
+        String[] lines = output.split("\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            if (i == 0 && line.startsWith("## ")) {
+                String rest = line.substring(3).trim();
+                int dots = rest.indexOf("...");
+                String left = dots >= 0 ? rest.substring(0, dots) : rest;
+                int bracket = left.indexOf(" [");
+                if (bracket >= 0) {
+                    left = left.substring(0, bracket);
+                }
+                // Detached: "## HEAD (no branch)"
+                if (left.startsWith("HEAD")) {
+                    branch = "HEAD";
+                } else {
+                    branch = left.trim();
+                }
+                int open = rest.lastIndexOf('[');
+                int close = rest.lastIndexOf(']');
+                if (open >= 0 && close > open) {
+                    String meta = rest.substring(open + 1, close).toLowerCase(Locale.US);
+                    ahead = parseAheadBehindToken(meta, "ahead");
+                    behind = parseAheadBehindToken(meta, "behind");
+                }
+                continue;
+            }
+            if (!line.isEmpty()) {
+                dirty++;
+            }
+        }
+        return new GitRepoStatus(true, branch, dirty, ahead, behind);
+    }
+
+    private static int parseAheadBehindToken(@NonNull String meta, @NonNull String key) {
+        // "ahead 2, behind 1" or "ahead 2"
+        int idx = meta.indexOf(key);
+        if (idx < 0) {
+            return 0;
+        }
+        int i = idx + key.length();
+        while (i < meta.length() && meta.charAt(i) == ' ') {
+            i++;
+        }
+        int start = i;
+        while (i < meta.length() && Character.isDigit(meta.charAt(i))) {
+            i++;
+        }
+        if (start == i) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(meta.substring(start, i));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private static void waitBriefly(@NonNull Process p, int seconds) {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                if (!p.waitFor(seconds, TimeUnit.SECONDS)) {
+                    p.destroy();
+                }
+            } else {
+                p.waitFor();
+            }
+        } catch (Exception ignored) {
+            try {
+                p.destroy();
+            } catch (Exception ignored2) {
+            }
+        }
+    }
+
     @NonNull
     private static String shellSingleQuote(@NonNull String s) {
         return "'" + s.replace("'", "'\\''") + "'";
+    }
+
+    /** Snapshot of {@code git status --porcelain=v1 -b} for one repo. */
+    public static final class GitRepoStatus {
+        public final boolean isGitRepo;
+        @Nullable
+        public final String branch;
+        public final int dirtyCount;
+        public final int ahead;
+        public final int behind;
+
+        public GitRepoStatus(boolean isGitRepo, @Nullable String branch,
+                             int dirtyCount, int ahead, int behind) {
+            this.isGitRepo = isGitRepo;
+            this.branch = branch;
+            this.dirtyCount = Math.max(0, dirtyCount);
+            this.ahead = Math.max(0, ahead);
+            this.behind = Math.max(0, behind);
+        }
+
+        @NonNull
+        public static GitRepoStatus notGit() {
+            return new GitRepoStatus(false, null, 0, 0, 0);
+        }
+
+        public boolean isDirty() {
+            return dirtyCount > 0;
+        }
+    }
+
+    private static final class CachedGitStatus {
+        @NonNull
+        final GitRepoStatus status;
+        final long atMs;
+
+        CachedGitStatus(@NonNull GitRepoStatus status, long atMs) {
+            this.status = status;
+            this.atMs = atMs;
+        }
     }
 }

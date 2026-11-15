@@ -61,7 +61,7 @@ On first launch the app seeds templates under `~/.shortcuts` (and
 |---|---|
 | `clipboard-speak` | `termux-clipboard-get` → `termux-tts-speak` |
 | `clipboard-to-file` | Append clipboard to `~/repos/clipboard.txt` |
-| `git-pull-repos` | `git pull --ff-only` in each `~/repos/*` git repo |
+| `git-pull-repos` | `td-sync` (fetch + ff-only; skips dirty) across `~/repos` |
 | `screen-ocr` | Capture/OCR screenshot → clipboard (`td-screen-ocr`, needs `tesseract`) |
 | `camera-photo` | `termux-camera-photo` → `~/repos/camera-last.jpg` (optional catalog) |
 | `wifi-info` | `termux-wifi-connectioninfo` → clipboard + toast (optional) |

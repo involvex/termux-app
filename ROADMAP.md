@@ -171,8 +171,9 @@ https://github.com/involvex/termux-app
   even in a container) and the Termux `glibc` + `ld-linux` wrappers
 - `arm` / `i686` images are base-only — bun publishes no 32-bit build, same as
   the APK. Docs: [`docs/docker.md`](docs/docker.md) · `docker/README.md`
-- Follow-up: move the helpers into `app/src/main/assets/invapp/` so the app and
-  `seed.sh` install the same files instead of two copies
+- Follow-up (partial): most helpers live under `app/src/main/assets/invapp/`;
+  some device-only scripts remain embedded in `TermuxBunInstaller` (OpenCode /
+  Cursor Agent wrappers) — further unification is a maintainer batch
 
 ### 16. First-run setup + login banner (done)
 
@@ -198,6 +199,19 @@ https://github.com/involvex/termux-app
   and after a fresh bootstrap; container `seed.sh` copies the same files
 - Docs: [docs/configure.md](docs/configure.md)
 
+### 17. PC ↔ phone Sync + Preview Share (done)
+
+- Repos picker shows git badges (branch, dirty count, ahead/behind) via
+  `git status --porcelain=v1 -b` (cached ~10s, off UI thread)
+- Repo actions: Open / Safe pull (`--ff-only`, blocked when dirty) / Branches…
+- Quick-bar **td-sync** (tap) + long-press for cwd `git pull --ff-only`;
+  extra-keys PULL → `td-sync`
+- `$PREFIX/bin/td-sync` — fetch + ff-only across `~/repos` (skips dirty);
+  widget `git-pull-repos` prefers `td-sync`
+- Preview **QR LAN** (ZXing encoder) beside Copy LAN; same wildcard-bind gate;
+  caption “same Wi‑Fi only, no public tunnel”
+- Quick-bar customize preserves user order; **Reorder…** (tap to move up)
+
 ## Non-goals (for now)
 
 - Full in-app IDE / multi-tab browser
@@ -209,8 +223,9 @@ https://github.com/involvex/termux-app
 ```bash
 cd ~/repos
 td-scaffold myapp react   # or: drawer → New… → pwa / pwa-react
+td-sync                   # or: drawer → td-sync (ff-only; skips dirty)
 td-dev                    # vite on :5173
-# Drawer → Preview → Scan → 5173
+# Drawer → Preview → Scan → 5173 · Copy LAN / QR LAN when on 0.0.0.0
 ```
 
 ```bash

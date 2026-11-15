@@ -89,6 +89,7 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.viewpager.widget.ViewPager;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -707,7 +708,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void setWorkflowButtonViews() {
         View gitPull = findViewById(R.id.workflow_git_pull_button);
         if (gitPull != null) {
-            gitPull.setOnClickListener(v -> sendWorkflowCommand(WorkflowHelper.CMD_GIT_PULL));
+            // td-sync: ff-only across ~/repos (skips dirty); same as widget.
+            gitPull.setOnClickListener(v -> sendWorkflowCommand(WorkflowHelper.CMD_TD_SYNC));
+            gitPull.setOnLongClickListener(v -> {
+                sendWorkflowCommand(WorkflowHelper.CMD_GIT_PULL);
+                return true;
+            });
         }
         View bunInstall = findViewById(R.id.workflow_bun_install_button);
         if (bunInstall != null) {
@@ -818,6 +824,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             getString(R.string.action_workflow_copy_last_error),
             getString(R.string.action_workflow_export_last_error),
             getString(R.string.action_workflow_customize),
+            getString(R.string.action_workflow_reorder_bar),
             getString(R.string.action_customize_extra_keys),
             getString(R.string.action_workflow_reset_bar)
         };
@@ -830,8 +837,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     case 2: copyLastTerminalError(false); break;
                     case 3: exportLastTerminalError(); break;
                     case 4: showCustomizeWorkflowBarDialog(); break;
-                    case 5: showCustomizeExtraKeysDialog(); break;
-                    case 6:
+                    case 5: showReorderWorkflowBarDialog(); break;
+                    case 6: showCustomizeExtraKeysDialog(); break;
+                    case 7:
                         WorkflowBarHelper.resetToDefault(this);
                         applyWorkflowBarVisibility();
                         break;
@@ -863,8 +871,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             getString(R.string.action_workflow_ai_stop),
             getString(R.string.action_workflow_setup)
         };
-        final boolean[] checked = WorkflowBarHelper.checkedFlags(
-            WorkflowBarHelper.getVisibleIds(this));
+        final List<String> previous = WorkflowBarHelper.getVisibleIds(this);
+        final boolean[] checked = WorkflowBarHelper.checkedFlags(previous);
         new AlertDialog.Builder(this)
             .setTitle(R.string.title_workflow_customize_bar)
             .setMultiChoiceItems(labels, checked, (dialog, which, isChecked) -> {
@@ -872,15 +880,79 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             })
             .setPositiveButton(android.R.string.ok, (dialog, which) -> {
                 WorkflowBarHelper.setVisibleIds(this,
-                    WorkflowBarHelper.filterToCatalogOrder(checked));
+                    WorkflowBarHelper.mergeCheckedPreservingOrder(checked, previous));
                 applyWorkflowBarVisibility();
             })
+            .setNeutralButton(R.string.action_workflow_reorder_bar, (dialog, which) -> {
+                // Persist visibility first, then open reorder.
+                WorkflowBarHelper.setVisibleIds(this,
+                    WorkflowBarHelper.mergeCheckedPreservingOrder(checked, previous));
+                applyWorkflowBarVisibility();
+                showReorderWorkflowBarDialog();
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    /**
+     * Tap an action to move it one slot toward the front; order is saved immediately.
+     */
+    private void showReorderWorkflowBarDialog() {
+        final List<String> order = new ArrayList<>(WorkflowBarHelper.getVisibleIds(this));
+        if (order.isEmpty()) {
+            return;
+        }
+        showReorderWorkflowBarDialogWith(order);
+    }
+
+    private void showReorderWorkflowBarDialogWith(@NonNull List<String> order) {
+        final String[] labels = new String[order.size()];
+        for (int i = 0; i < order.size(); i++) {
+            labels[i] = workflowLabelForId(order.get(i));
+        }
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.title_workflow_reorder_bar)
+            .setMessage(R.string.msg_workflow_reorder_hint)
+            .setItems(labels, (dialog, which) -> {
+                List<String> moved = WorkflowBarHelper.moveIdUp(order, order.get(which));
+                WorkflowBarHelper.setVisibleIds(this, moved);
+                applyWorkflowBarVisibility();
+                showReorderWorkflowBarDialogWith(moved);
+            })
+            .setPositiveButton(android.R.string.ok, null)
             .setNeutralButton(R.string.action_workflow_reset_bar, (dialog, which) -> {
                 WorkflowBarHelper.resetToDefault(this);
                 applyWorkflowBarVisibility();
             })
-            .setNegativeButton(android.R.string.cancel, null)
             .show();
+    }
+
+    @NonNull
+    private String workflowLabelForId(@NonNull String id) {
+        switch (id) {
+            case WorkflowBarHelper.ID_PULL:
+                return getString(R.string.action_workflow_git_pull);
+            case WorkflowBarHelper.ID_BUN_I:
+                return getString(R.string.action_workflow_bun_install);
+            case WorkflowBarHelper.ID_BUN_DEV:
+                return getString(R.string.action_workflow_bun_dev);
+            case WorkflowBarHelper.ID_REPOS:
+                return getString(R.string.action_workflow_repos);
+            case WorkflowBarHelper.ID_RUN:
+                return getString(R.string.action_workflow_run);
+            case WorkflowBarHelper.ID_CLONE:
+                return getString(R.string.action_workflow_clone);
+            case WorkflowBarHelper.ID_NEW:
+                return getString(R.string.action_workflow_new);
+            case WorkflowBarHelper.ID_AI:
+                return getString(R.string.action_workflow_ai);
+            case WorkflowBarHelper.ID_AI_STOP:
+                return getString(R.string.action_workflow_ai_stop);
+            case WorkflowBarHelper.ID_SETUP:
+                return getString(R.string.action_workflow_setup);
+            default:
+                return id;
+        }
     }
 
     private void startAiSession() {
@@ -1223,30 +1295,114 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * @param forRunScripts if true, after picking a repo show package.json scripts sheet
      */
     private void showReposPicker(boolean forRunScripts) {
-        List<File> repos = WorkflowHelper.listRepos();
+        final List<File> repos = WorkflowHelper.listRepos();
         if (repos.isEmpty()) {
             showToast(getString(R.string.msg_workflow_no_repos), true);
             return;
         }
-        String[] names = new String[repos.size()];
-        for (int i = 0; i < repos.size(); i++) {
-            names[i] = WorkflowHelper.displayRepoName(repos.get(i));
+        showToast(getString(R.string.msg_workflow_loading_repos), false);
+        mAiExecutor.execute(() -> {
+            final String[] labels = new String[repos.size()];
+            final WorkflowHelper.GitRepoStatus[] statuses =
+                new WorkflowHelper.GitRepoStatus[repos.size()];
+            for (int i = 0; i < repos.size(); i++) {
+                statuses[i] = WorkflowHelper.readGitStatus(repos.get(i));
+                labels[i] = WorkflowHelper.formatRepoLabel(repos.get(i), statuses[i]);
+            }
+            mMainHandler.post(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+                int title = forRunScripts
+                    ? R.string.title_workflow_pick_repo_for_run
+                    : R.string.title_workflow_repos;
+                new AlertDialog.Builder(this)
+                    .setTitle(title)
+                    .setItems(labels, (dialog, which) -> {
+                        File dir = repos.get(which);
+                        if (forRunScripts) {
+                            showRunScriptPicker(dir);
+                        } else {
+                            showRepoActionsSheet(dir, statuses[which]);
+                        }
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+            });
+        });
+    }
+
+    /**
+     * Open / safe pull / branch switch for one {@code ~/repos} project.
+     */
+    private void showRepoActionsSheet(@NonNull File projectDir,
+                                      @Nullable WorkflowHelper.GitRepoStatus status) {
+        final boolean isGit = status != null && status.isGitRepo;
+        final boolean dirty = status != null && status.isDirty();
+        final String[] items;
+        if (!isGit) {
+            items = new String[] {
+                getString(R.string.action_workflow_repo_open)
+            };
+        } else {
+            items = new String[] {
+                getString(R.string.action_workflow_repo_open),
+                getString(R.string.action_workflow_repo_safe_pull),
+                getString(R.string.action_workflow_repo_branches)
+            };
         }
-        int title = forRunScripts
-            ? R.string.title_workflow_pick_repo_for_run
-            : R.string.title_workflow_repos;
+        String title = WorkflowHelper.formatRepoLabel(projectDir, status);
         new AlertDialog.Builder(this)
             .setTitle(title)
-            .setItems(names, (dialog, which) -> {
-                File dir = repos.get(which);
-                if (forRunScripts) {
-                    showRunScriptPicker(dir);
-                } else {
-                    sendWorkflowCommand(WorkflowHelper.cdToRepo(dir));
+            .setItems(items, (dialog, which) -> {
+                if (which == 0) {
+                    sendWorkflowCommand(WorkflowHelper.cdToRepo(projectDir));
+                    return;
+                }
+                if (!isGit) {
+                    return;
+                }
+                if (which == 1) {
+                    if (dirty) {
+                        showToast(getString(R.string.msg_workflow_repo_dirty_pull), true);
+                        return;
+                    }
+                    WorkflowHelper.invalidateGitStatus(projectDir);
+                    sendWorkflowCommand(WorkflowHelper.safePullInRepo(projectDir));
+                    return;
+                }
+                if (which == 2) {
+                    showBranchPicker(projectDir);
                 }
             })
             .setNegativeButton(android.R.string.cancel, null)
             .show();
+    }
+
+    private void showBranchPicker(@NonNull File projectDir) {
+        showToast(getString(R.string.msg_workflow_loading_branches), false);
+        mAiExecutor.execute(() -> {
+            final List<String> branches = WorkflowHelper.listLocalBranches(projectDir);
+            mMainHandler.post(() -> {
+                if (isFinishing()) {
+                    return;
+                }
+                if (branches.isEmpty()) {
+                    showToast(getString(R.string.msg_workflow_no_branches), true);
+                    return;
+                }
+                String[] names = branches.toArray(new String[0]);
+                new AlertDialog.Builder(this)
+                    .setTitle(R.string.title_workflow_branches)
+                    .setItems(names, (dialog, which) -> {
+                        WorkflowHelper.invalidateGitStatus(projectDir);
+                        sendWorkflowCommand(
+                            WorkflowHelper.checkoutBranch(projectDir, branches.get(which)));
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+            });
+        });
     }
 
     private void showRunScriptPicker(@NonNull File projectDir) {

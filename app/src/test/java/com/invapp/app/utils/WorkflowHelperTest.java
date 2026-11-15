@@ -108,6 +108,35 @@ public class WorkflowHelperTest {
     }
 
     @Test
+    public void parseGitStatusPorcelain_readsBranchDirtyAndAheadBehind() {
+        WorkflowHelper.GitRepoStatus clean = WorkflowHelper.parseGitStatusPorcelain(
+            "## main...origin/main\n", true);
+        assertTrue(clean.isGitRepo);
+        assertEquals("main", clean.branch);
+        assertEquals(0, clean.dirtyCount);
+        assertEquals(0, clean.ahead);
+        assertEquals(0, clean.behind);
+
+        WorkflowHelper.GitRepoStatus dirty = WorkflowHelper.parseGitStatusPorcelain(
+            "## feature/x...origin/feature/x [ahead 2, behind 1]\n"
+                + " M src/a.java\n"
+                + "?? new.txt\n", true);
+        assertEquals("feature/x", dirty.branch);
+        assertEquals(2, dirty.dirtyCount);
+        assertEquals(2, dirty.ahead);
+        assertEquals(1, dirty.behind);
+        assertTrue(dirty.isDirty());
+
+        assertEquals("app · main · dirty+2 · ↑1",
+            WorkflowHelper.formatRepoLabel(new java.io.File("/x/repos/app"),
+                new WorkflowHelper.GitRepoStatus(true, "main", 2, 1, 0)));
+
+        assertTrue(!WorkflowHelper.parseGitStatusPorcelain(null, false).isGitRepo);
+        assertEquals("git pull --ff-only\n", WorkflowHelper.CMD_GIT_PULL);
+        assertEquals("td-sync\n", WorkflowHelper.CMD_TD_SYNC);
+    }
+
+    @Test
     public void isAllowedPreviewUrl_allowsHttpHttpsAndInertSchemes() {
         assertTrue(WorkflowHelper.isAllowedPreviewUrl("http://127.0.0.1:5173/"));
         assertTrue(WorkflowHelper.isAllowedPreviewUrl("https://example.com/"));

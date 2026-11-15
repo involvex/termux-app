@@ -61,4 +61,46 @@ public class WorkflowBarHelperTest {
         boolean[] flags = WorkflowBarHelper.checkedFlags(visible);
         assertEquals(visible, WorkflowBarHelper.filterToCatalogOrder(flags));
     }
+
+    @Test
+    public void mergeCheckedPreservingOrder_keepsUserSequence() {
+        List<String> previous = Arrays.asList(
+            WorkflowBarHelper.ID_AI,
+            WorkflowBarHelper.ID_CLONE,
+            WorkflowBarHelper.ID_PULL);
+        boolean[] checked = WorkflowBarHelper.checkedFlags(previous);
+        // Uncheck clone, keep AI + pull order; add RUN newly.
+        int cloneIdx = -1;
+        int runIdx = -1;
+        for (int i = 0; i < WorkflowBarHelper.ALL_ACTION_IDS.length; i++) {
+            if (WorkflowBarHelper.ID_CLONE.equals(WorkflowBarHelper.ALL_ACTION_IDS[i])) {
+                cloneIdx = i;
+            }
+            if (WorkflowBarHelper.ID_RUN.equals(WorkflowBarHelper.ALL_ACTION_IDS[i])) {
+                runIdx = i;
+            }
+        }
+        checked[cloneIdx] = false;
+        checked[runIdx] = true;
+        List<String> out = WorkflowBarHelper.mergeCheckedPreservingOrder(checked, previous);
+        assertEquals(Arrays.asList(
+            WorkflowBarHelper.ID_AI,
+            WorkflowBarHelper.ID_PULL,
+            WorkflowBarHelper.ID_RUN
+        ), out);
+    }
+
+    @Test
+    public void moveIdUp_swapsWithPrevious() {
+        List<String> order = Arrays.asList(
+            WorkflowBarHelper.ID_PULL,
+            WorkflowBarHelper.ID_AI,
+            WorkflowBarHelper.ID_CLONE);
+        assertEquals(Arrays.asList(
+            WorkflowBarHelper.ID_AI,
+            WorkflowBarHelper.ID_PULL,
+            WorkflowBarHelper.ID_CLONE
+        ), WorkflowBarHelper.moveIdUp(order, WorkflowBarHelper.ID_AI));
+        assertEquals(order, WorkflowBarHelper.moveIdUp(order, WorkflowBarHelper.ID_PULL));
+    }
 }

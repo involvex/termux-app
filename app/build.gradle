@@ -36,6 +36,8 @@ android {
         implementation "io.noties.markwon:linkify:$markwonVersion"
         implementation "io.noties.markwon:recycler:$markwonVersion"
         implementation 'com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava'
+        // QR encoder only (Preview LAN share) — no camera / no zxing-android-embedded
+        implementation "com.google.zxing:core:3.5.3"
 
         implementation project(":terminal-view")
         implementation project(":termux-shared")
@@ -45,8 +47,8 @@ android {
         applicationId "com.involvex.termux_app"
         minSdkVersion project.properties.minSdkVersion.toInteger()
         targetSdkVersion project.properties.targetSdkVersion.toInteger()
-        versionCode 205
-        versionName "0.204.0"
+        versionCode 206
+        versionName "0.205.0"
 
         if (appVersionName) versionName = appVersionName
         validateVersionName(versionName)

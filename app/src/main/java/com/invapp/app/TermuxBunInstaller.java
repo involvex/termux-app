@@ -1551,6 +1551,9 @@ public final class TermuxBunInstaller {
         // containers show the docker host path from a single asset.
         writeExec(new File(binDir, "td-dev"),
                 assetWithBashShebang(context, "invapp/bin/td-dev", bash));
+        // PC ↔ phone: fetch + ff-only pull every ~/repos git tree (widget + bar).
+        writeExec(new File(binDir, "td-sync"),
+                assetWithBashShebang(context, "invapp/bin/td-sync", bash));
 
         // Optional Kali NetHunter via Termux udocker + TigerVNC (device-only).
         // `td-udocker-setup` pulls/creates; `td-nethunter-setup` adds the desktop;

@@ -10,3 +10,6 @@
 -dontobfuscate
 #-renamesourcefileattribute SourceFile
 #-keepattributes SourceFile,LineNumberTable
+
+# ZXing QR encoder used by Preview LAN share (QrCodeHelper)
+-keep class com.google.zxing.** { *; }

@@ -123,6 +123,11 @@ public final class WorkflowBarHelper {
         return false;
     }
 
+    /**
+     * Catalog order for checked flags (legacy / tests). Prefer
+     * {@link #mergeCheckedPreservingOrder} when saving customize results so the
+     * user's previous bar order is kept.
+     */
     @NonNull
     public static List<String> filterToCatalogOrder(@NonNull boolean[] checked) {
         List<String> out = new ArrayList<>();
@@ -132,6 +137,58 @@ public final class WorkflowBarHelper {
             }
         }
         return out.isEmpty() ? Arrays.asList(DEFAULT_VISIBLE_IDS) : out;
+    }
+
+    /**
+     * Keep previously visible ids in their saved order; append newly checked
+     * ids in catalog order; drop unchecked.
+     */
+    @NonNull
+    public static List<String> mergeCheckedPreservingOrder(
+        @NonNull boolean[] checked, @NonNull List<String> previousOrder) {
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        for (String id : previousOrder) {
+            int idx = catalogIndex(id);
+            if (idx >= 0 && idx < checked.length && checked[idx]) {
+                out.add(id);
+            }
+        }
+        for (int i = 0; i < ALL_ACTION_IDS.length && i < checked.length; i++) {
+            if (checked[i]) {
+                out.add(ALL_ACTION_IDS[i]);
+            }
+        }
+        if (out.isEmpty()) {
+            return new ArrayList<>(Arrays.asList(DEFAULT_VISIBLE_IDS));
+        }
+        return new ArrayList<>(out);
+    }
+
+    /**
+     * Move {@code id} one slot toward the front of {@code order} (no-op if
+     * missing or already first). Returns a new list.
+     */
+    @NonNull
+    public static List<String> moveIdUp(@NonNull List<String> order, @NonNull String id) {
+        ArrayList<String> out = new ArrayList<>(order);
+        int idx = out.indexOf(id);
+        if (idx <= 0) {
+            return out;
+        }
+        Collections.swap(out, idx, idx - 1);
+        return out;
+    }
+
+    private static int catalogIndex(@Nullable String id) {
+        if (id == null) {
+            return -1;
+        }
+        for (int i = 0; i < ALL_ACTION_IDS.length; i++) {
+            if (ALL_ACTION_IDS[i].equals(id)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     @NonNull

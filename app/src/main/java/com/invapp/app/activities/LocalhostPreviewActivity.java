@@ -22,6 +22,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -40,6 +41,7 @@ import com.invapp.app.utils.AiSessionHelper;
 import com.invapp.app.utils.LanShareHelper;
 import com.invapp.app.utils.LocalhostPortScanner;
 import com.invapp.app.utils.PreviewPortPrefs;
+import com.invapp.app.utils.QrCodeHelper;
 import com.invapp.app.utils.WorkflowHelper;
 import com.invapp.shared.interact.ShareUtils;
 
@@ -57,9 +59,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * In-app preview of HTTP(S) servers (Vite, Expo web, {@code opencode web}, LAN, etc.).
  * WebView navigation allows any {@code http}/{@code https} URL (plus inert
  * {@code about}/{@code data} error pages). Bare ports and scan chips default to
- * {@code 127.0.0.1}. Opt-in <strong>Copy LAN</strong> copies
- * {@code http://&lt;wifi-ip&gt;:&lt;port&gt;} when the server listens on
- * {@code 0.0.0.0} / {@code ::} — for sharing with other devices.
+ * {@code 127.0.0.1}. Opt-in <strong>Copy LAN</strong> / <strong>QR LAN</strong>
+ * share {@code http://&lt;wifi-ip&gt;:&lt;port&gt;} when the server listens on
+ * {@code 0.0.0.0} / {@code ::} — for other devices on the same Wi‑Fi (no tunnels).
  */
 public final class LocalhostPreviewActivity extends AppCompatActivity {
 
@@ -127,6 +129,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         Button reloadButton = findViewById(R.id.preview_reload_button);
         Button scanButton = findViewById(R.id.preview_scan_button);
         Button copyLanButton = findViewById(R.id.preview_copy_lan_button);
+        Button qrLanButton = findViewById(R.id.preview_qr_lan_button);
         Button clearButton = findViewById(R.id.preview_clear_button);
         Button browserButton = findViewById(R.id.preview_browser_button);
         mBackButton = findViewById(R.id.preview_back_button);
@@ -253,6 +256,9 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         reloadButton.setOnClickListener(v -> reloadCurrent());
         scanButton.setOnClickListener(v -> scanPortsAsync(false));
         copyLanButton.setOnClickListener(v -> copyLanUrlForCurrentPort());
+        if (qrLanButton != null) {
+            qrLanButton.setOnClickListener(v -> showQrLanForCurrentPort());
+        }
         if (clearButton != null) {
             clearButton.setOnClickListener(v -> clearPreviewData());
         }
@@ -395,6 +401,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         boolean starred = PreviewPortPrefs.isStarred(this, port);
         final String[] items = new String[] {
             getString(R.string.action_preview_copy_lan),
+            getString(R.string.action_preview_show_qr),
             getString(starred ? R.string.action_preview_unstar : R.string.action_preview_star),
             getString(R.string.action_preview_forget)
         };
@@ -406,6 +413,9 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
                         copyLanUrlForPort(port);
                         break;
                     case 1:
+                        showQrLanForPort(port);
+                        break;
+                    case 2:
                         PreviewPortPrefs.toggleStar(this, port);
                         Toast.makeText(this,
                             getString(starred
@@ -414,7 +424,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
                             Toast.LENGTH_SHORT).show();
                         scanPortsAsync(false);
                         break;
-                    case 2:
+                    case 3:
                         PreviewPortPrefs.forgetPort(this, port);
                         Toast.makeText(this,
                             getString(R.string.msg_preview_port_forgotten, port),
@@ -437,7 +447,60 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         copyLanUrlForPort(port);
     }
 
+    private void showQrLanForCurrentPort() {
+        int port = readPortInputOrToast();
+        if (port < 0) {
+            return;
+        }
+        showQrLanForPort(port);
+    }
+
     private void copyLanUrlForPort(int port) {
+        resolveLanShareUrl(port, url ->
+            ShareUtils.copyTextToClipboard(this, url,
+                getString(R.string.msg_preview_lan_copied, url)));
+    }
+
+    private void showQrLanForPort(int port) {
+        resolveLanShareUrl(port, url -> {
+            int sizePx = (int) TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 240f, getResources().getDisplayMetrics());
+            Bitmap qr = QrCodeHelper.encodeQrBitmap(url, sizePx);
+            if (qr == null) {
+                Toast.makeText(this, R.string.msg_preview_qr_failed, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            float density = getResources().getDisplayMetrics().density;
+            int pad = (int) (16 * density);
+            LinearLayout root = new LinearLayout(this);
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.setPadding(pad, pad, pad, pad);
+            ImageView image = new ImageView(this);
+            image.setAdjustViewBounds(true);
+            image.setImageBitmap(qr);
+            root.addView(image, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+            TextView caption = new TextView(this);
+            caption.setText(url + "\n" + getString(R.string.msg_preview_qr_caption));
+            caption.setPadding(0, pad / 2, 0, 0);
+            caption.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            root.addView(caption);
+            new AlertDialog.Builder(this)
+                .setTitle(R.string.title_preview_qr_lan)
+                .setView(root)
+                .setPositiveButton(R.string.action_preview_copy_lan, (d, w) ->
+                    ShareUtils.copyTextToClipboard(this, url,
+                        getString(R.string.msg_preview_lan_copied, url)))
+                .setNegativeButton(android.R.string.ok, null)
+                .show();
+        });
+    }
+
+    /**
+     * Resolve a LAN URL when the port is wildcard-bound; toast otherwise.
+     */
+    private void resolveLanShareUrl(int port, @NonNull final LanUrlConsumer onReady) {
         mScanExecutor.execute(() -> {
             final boolean wildcard = LocalhostPortScanner.isWildcardListen(port);
             final String ip = LanShareHelper.getSiteLocalIpv4();
@@ -459,10 +522,13 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
                         Toast.LENGTH_SHORT).show();
                     return;
                 }
-                ShareUtils.copyTextToClipboard(this, url,
-                    getString(R.string.msg_preview_lan_copied, url));
+                onReady.accept(url);
             });
         });
+    }
+
+    private interface LanUrlConsumer {
+        void accept(@NonNull String url);
     }
 
     private void refreshLanHint() {
@@ -767,7 +833,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             + "<li>OpenCode: <code>td-ai</code> → health on <code>:4096</code>.</li>"
             + "<li>Pull down to retry. Use <b>Clear</b> if you see a stale app shell.</li>"
             + "</ul>"
-            + "<p>Toolbar: Back · Fwd · Reload · Scan · Copy LAN · Clear · Browser</p>"
+            + "<p>Toolbar: Back · Fwd · Reload · Scan · Copy LAN · QR LAN · Clear · Browser</p>"
             + "</body></html>";
         // Null base URL on purpose: using the live origin as base lets a
         // cached SPA shell resolve relative assets and masquerade as a live app

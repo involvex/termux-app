@@ -3,8 +3,13 @@
 # Parity with the app's Widget script. Inside a container there is no
 # Termux:Widget launcher, so run it by hand: sh ~/.shortcuts/git-pull-repos
 #
-# Pulls every git repo under ~/repos and reports a one-line summary.
+# Prefers td-sync (fetch + ff-only, skips dirty). Falls back to a simple
+# pull loop when td-sync is missing.
 set -u
+
+if command -v td-sync >/dev/null 2>&1; then
+    exec td-sync
+fi
 
 REPOS_DIR="${REPOS_DIR:-$HOME/repos}"
 [ -d "$REPOS_DIR" ] || { echo "no repos in $REPOS_DIR"; exit 1; }

@@ -1,0 +1,74 @@
+#!@BASH@
+# InVxTermux — td-sync
+# Fetch + fast-forward pull every git repo under ~/repos. Skips dirty trees
+# (prints a warning) so it never creates merge commits from the widget/bar.
+#
+# Usage: td-sync [--help]
+set -u
+
+. "${INVAPP_LIB_DIR:-${PREFIX:-}/lib/invapp}/env.sh" 2>/dev/null || true
+
+REPOS_DIR="${REPOS_DIR:-$HOME/repos}"
+
+usage() {
+    cat <<'EOF'
+usage: td-sync
+
+  For each git repo under ~/repos:
+    - skip if the working tree is dirty
+    - otherwise: git fetch + git pull --ff-only
+
+  Exit 0 when every attempted pull succeeds (or there is nothing to do).
+  Exit 1 if any repo fails or is skipped dirty (summary still printed).
+EOF
+}
+
+case "${1:-}" in
+    -h|--help) usage; exit 0 ;;
+esac
+
+if ! command -v git >/dev/null 2>&1; then
+    echo "td-sync: git missing — pkg install git" >&2
+    exit 1
+fi
+
+if [ ! -d "$REPOS_DIR" ]; then
+    echo "td-sync: no ~/repos ($REPOS_DIR)" >&2
+    exit 1
+fi
+
+ok=0
+dirty=0
+failed=0
+skipped=0
+
+shopt -s nullglob 2>/dev/null || true
+for dir in "$REPOS_DIR"/*/; do
+    [ -d "$dir/.git" ] || continue
+    name=$(basename "$dir")
+    printf '%-24s ' "$name"
+    if ! (cd "$dir" && git rev-parse --is-inside-work-tree >/dev/null 2>&1); then
+        echo "skip (not a work tree)"
+        skipped=$((skipped + 1))
+        continue
+    fi
+    # Porcelain without branch header: any output ⇒ dirty.
+    if [ -n "$(cd "$dir" && git -c color.ui=false status --porcelain=v1 2>/dev/null)" ]; then
+        echo "dirty — skip (commit/stash first)"
+        dirty=$((dirty + 1))
+        continue
+    fi
+    if (cd "$dir" && git fetch --quiet 2>/dev/null; git pull --ff-only); then
+        ok=$((ok + 1))
+    else
+        echo "  (ff-only failed — resolve locally)"
+        failed=$((failed + 1))
+    fi
+done
+
+echo
+echo "td-sync: ok=$ok  dirty=$dirty  failed=$failed  skipped=$skipped"
+if [ "$dirty" -gt 0 ] || [ "$failed" -gt 0 ]; then
+    exit 1
+fi
+exit 0

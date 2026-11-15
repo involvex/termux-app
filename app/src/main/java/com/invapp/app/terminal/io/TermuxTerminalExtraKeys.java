@@ -115,7 +115,7 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
             if (terminalView != null && terminalView.mEmulator != null)
                 terminalView.mEmulator.toggleAutoScrollDisabled();
         } else if ("PULL".equals(key)) {
-            mActivity.sendWorkflowCommandFromExtraKeys(WorkflowHelper.CMD_GIT_PULL);
+            mActivity.sendWorkflowCommandFromExtraKeys(WorkflowHelper.CMD_TD_SYNC);
         } else if ("BUNI".equals(key)) {
             mActivity.sendWorkflowCommandFromExtraKeys(WorkflowHelper.CMD_BUN_INSTALL);
         } else if ("DEV".equals(key)) {
