@@ -34,6 +34,20 @@
         app:summary="@string/summary_preferred_ports"
         app:persistent="false"/>
 
+    <SwitchPreferenceCompat
+        app:key="notify_preferred_ports"
+        app:title="@string/title_notify_preferred_ports"
+        app:summary="@string/summary_notify_preferred_ports"
+        app:defaultValue="true"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="bun"
+        app:title="@string/title_bun"
+        app:summary="@string/summary_bun"
+        app:persistent="false"
+        app:fragment="com.invapp.app.fragments.settings.BunPreferencesFragment"/>
+
     <Preference
         app:key="ai_doctor"
         app:title="@string/title_ai_doctor"

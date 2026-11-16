@@ -26,7 +26,7 @@ printf '  git          %s\n' "$(command -v git >/dev/null 2>&1 && git --version 
 
 hr
 echo "helpers"
-for h in td-dev td-sync td-scaffold td-clone td-ai td-ai-stop opencode-server td-upgrade td-install-extras bun-doctor ivx-configure ivx-doctor opencode-setup cursor-agent-setup; do
+for h in td-dev td-sync td-scaffold td-clone td-ai td-ai-stop opencode-server td-upgrade td-install-extras bun-doctor bun-version bun-upgrade ivx-configure ivx-doctor opencode-setup cursor-agent-setup; do
     if [ -x "$PREFIX/bin/$h" ]; then printf '  %-22s ok\n' "$h"; else printf '  %-22s MISSING\n' "$h"; fi
 done
 

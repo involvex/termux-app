@@ -53,6 +53,7 @@ public final class WidgetScriptsInstaller {
     public static final String ID_STOP_AI = "stop-ai";
     public static final String ID_TD_UPGRADE = "td-upgrade";
     public static final String ID_STOP_AGENT_WORKER = "stop-agent-worker";
+    public static final String ID_TD_DEV = "td-dev";
 
     /** Background task scripts under {@code ~/.shortcuts/tasks/}. */
     public static final String ID_TD_AI = "td-ai";
@@ -71,7 +72,7 @@ public final class WidgetScriptsInstaller {
         ID_CAMERA_PHOTO, ID_WIFI_INFO, ID_WIFI_SCAN, ID_BATTERY_STATUS,
         ID_TORCH_TOGGLE, ID_SHARE_CLIPBOARD, ID_OPEN_SETTINGS,
         ID_VIBRATE, ID_VOLUME_INFO, ID_LOCATION, ID_TELEPHONY_INFO, ID_STOP_AI,
-        ID_TD_UPGRADE, ID_STOP_AGENT_WORKER
+        ID_TD_UPGRADE, ID_STOP_AGENT_WORKER, ID_TD_DEV
     };
 
     /** Display labels parallel to {@link #allCatalogIds()}. */
@@ -94,6 +95,7 @@ public final class WidgetScriptsInstaller {
         "stop-ai",
         "td-upgrade",
         "stop-agent-worker",
+        "td-dev",
         "td-ai (background task)",
         "agent-worker (background task)"
     };
@@ -108,7 +110,7 @@ public final class WidgetScriptsInstaller {
             ID_CAMERA_PHOTO, ID_WIFI_INFO, ID_WIFI_SCAN, ID_BATTERY_STATUS,
             ID_TORCH_TOGGLE, ID_SHARE_CLIPBOARD, ID_OPEN_SETTINGS,
             ID_VIBRATE, ID_VOLUME_INFO, ID_LOCATION, ID_TELEPHONY_INFO, ID_STOP_AI,
-            ID_TD_UPGRADE, ID_STOP_AGENT_WORKER,
+            ID_TD_UPGRADE, ID_STOP_AGENT_WORKER, ID_TD_DEV,
             ID_TD_AI, ID_AGENT_WORKER
         };
     }
@@ -246,6 +248,7 @@ public final class WidgetScriptsInstaller {
             case ID_STOP_AI: return 0xFFF44336; // red
             case ID_TD_UPGRADE: return 0xFF00897B; // teal dark
             case ID_STOP_AGENT_WORKER: return 0xFFE53935; // red
+            case ID_TD_DEV: return 0xFFFF9800; // orange
             case ID_TD_AI: return 0xFFAA00FF; // purple
             case ID_AGENT_WORKER: return 0xFF1E88E5; // blue
             default: return null;
@@ -359,12 +362,110 @@ public final class WidgetScriptsInstaller {
      */
     @Nullable
     public static String runOnceCommand(@NonNull String id) {
+        return runOnceCommand(id, null, null);
+    }
+
+    /**
+     * Build a run-once command with optional env assignments and positional args.
+     * Returns {@code null} if the script is missing or args/env fail validation.
+     */
+    @Nullable
+    public static String runOnceCommand(@NonNull String id,
+                                        @Nullable String argsText,
+                                        @Nullable String envText) {
         File f = scriptPath(id);
         if (f == null) {
             return null;
         }
-        String path = f.getAbsolutePath().replace("'", "'\\''");
-        return "bash '" + path + "'\n";
+        if (!isSafeShellFragment(argsText) || !isSafeShellFragment(envText)) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        List<String> envPairs = parseEnvAssignments(envText);
+        if (!envPairs.isEmpty()) {
+            sb.append("env");
+            for (String pair : envPairs) {
+                int eq = pair.indexOf('=');
+                String key = pair.substring(0, eq);
+                String val = pair.substring(eq + 1);
+                sb.append(' ').append(key).append('=').append(shellSingleQuote(val));
+            }
+            sb.append(' ');
+        }
+        sb.append("bash ").append(shellSingleQuote(f.getAbsolutePath()));
+        for (String arg : parseArgTokens(argsText)) {
+            sb.append(' ').append(shellSingleQuote(arg));
+        }
+        sb.append('\n');
+        return sb.toString();
+    }
+
+    /** Reject shell metacharacters that would break quoting / injection. */
+    public static boolean isSafeShellFragment(@Nullable String text) {
+        if (text == null || text.isEmpty()) {
+            return true;
+        }
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == ';' || c == '|' || c == '&' || c == '$' || c == '`'
+                || c == '(' || c == ')' || c == '\n' || c == '\r' || c == '\0') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @NonNull
+    static List<String> parseArgTokens(@Nullable String argsText) {
+        List<String> out = new ArrayList<>();
+        if (argsText == null) {
+            return out;
+        }
+        String trimmed = argsText.trim();
+        if (trimmed.isEmpty()) {
+            return out;
+        }
+        for (String part : trimmed.split("\\s+")) {
+            if (!part.isEmpty()) {
+                out.add(part);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Parse {@code KEY=value} tokens (whitespace-separated). Invalid tokens skipped.
+     */
+    @NonNull
+    static List<String> parseEnvAssignments(@Nullable String envText) {
+        List<String> out = new ArrayList<>();
+        if (envText == null) {
+            return out;
+        }
+        String trimmed = envText.trim();
+        if (trimmed.isEmpty()) {
+            return out;
+        }
+        for (String part : trimmed.split("\\s+")) {
+            if (part.isEmpty()) {
+                continue;
+            }
+            int eq = part.indexOf('=');
+            if (eq <= 0 || eq == part.length() - 1) {
+                continue;
+            }
+            String key = part.substring(0, eq);
+            if (!key.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                continue;
+            }
+            out.add(part);
+        }
+        return out;
+    }
+
+    @NonNull
+    static String shellSingleQuote(@NonNull String s) {
+        return "'" + s.replace("'", "'\\''") + "'";
     }
 
     @Nullable
@@ -882,6 +983,20 @@ public final class WidgetScriptsInstaller {
             + "  command -v termux-wake-unlock >/dev/null 2>&1 && termux-wake-unlock || true\n"
             + "fi\n"
             + "toast 'Agent worker stopped'\n");
+        m.put(ID_TD_DEV, ""
+            + "#!" + bash + "\n"
+            + "# invapp-widget: td-dev\n"
+            + "set -e\n"
+            + "export PATH=\"" + prefix + "/bin:$PATH\"\n"
+            + "toast() { command -v termux-toast >/dev/null 2>&1 && termux-toast \"$1\" || true; }\n"
+            + "cd \"" + home + "/repos\" 2>/dev/null || cd \"$HOME\" || true\n"
+            + "toast 'td-dev…'\n"
+            + "if ! command -v td-dev >/dev/null 2>&1; then\n"
+            + "  msg='td-dev missing — open InVxTermux once'\n"
+            + "  toast \"$msg\"; echo \"$msg\" >&2\n"
+            + "  exit 1\n"
+            + "fi\n"
+            + "exec td-dev \"$@\"\n");
         m.put(ID_TD_AI, ""
             + "#!" + bash + "\n"
             + "# invapp-widget: td-ai (background task)\n"

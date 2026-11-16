@@ -171,9 +171,10 @@ https://github.com/involvex/termux-app
   even in a container) and the Termux `glibc` + `ld-linux` wrappers
 - `arm` / `i686` images are base-only — bun publishes no 32-bit build, same as
   the APK. Docs: [`docs/docker.md`](docs/docker.md) · `docker/README.md`
-- Follow-up (partial): most helpers live under `app/src/main/assets/invapp/`;
-  some device-only scripts remain embedded in `TermuxBunInstaller` (OpenCode /
-  Cursor Agent wrappers) — further unification is a maintainer batch
+- Follow-up (partial): AI stack helpers (`opencode-setup`, `cursor-agent-setup`,
+  `td-upgrade`, …) live under `app/src/main/assets/invapp/` (Phase 19). Some
+  device-only scripts remain in `TermuxBunInstaller` (scaffold/JDK/OCR) —
+  further unification is a maintainer batch
 
 ### 16. First-run setup + login banner (done)
 
@@ -223,6 +224,19 @@ https://github.com/involvex/termux-app
   Copy LAN / QR LAN (`invapp://preview/…`); OpenCode hint when port is 4000
 - TalkBack `contentDescription` on quick-bar + Preview toolbar
 - Docs: `:4096` → `:4000` hygiene; [litert.md](docs/litert.md) for on-device LLM
+
+### 19. Workflow polish + AI asset unification (done)
+
+- Settings → **Bun**: stamp / APK pin / libexec status; `bun-version` +
+  `bun-upgrade --check` (never `bun upgrade` / self-replace `.incbin`);
+  **Update via APK** → GitHub Releases
+- Preferred-port **notification** when a watched port appears while the app
+  is backgrounded (toggle next to Preferred ports; deep-link Preview)
+- Widget **Run…** dialog with safe args/env quoting; optional catalog
+  `td-dev`
+- Move `opencode-setup`, `opencode-fix-net`, `cursor-agent-setup`,
+  `td-agent-worker`, `td-upgrade` from `TermuxBunInstaller` Java literals
+  into `app/src/main/assets/invapp/bin/` (container seed parity)
 
 ## Non-goals (for now)
 

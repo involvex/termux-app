@@ -40,6 +40,7 @@ import com.invapp.R;
 import com.invapp.app.utils.AiSessionHelper;
 import com.invapp.app.utils.LanShareHelper;
 import com.invapp.app.utils.LocalhostPortScanner;
+import com.invapp.app.utils.PreferredPortWatcher;
 import com.invapp.app.utils.PreviewPortPrefs;
 import com.invapp.app.utils.QrCodeHelper;
 import com.invapp.app.utils.WorkflowHelper;
@@ -118,6 +119,10 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_localhost_preview);
+
+        int launchPort = getIntent() != null
+            ? getIntent().getIntExtra(EXTRA_PORT, DEFAULT_PORT) : DEFAULT_PORT;
+        PreferredPortWatcher.cancelPortNotification(this, launchPort);
 
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);

@@ -55,7 +55,9 @@ the same menu; the right drawer also has a **Setup** button. Long-press
 Preview **Copy LAN** / **QR LAN** (or long-press a port chip) share
 `http://<wifi-ip>:<port>/` when the server listens on `0.0.0.0` / `::`.
 QR is same-Wi‑Fi only — no public tunnels. Settings → **Preferred Preview ports**
-customizes Scan / snackbar priorities.
+customizes Scan / snackbar priorities (and **Notify on preferred ports** for
+background alerts). Settings → **Bun** shows the APK stamp; use
+`bun-upgrade --check` — never `bun upgrade`.
 
 ## Bun
 

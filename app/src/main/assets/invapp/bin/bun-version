@@ -1,0 +1,42 @@
+#!@BASH@
+# InVxTermux — show bundled stamp vs running Bun (never upgrades).
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+STAMP="$PREFIX/var/lib/invapp/bun.version"
+STAMPED=""
+[ -f "$STAMP" ] && STAMPED=$(tr -d '[:space:]' < "$STAMP")
+
+RUNNING=""
+if command -v bun >/dev/null 2>&1; then
+    RUNNING=$(bun --version 2>/dev/null | head -1 || true)
+fi
+
+REAL="$PREFIX/libexec/bun"
+REAL_OK=0
+[ -x "$REAL" ] && REAL_OK=1
+
+echo "bun-version"
+echo "  stamped:  ${STAMPED:-unknown}"
+echo "  running:  ${RUNNING:-missing}"
+if [ "$REAL_OK" = 1 ]; then
+    echo "  libexec:  $REAL (ok)"
+else
+    echo "  libexec:  $REAL (missing)"
+fi
+
+# Heuristic: glibc Linux Bun often lives under ~/.bun and fails with SIGSYS on device.
+if [ -n "$RUNNING" ] && [ -x "$HOME/.bun/bin/bun" ]; then
+    case "$(readlink -f "$(command -v bun)" 2>/dev/null || command -v bun)" in
+        "$HOME/.bun"/*)
+            echo "  warning: bun resolves under ~/.bun — likely curl|bash glibc install"
+            echo "           use the APK-bundled wrapper at $PREFIX/bin/bun"
+            ;;
+    esac
+fi
+
+if [ -n "$RUNNING" ] && [ -n "$STAMPED" ] && [ "$RUNNING" != "$STAMPED" ]; then
+    echo "  note: running ≠ stamp — install a newer InVxTermux APK"
+    echo "        (do not run 'bun upgrade' — pulls glibc/wrong binary → SIGSYS)"
+    exit 1
+fi
+exit 0

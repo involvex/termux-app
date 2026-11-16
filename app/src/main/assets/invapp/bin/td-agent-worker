@@ -1,0 +1,83 @@
+#!@BASH@
+# InVxTermux — td-agent-worker (Cursor cloud My Machines).
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+export PATH="$PREFIX/bin:$HOME/.local/bin:$PATH"
+CMD="${1:-start}"
+if [ "$#" -gt 0 ]; then shift; fi
+NAME="${CURSOR_WORKER_NAME:-invx-phone}"
+DIRS=()
+MGMT=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --name) NAME="$2"; shift 2 ;;
+    --dir|--worker-dir) DIRS+=("$2"); shift 2 ;;
+    --management-addr) MGMT="$2"; shift 2 ;;
+    start|stop|status) CMD="$1"; shift ;;
+    *) echo "usage: td-agent-worker [start|stop|status] [--name N] [--dir PATH]…" >&2; exit 2 ;;
+  esac
+done
+if [ "${#DIRS[@]}" -eq 0 ]; then
+  mkdir -p "$HOME/repos"
+  DIRS=("$HOME/repos")
+fi
+worker_running() {
+  pgrep -f '[a]gent worker' >/dev/null 2>&1 \
+    || pgrep -f 'cursor-agent.*worker' >/dev/null 2>&1
+}
+case "$CMD" in
+  status)
+    if worker_running; then
+      echo "td-agent-worker: running (name=$NAME)"
+      echo "  Pick machine at https://cursor.com/agents"
+      exit 0
+    fi
+    echo "td-agent-worker: not running"
+    exit 1
+    ;;
+  stop)
+    echo "td-agent-worker: stopping…"
+    pkill -f '[a]gent worker' 2>/dev/null || true
+    pkill -f 'cursor-agent.*worker' 2>/dev/null || true
+    command -v termux-wake-unlock >/dev/null 2>&1 && termux-wake-unlock || true
+    sleep 0.3
+    if worker_running; then
+      echo "td-agent-worker: still running" >&2
+      exit 1
+    fi
+    echo "td-agent-worker: stopped"
+    exit 0
+    ;;
+  start)
+    if ! command -v agent >/dev/null 2>&1 \
+      || ! head -2 "$(command -v agent)" 2>/dev/null | grep -q invapp-cursor-agent-wrapper; then
+      echo "td-agent-worker: installing Cursor Agent CLI…"
+      cursor-agent-setup || exit $?
+      hash -r 2>/dev/null || true
+    fi
+    if worker_running; then
+      echo "td-agent-worker: already running"
+      echo "  status: td-agent-worker status | stop: td-agent-worker stop"
+      exit 0
+    fi
+    if [ -z "${CURSOR_API_KEY:-}" ] && [ -z "${CURSOR_AUTH_TOKEN:-}" ]; then
+      echo "td-agent-worker: ensure auth — agent login  (or CURSOR_API_KEY=…)"
+    fi
+    command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock || true
+    ARGS=(worker)
+    for d in "${DIRS[@]}"; do
+      ARGS+=(--worker-dir "$d")
+    done
+    [ -n "$MGMT" ] && ARGS+=(--management-addr "$MGMT")
+    ARGS+=(start --name "$NAME")
+    echo "td-agent-worker: agent ${ARGS[*]}"
+    echo "  Cloud: https://cursor.com/agents (My Machines)"
+    echo "  Outbound HTTPS only — no Preview port"
+    echo ""
+    exec agent "${ARGS[@]}"
+    ;;
+  *)
+    echo "usage: td-agent-worker [start|stop|status] [--name N] [--dir PATH]…" >&2
+    exit 2
+    ;;
+esac

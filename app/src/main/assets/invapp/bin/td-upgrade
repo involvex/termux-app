@@ -1,58 +1,76 @@
 #!@BASH@
-# InVxTermux container -- td-upgrade
-# Refresh the stack: packages, OpenCode, Cursor Agent, bun stamp.
-# Unlike the APK there is no bundled-binary constraint: bun is a normal file in
-# $PREFIX/libexec, so an image refresh is `docker pull` + re-tag, not an APK
-# upgrade. This script updates everything in place inside the running container.
+# InVxTermux — td-upgrade (pkg + OpenCode + Cursor Agent + bun stamp).
 set -e
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+REDIRECTOR_SO="$PREFIX/lib/libinvapp-redirector.so"
+[ -f "$REDIRECTOR_SO" ] && export LD_PRELOAD="$REDIRECTOR_SO${LD_PRELOAD:+:$LD_PRELOAD}"
 
-echo "=== td-upgrade: packages ==="
+echo "=== td-upgrade: pkg ==="
 if command -v pkg >/dev/null 2>&1; then
-    pkg update -y || true
-    pkg upgrade -y || true
+  pkg update -y || true
+  pkg upgrade -y || true
 else
-    echo "td-upgrade: pkg missing -- skip"
+  echo "td-upgrade: pkg missing — skip"
 fi
-
 echo ""
 echo "=== td-upgrade: OpenCode ==="
 if command -v opencode-setup >/dev/null 2>&1; then
-    opencode-setup || echo "td-upgrade: opencode-setup failed (non-fatal)" >&2
+  opencode-setup || echo "td-upgrade: opencode-setup failed (non-fatal)" >&2
 else
-    echo "td-upgrade: opencode-setup missing -- recreate the image"
+  echo "td-upgrade: opencode-setup missing — reopen the app"
 fi
-
 echo ""
 echo "=== td-upgrade: Cursor Agent ==="
 if command -v cursor-agent-setup >/dev/null 2>&1; then
-    if command -v agent >/dev/null 2>&1; then
-        echo "td-upgrade: agent update…"
-        agent update 2>&1 || echo "td-upgrade: agent update skipped/failed" >&2
-        cursor-agent-setup --wrap-only || cursor-agent-setup || true
-    else
-        echo "td-upgrade: agent missing -- full cursor-agent-setup…"
-        cursor-agent-setup || echo "td-upgrade: cursor-agent-setup failed" >&2
+  CA_VER_DIR=""
+  if [ -L "$HOME/.local/share/cursor-agent/current" ] \
+    || [ -d "$HOME/.local/share/cursor-agent/current" ]; then
+    CA_VER_DIR=$(readlink -f "$HOME/.local/share/cursor-agent/current" 2>/dev/null \
+      || echo "$HOME/.local/share/cursor-agent/current")
+  elif [ -f "$HOME/.local/share/cursor-agent/version" ]; then
+    _v=$(tr -d '[:space:]' < "$HOME/.local/share/cursor-agent/version")
+    CA_VER_DIR="$HOME/.local/share/cursor-agent/versions/$_v"
+  fi
+  CA_OK=0
+  if [ -n "$CA_VER_DIR" ] \
+    && [ -x "$CA_VER_DIR/node" ] \
+    && [ -f "$CA_VER_DIR/node_modules/tree-sitter/package.json" ] \
+    && [ -f "$CA_VER_DIR/node_modules/tree-sitter-bash/package.json" ]; then
+    CA_OK=1
+  fi
+  if [ "$CA_OK" != 1 ]; then
+    echo "td-upgrade: Cursor Agent incomplete/missing — full cursor-agent-setup…"
+    if [ -n "$CA_VER_DIR" ] && [ -e "$CA_VER_DIR" ]; then
+      rm -rf "$CA_VER_DIR"
     fi
+    cursor-agent-setup || echo "td-upgrade: cursor-agent-setup failed" >&2
+  elif command -v agent >/dev/null 2>&1 \
+    && head -2 "$(command -v agent)" 2>/dev/null | grep -q invapp-cursor-agent-wrapper; then
+    echo "td-upgrade: agent update…"
+    agent update 2>&1 || echo "td-upgrade: agent update skipped/failed" >&2
+    cursor-agent-setup --wrap-only || cursor-agent-setup || true
+  else
+    echo "td-upgrade: wrapping existing install…"
+    cursor-agent-setup --wrap-only || cursor-agent-setup || true
+  fi
 else
-    echo "td-upgrade: cursor-agent-setup missing -- recreate the image"
+  echo "td-upgrade: cursor-agent-setup missing — reopen the app"
 fi
-
 echo ""
-echo "=== td-upgrade: bun ==="
-STAMP="$PREFIX/var/lib/invapp/bun.version"
-RUNNING=""
-command -v bun >/dev/null 2>&1 && RUNNING=$(bun --version 2>/dev/null | head -1 || true)
-STAMPED=""
-[ -f "$STAMP" ] && STAMPED=$(tr -d '[:space:]' < "$STAMP")
-echo "  image stamp: ${STAMPED:-unknown}"
-echo "  running:     ${RUNNING:-missing}"
-if [ -n "$RUNNING" ] && [ "$RUNNING" != "$STAMPED" ]; then
-    echo "  note: version drift -- rebuild/pull the image for a matching bun"
+echo "=== td-upgrade: Bun (APK-bundled; no bun upgrade) ==="
+if command -v bun-upgrade >/dev/null 2>&1; then
+  bun-upgrade --check || true
+else
+  STAMP="$PREFIX/var/lib/invapp/bun.version"
+  RUNNING=""
+  command -v bun >/dev/null 2>&1 && RUNNING=$(bun --version 2>/dev/null | head -1 || true)
+  STAMPED=""
+  [ -f "$STAMP" ] && STAMPED=$(tr -d '[:space:]' < "$STAMP")
+  echo "  stamped:  ${STAMPED:-unknown}"
+  echo "  running:  ${RUNNING:-missing}"
+  if [ -n "$RUNNING" ] && [ -n "$STAMPED" ] && [ "$RUNNING" != "$STAMPED" ]; then
+    echo "  note: version drift — install a newer InVxTermux APK (no bun upgrade)"
+  fi
 fi
-echo "  'bun upgrade' is deliberately NOT run: it replaces the verified"
-echo "  $PREFIX/libexec/bun with a build whose natives may not match the prefix."
-echo "  Bump it with INVAPP_BUN_VERSION at image build time instead."
-
 echo ""
 echo "td-upgrade: done"

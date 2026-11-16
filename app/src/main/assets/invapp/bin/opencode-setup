@@ -1,150 +1,177 @@
 #!@BASH@
-# InVxTermux container -- opencode-setup.
-#
-# Port of the APK's opencode-setup (TermuxBunInstaller.java) with the
-# Android-only pieces removed:
-#   * no libinvapp-opencode-shim.so  (Docker ships /etc/resolv.conf + /sys, so
-#     glibc getaddrinfo/getifaddrs work without a shim)
-#   * no com.termux -> com.involvex path rewrite (the container prefix *is*
-#     /data/data/com.termux, the path glibc packages hardcode)
-#   * still installs Termux glibc: a Termux container is bionic, so a
-#     linux-glibc OpenCode binary needs ld-linux --library-path.
+# InVxTermux — opencode-setup (OpenCode V2 + glibc ld-linux wrapper).
 set -e
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+INVAPP_FILES_DIR="${PREFIX%/usr}"
+_stock_files="$(printf '%s' 'L2RhdGEvZGF0YS9jb20udGVybXV4L2ZpbGVz' | base64 -d 2>/dev/null || true)"
+_stock_pkg="$(printf '%s' 'Y29tLnRlcm11eA==' | base64 -d 2>/dev/null || true)"
+REDIRECTOR_SO="$PREFIX/lib/libinvapp-redirector.so"
+[ -f "$REDIRECTOR_SO" ] && export LD_PRELOAD="$REDIRECTOR_SO${LD_PRELOAD:+:$LD_PRELOAD}"
 
-# Drop broken official-install shims (point at ~/.opencode/bin).
+rm -f "$PREFIX/bin/opencode" "$HOME/.bun/bin/opencode" 2>/dev/null || true
 rm -f "$PREFIX/bin/opencode-v2" "$PREFIX/bin/opencode-v2-server" \
   "$HOME/.bun/bin/opencode-v2" "$HOME/.bun/bin/opencode-v2-server" \
   "$HOME/.local/bin/opencode-v2" "$HOME/.local/bin/opencode-v2-server" 2>/dev/null || true
-
 case "$(uname -m)" in
-    aarch64|arm64) OC_ASSET=opencode-linux-arm64.tar.gz; OC_LD=ld-linux-aarch64.so.1 ;;
-    x86_64|amd64)  OC_ASSET=opencode-linux-x64.tar.gz;  OC_LD=ld-linux-x86-64.so.2 ;;
-    *)
-        echo "opencode-setup: $(uname -m) unsupported (x64 + aarch64 only)" >&2
-        exit 2
-        ;;
+  aarch64|arm64) OC_ASSET=opencode-linux-arm64.tar.gz; OC_LD=ld-linux-aarch64.so.1 ;;
+  x86_64|amd64)  OC_ASSET=opencode-linux-x64.tar.gz;  OC_LD=ld-linux-x86-64.so.2 ;;
+  *)             OC_ASSET=opencode-linux-arm64.tar.gz; OC_LD=ld-linux-aarch64.so.1 ;;
 esac
-
-WRAP_ONLY=0
-OC_ARG_VER=""
-OC_BIN_SRC=""
-while [ $# -gt 0 ]; do
-    case "$1" in
-        -h|--help)
-            echo "usage: opencode-setup [--version X] [--binary PATH] [--wrap-only]"
-            echo "  env: OPENCODE_VERSION=X (or VERSION=X); default: live V2 lookup"
-            exit 0
-            ;;
-        -v|--version) OC_ARG_VER="${2:-}"; shift 2 ;;
-        -b|--binary)  OC_BIN_SRC="${2:-}"; shift 2 ;;
-        --wrap-only)  WRAP_ONLY=1; shift ;;
-        *) break ;;
-    esac
-done
-
 OC_DIR="$PREFIX/libexec/opencode"
 OC_BIN="$OC_DIR/opencode"
-
+# V2 flags mirror https://opencode.ai/v2/install (--version/-v, --binary/-b).
+OC_ARG_VER=""
+OC_BIN_SRC=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -h|--help) echo "usage: opencode-setup [--version X] [--binary PATH]"; echo "  env: OPENCODE_VERSION=X (or VERSION=X); default: live V2 lookup"; exit 0 ;;
+    -v|--version) OC_ARG_VER="${2:-}"; shift 2 ;;
+    -b|--binary) OC_BIN_SRC="${2:-}"; shift 2 ;;
+    *) break ;;
+  esac
+done
+OC_VER="${OC_ARG_VER:-${OPENCODE_VERSION:-${VERSION:-}}}"
+OC_VER="${OC_VER#v}"
+if [ -z "$OC_VER" ]; then
+  echo "opencode-setup: resolving latest V2 version…"
+  OC_META=$(curl -fsSL --max-time 20 https://opencode.ai/update/api/latest/cli/npm 2>/dev/null || true)
+  OC_VER=$(printf '%s' "$OC_META" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' | head -1)
+  OC_VER="${OC_VER#v}"
+  if [ -z "$OC_VER" ]; then
+    OC_VER="2.0.6"
+    echo "opencode-setup: version lookup failed — using fallback v$OC_VER" >&2
+  else
+    echo "opencode-setup: latest V2 is v$OC_VER"
+  fi
+fi
+case "$OC_VER" in 1.*|0.*) OC_URL="https://github.com/anomalyco/opencode/releases/download/v$OC_VER/$OC_ASSET" ;;
+  *) OC_URL="https://opencode.ai/files/bin/$OC_VER/$OC_ASSET" ;;
+esac
+if [ -n "$OC_BIN_SRC" ]; then
+  echo "opencode-setup: installing from local binary $OC_BIN_SRC…"
+  rm -rf "$OC_DIR.new"
+  mkdir -p "$OC_DIR.new"
+  cp -f "$OC_BIN_SRC" "$OC_DIR.new/opencode"
+  chmod +x "$OC_DIR.new/opencode"
+  rm -rf "$OC_DIR"
+  mv "$OC_DIR.new" "$OC_DIR"
+  OC_BIN=$(find "$OC_DIR" -type f -name opencode 2>/dev/null | head -1)
+fi
+if [ -z "$OC_BIN_SRC" ]; then
+echo "Downloading $OC_ASSET (official V2 linux binary; no bun install)…"
+echo "  $OC_URL"
+mkdir -p "$OC_DIR" "$TMPDIR"
+OC_TAR="$TMPDIR/$OC_ASSET"
+if command -v curl >/dev/null 2>&1; then
+  curl -fL --retry 3 --retry-delay 2 -o "$OC_TAR" "$OC_URL"
+elif command -v wget >/dev/null 2>&1; then
+  wget -O "$OC_TAR" "$OC_URL"
+else
+  echo "opencode-setup: need curl or wget" >&2
+  exit 127
+fi
+rm -rf "$OC_DIR.new"
+mkdir -p "$OC_DIR.new"
+tar -xzf "$OC_TAR" -C "$OC_DIR.new"
+rm -f "$OC_TAR"
+FOUND=$(find "$OC_DIR.new" -type f -name opencode 2>/dev/null | head -1)
+if [ -z "$FOUND" ] || [ ! -f "$FOUND" ]; then
+  echo "opencode-setup: tarball had no opencode binary" >&2
+  rm -rf "$OC_DIR.new"
+  exit 1
+fi
+chmod +x "$FOUND"
+rm -rf "$OC_DIR"
+mv "$OC_DIR.new" "$OC_DIR"
+OC_BIN=$(find "$OC_DIR" -type f -name opencode 2>/dev/null | head -1)
+fi
+if [ -z "$OC_BIN" ] || [ ! -x "$OC_BIN" ]; then
+  echo "opencode-setup: install failed (binary missing)" >&2
+  exit 1
+fi
 fixup_glibc_paths() {
-    # glibc packages hardcode /data/data/com.termux (correct here) and ship
-    # only versioned .so names.
-    [ -f "$PREFIX/glibc/lib/libc.so.6" ] && ln -sfn libc.so.6 "$PREFIX/glibc/lib/libc.so" 2>/dev/null || true
-    ln -sfn libdl.so.2 "$PREFIX/glibc/lib/libdl.so" 2>/dev/null || true
-    ln -sfn libpthread.so.0 "$PREFIX/glibc/lib/libpthread.so" 2>/dev/null || true
-    mkdir -p "$PREFIX/etc" "$PREFIX/glibc/etc/ssl/certs"
-    # Docker already provides /etc/resolv.conf, but glibc reads its own copy.
-    if [ ! -s "$PREFIX/etc/resolv.conf" ] && [ -s /etc/resolv.conf ]; then
-        cp -f /etc/resolv.conf "$PREFIX/etc/resolv.conf"
-    fi
-    if [ ! -s "$PREFIX/etc/resolv.conf" ]; then
-        printf '%s\n' 'nameserver 8.8.8.8' 'nameserver 1.1.1.1' > "$PREFIX/etc/resolv.conf"
-    fi
-    cp -f "$PREFIX/etc/resolv.conf" "$PREFIX/glibc/etc/resolv.conf" 2>/dev/null || true
-    printf '%s\n' '127.0.0.1 localhost' '::1 localhost' > "$PREFIX/etc/hosts" 2>/dev/null || true
-    if [ -f "$PREFIX/etc/tls/cert.pem" ]; then
-        ln -sfn "$PREFIX/etc/tls/cert.pem" \
-            "$PREFIX/glibc/etc/ssl/certs/ca-certificates.crt" 2>/dev/null || true
-    fi
+  local f
+  for f in "$PREFIX/opt/glibc-runner/glibc-runner.sh" "$PREFIX/bin/grun"; do
+    [ -f "$f" ] || continue
+    grep -q "${_stock_pkg}" "$f" 2>/dev/null || continue
+    sed -i "s|${_stock_files}|${INVAPP_FILES_DIR}|g" "$f" 2>/dev/null || true
+  done
+  if [ -f "$PREFIX/glibc/lib/libc.so.6" ]; then
+    ln -sfn libc.so.6 "$PREFIX/glibc/lib/libc.so" 2>/dev/null || true
+  fi
+  if [ -f "$PREFIX/glibc/lib/libm.so.6" ]; then
+    ln -sfn libm.so.6 "$PREFIX/glibc/lib/libm.so" 2>/dev/null || true
+  fi
+  ln -sfn libdl.so.2 "$PREFIX/glibc/lib/libdl.so" 2>/dev/null || true
+  ln -sfn libpthread.so.0 "$PREFIX/glibc/lib/libpthread.so" 2>/dev/null || true
+  if [ ! -f "$PREFIX/glibc/lib/liblog.so" ] && [ -x "$PREFIX/bin/clang" ]; then
+    cat > "$PREFIX/tmp/invapp-liblog-stub.c" <<'STUBEOF'
+int __android_log_write(int a, const char* b, const char* c) { (void)a;(void)b;(void)c; return 0; }
+int __android_log_print(int a, const char* b, const char* c, ...) { (void)a;(void)b;(void)c; return 0; }
+int __android_log_vprint(int a, const char* b, const char* c, void* d) { (void)a;(void)b;(void)c;(void)d; return 0; }
+void __android_log_assert(const char* a, const char* b, const char* c, ...) { (void)a;(void)b;(void)c; }
+STUBEOF
+    "$PREFIX/bin/clang" -shared -nostdlib -fPIC -Wl,-soname,liblog.so \
+      -o "$PREFIX/glibc/lib/liblog.so" "$PREFIX/tmp/invapp-liblog-stub.c" 2>/dev/null || true
+  fi
+  mkdir -p "$PREFIX/etc" "$PREFIX/glibc/etc/ssl/certs"
+  if [ ! -s "$PREFIX/etc/resolv.conf" ]; then
+    printf '%s\n' 'nameserver 8.8.8.8' 'nameserver 1.1.1.1' > "$PREFIX/etc/resolv.conf"
+  fi
+  cp -f "$PREFIX/etc/resolv.conf" "$PREFIX/glibc/etc/resolv.conf" 2>/dev/null || \
+    printf '%s\n' 'nameserver 8.8.8.8' 'nameserver 1.1.1.1' > "$PREFIX/glibc/etc/resolv.conf"
+  if [ ! -s "$PREFIX/etc/hosts" ]; then
+    printf '%s\n' '127.0.0.1 localhost' '::1 localhost' > "$PREFIX/etc/hosts"
+  fi
+  cp -f "$PREFIX/etc/hosts" "$PREFIX/glibc/etc/hosts" 2>/dev/null || true
+  if [ -f "$PREFIX/etc/tls/cert.pem" ]; then
+    ln -sfn "$PREFIX/etc/tls/cert.pem" \
+      "$PREFIX/glibc/etc/ssl/certs/ca-certificates.crt" 2>/dev/null || true
+    ln -sfn "$PREFIX/etc/tls/cert.pem" \
+      "$PREFIX/glibc/etc/ssl/cert.pem" 2>/dev/null || true
+  fi
 }
-
 ensure_glibc() {
-    if [ -x "$PREFIX/glibc/lib/$OC_LD" ]; then
-        fixup_glibc_paths
-        return 0
-    fi
-    echo "opencode-setup: installing Termux glibc (linux binaries need it, even in a container)…"
-    mkdir -p "$PREFIX/etc/apt/sources.list.d"
-    printf '%s\n' 'deb [trusted=yes] https://packages-cf.termux.dev/apt/termux-glibc/ glibc stable' \
-        > "$PREFIX/etc/apt/sources.list.d/glibc.list"
-    export DEBIAN_FRONTEND=noninteractive
-    pkg install -y glibc-repo 2>/dev/null || true
-    apt-get update -y >/dev/null 2>&1 || pkg update -y >/dev/null 2>&1 || true
-    pkg install -y glibc glibc-runner openssl-glibc ca-certificates 2>/dev/null \
-        || apt-get install -y glibc glibc-runner openssl-glibc ca-certificates 2>/dev/null \
-        || true
-    [ -x "$PREFIX/glibc/lib/$OC_LD" ] || return 1
+  if [ -x "$PREFIX/glibc/lib/$OC_LD" ]; then
     fixup_glibc_paths
     return 0
+  fi
+  echo "opencode-setup: installing glibc (linux binaries need it on Android)…"
+  if ! command -v pkg >/dev/null 2>&1 && ! command -v apt-get >/dev/null 2>&1; then
+    return 1
+  fi
+  mkdir -p "$PREFIX/etc/apt/sources.list.d"
+  printf '%s\n' \
+    'deb [trusted=yes] https://packages-cf.termux.dev/apt/termux-glibc/ glibc stable' \
+    > "$PREFIX/etc/apt/sources.list.d/glibc.list"
+  export DEBIAN_FRONTEND=noninteractive
+  pkg install -y glibc-repo 2>/dev/null || true
+  apt-get update -y 2>/dev/null || pkg update -y 2>/dev/null || true
+  pkg install -y glibc glibc-runner 2>/dev/null \
+    || apt-get install -y glibc glibc-runner 2>/dev/null \
+    || pkg install -y glibc 2>/dev/null \
+    || apt-get install -y glibc 2>/dev/null \
+    || true
+  pkg install -y openssl-glibc ca-certificates gcc-glibc 2>/dev/null \
+    || apt-get install -y openssl-glibc ca-certificates gcc-glibc 2>/dev/null \
+    || true
+  if [ ! -x "$PREFIX/glibc/lib/$OC_LD" ]; then
+    return 1
+  fi
+  fixup_glibc_paths
+  return 0
 }
-
-resolve_version() {
-    if [ -n "${OPENCODE_VERSION:-${VERSION:-}}" ]; then
-        echo "${OPENCODE_VERSION#v}"
-        return
-    fi
-    # Progress goes to stderr: the caller captures stdout into the version.
-    echo "opencode-setup: resolving latest V2 version…" >&2
-    meta=$(curl -fsSL --max-time 20 https://opencode.ai/update/api/latest/cli/npm 2>/dev/null || true)
-    v=$(printf '%s' "$meta" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' | head -1)
-    v="${v#v}"
-    if [ -z "$v" ]; then
-        echo "2.0.6"
-        echo "opencode-setup: version lookup failed — using fallback" >&2
-    else
-        echo "$v"
-    fi
-}
-
-url_for() {
-    case "$1" in
-        1.*|0.*) echo "https://github.com/anomalyco/opencode/releases/download/v$1/$2" ;;
-        *)       echo "https://opencode.ai/files/bin/$1/$2" ;;
-    esac
-}
-
-fetch() {
-    # fetch <url> <dest>
-    if command -v curl >/dev/null 2>&1; then
-        curl -fL --retry 3 --retry-delay 2 -o "$2" "$1"
-    elif command -v wget >/dev/null 2>&1; then
-        wget -O "$2" "$1"
-    else
-        echo "opencode-setup: need curl or wget" >&2
-        exit 127
-    fi
-}
-
-unpack() {
-    # unpack <tarball>
-    rm -rf "$OC_DIR.new"
-    mkdir -p "$OC_DIR.new"
-    tar -xzf "$1" -C "$OC_DIR.new"
-    found=$(find "$OC_DIR.new" -type f -name opencode 2>/dev/null | head -1)
-    [ -n "$found" ] && [ -f "$found" ] || return 1
-    chmod +x "$found"
-    rm -rf "$OC_DIR"
-    mv "$OC_DIR.new" "$OC_DIR"
-    OC_BIN=$(find "$OC_DIR" -type f -name opencode 2>/dev/null | head -1)
-    return 0
-}
-
-write_wrapper() {
-    WRAPPER="$PREFIX/bin/opencode"
-    mkdir -p "$PREFIX/bin" "$HOME/.bun/bin" "$PREFIX/lib"
-    cat > "$WRAPPER" <<EOF
+if ! ensure_glibc; then
+  echo "opencode-setup: glibc missing." >&2
+  echo "  pkg install glibc-repo && pkg install glibc glibc-runner" >&2
+  echo "Then re-run: opencode-setup" >&2
+  exit 1
+fi
+WRAPPER="$PREFIX/bin/opencode"
+rm -f "$WRAPPER" "$HOME/.bun/bin/opencode" 2>/dev/null || true
+cat > "$WRAPPER" <<EOF
 #!$PREFIX/bin/bash
-# invapp-opencode-wrapper (container) -- OpenCode linux binary via Termux glibc
+# invapp-opencode-wrapper — OpenCode linux binary via glibc ld-linux
 OC_BIN="$OC_BIN"
 PREFIX="$PREFIX"
 OC_LD="$OC_LD"
@@ -153,95 +180,292 @@ LIB="\$PREFIX/glibc/lib"
 export TMPDIR="\${TMPDIR:-\$PREFIX/tmp}"
 mkdir -p "\$TMPDIR" 2>/dev/null || true
 if [ ! -x "\$OC_BIN" ]; then
-  echo "opencode: binary missing -- run opencode-setup" >&2
+  echo "opencode: binary missing — run opencode-setup" >&2
   exit 127
 fi
 if [ ! -x "\$LD" ]; then
-  echo "opencode: glibc missing -- run opencode-setup" >&2
+  echo "opencode: glibc missing — run opencode-setup" >&2
   exit 127
 fi
-# Empty LD_PRELOAD on purpose: preloading anything here makes the loader pick
-# up the wrong libc ("version \`LIBC' not found").
 export LD_PRELOAD=
+OC_SHIM="\$PREFIX/lib/libinvapp-opencode-shim.so"
+OC_PRELOAD_ARGS=
+if [ -f "\$OC_SHIM" ]; then
+  OC_PRELOAD_ARGS="--preload \$OC_SHIM"
+elif [ -f "\$PREFIX/lib/libinvapp-getifaddrs.so" ]; then
+  OC_PRELOAD_ARGS="--preload \$PREFIX/lib/libinvapp-getifaddrs.so"
+fi
 export LD_LIBRARY_PATH=
+mkdir -p "\$PREFIX/glibc/etc/ssl/certs" 2>/dev/null || true
+if [ ! -s "\$PREFIX/etc/resolv.conf" ]; then
+  printf '%s\n' 'nameserver 8.8.8.8' 'nameserver 1.1.1.1' > "\$PREFIX/etc/resolv.conf"
+fi
+cp -f "\$PREFIX/etc/resolv.conf" "\$PREFIX/glibc/etc/resolv.conf" 2>/dev/null || true
 if [ -f "\$PREFIX/etc/tls/cert.pem" ]; then
   export SSL_CERT_FILE="\$PREFIX/etc/tls/cert.pem"
   export CURL_CA_BUNDLE="\$PREFIX/etc/tls/cert.pem"
   export NODE_EXTRA_CA_CERTS="\$PREFIX/etc/tls/cert.pem"
   mkdir -p "\$PREFIX/etc/tls/certs" "\$PREFIX/glibc/etc/ssl/certs" 2>/dev/null || true
-  ln -sfn "\$PREFIX/etc/tls/cert.pem" "\$PREFIX/etc/tls/certs/ca-certificates.crt" 2>/dev/null || true
-  ln -sfn "\$PREFIX/etc/tls/cert.pem" "\$PREFIX/glibc/etc/ssl/certs/ca-certificates.crt" 2>/dev/null || true
+  ln -sfn "\$PREFIX/etc/tls/cert.pem" \
+    "\$PREFIX/etc/tls/certs/ca-certificates.crt" 2>/dev/null || true
+  ln -sfn "\$PREFIX/etc/tls/cert.pem" \
+    "\$PREFIX/glibc/etc/ssl/certs/ca-certificates.crt" 2>/dev/null || true
   export SSL_CERT_DIR="\$PREFIX/etc/tls/certs"
 fi
 export PATH="\$PREFIX/bin:\$PATH"
-exec "\$LD" --library-path "\$LIB" "\$OC_BIN" "\$@"
+# shellcheck disable=SC2086
+exec "\$LD" --library-path "\$LIB" \$OC_PRELOAD_ARGS "\$OC_BIN" "\$@"
 EOF
-    chmod 700 "$WRAPPER"
-    # td-ai repairs a half-finished install in either location.
-    cp -f "$WRAPPER" "$HOME/.bun/bin/opencode" 2>/dev/null || true
-    chmod 700 "$HOME/.bun/bin/opencode" 2>/dev/null || true
-    printf '%s\n' "${OPENCODE_INSTALLED_VERSION:-unknown}" > "$PREFIX/var/lib/invapp/opencode.version"
+chmod 700 "$WRAPPER"
+mkdir -p "$HOME/.bun/bin" "$PREFIX/lib"
+build_opencode_shim() {
+  local stub_c="$PREFIX/tmp/invapp-opencode-shim.c"
+  local stub_so="$PREFIX/lib/libinvapp-opencode-shim.so"
+  local stub_map="$PREFIX/tmp/invapp-opencode-shim.map"
+  local cc=""
+  if [ -f "$stub_so" ] && [ -s "$stub_so" ]; then
+    echo "opencode-setup: using existing DNS shim → $stub_so"
+    return 0
+  fi
+  for cc in "$PREFIX/glibc/bin/gcc" "$PREFIX/bin/aarch64-linux-gnu-gcc" \
+            "$PREFIX/bin/x86_64-linux-gnu-gcc" "$PREFIX/bin/gcc-glibc"; do
+    [ -x "$cc" ] || continue
+    break
+  done
+  if [ -z "$cc" ] || [ ! -x "$cc" ]; then
+    echo "opencode-setup: no gcc-glibc — keep shipped shim or: pkg install gcc-glibc" >&2
+    return 0
+  fi
+  cat > "$stub_c" <<STUBC
+#define _GNU_SOURCE
+#include <arpa/inet.h>
+#include <dlfcn.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <stdarg.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
+static const char *INVAPP_RESOLV ="$PREFIX/etc/resolv.conf";
+static const char *INVAPP_HOSTS ="$PREFIX/etc/hosts";
+static const char *INVAPP_CERT ="$PREFIX/etc/tls/cert.pem";
+static const char *INVAPP_PREFIX ="$PREFIX";
+static const char *STOCK_PREFIX ="$(printf '%s' 'L2RhdGEvZGF0YS9jb20udGVybXV4L2ZpbGVzL3Vzc' | base64 -d)";
+static char g_redir_buf[512];
+static const char *redirect_path(const char *path) {
+  size_t stock_len;
+  if (!path) return path;
+  if (strcmp(path, "/etc/resolv.conf") == 0) return INVAPP_RESOLV;
+  if (strcmp(path, "/etc/hosts") == 0) return INVAPP_HOSTS;
+  if (strcmp(path, "/etc/ssl/cert.pem") == 0) return INVAPP_CERT;
+  if (strcmp(path, "/etc/ssl/certs/ca-certificates.crt") == 0) return INVAPP_CERT;
+  if (strcmp(path, "/etc/pki/tls/certs/ca-bundle.crt") == 0) return INVAPP_CERT;
+  stock_len = strlen(STOCK_PREFIX);
+  if (strncmp(path, STOCK_PREFIX, stock_len) == 0) {
+    size_t rest = strlen(path + stock_len);
+    if (strlen(INVAPP_PREFIX) + rest + 1 > sizeof(g_redir_buf)) return path;
+    memcpy(g_redir_buf, INVAPP_PREFIX, strlen(INVAPP_PREFIX) + 1);
+    memcpy(g_redir_buf + strlen(INVAPP_PREFIX), path + stock_len, rest + 1);
+    return g_redir_buf;
+  }
+  return path;
 }
-
-if [ "$WRAP_ONLY" != 1 ]; then
-    if [ -n "$OC_BIN_SRC" ]; then
-        echo "opencode-setup: installing from local binary $OC_BIN_SRC…"
-        rm -rf "$OC_DIR.new"
-        mkdir -p "$OC_DIR.new"
-        cp -f "$OC_BIN_SRC" "$OC_DIR.new/opencode"
-        chmod +x "$OC_DIR.new/opencode"
-        rm -rf "$OC_DIR"
-        mv "$OC_DIR.new" "$OC_DIR"
-        OC_BIN=$(find "$OC_DIR" -type f -name opencode 2>/dev/null | head -1)
-    else
-        OC_VER="$OC_ARG_VER"
-        [ -n "$OC_VER" ] || OC_VER=$(resolve_version)
-        OC_VER="${OC_VER#v}"
-        OPENCODE_INSTALLED_VERSION="$OC_VER"
-        echo "opencode-setup: installing $OC_VER ($OC_ASSET)"
-        case "$OC_VER" in
-            ''|*[!0-9.]*) die "could not resolve a version (got '$OC_VER')" ;;
-        esac
-        mkdir -p "$OC_DIR" "$TMPDIR"
-        tarball="$TMPDIR/$OC_ASSET"
-        fetch "$(url_for "$OC_VER" "$OC_ASSET")" "$tarball"
-        if ! unpack "$tarball"; then
-            echo "opencode-setup: tarball had no opencode binary" >&2
-            rm -f "$tarball"
-            exit 1
-        fi
-        rm -f "$tarball"
-
-        # Probe: x64 builds may need the no-AVX2 variant on old CPUs.
-        if ! ensure_glibc; then
-            echo "opencode-setup: glibc missing -- pkg install glibc-repo && pkg install glibc glibc-runner" >&2
-            exit 1
-        fi
-        write_wrapper
-        if ! "$PREFIX/bin/opencode" --version >/dev/null 2>&1; then
-            base_asset=$(printf '%s' "$OC_ASSET" | sed -e 's/\.tar\.gz$/-baseline.tar.gz/')
-            if [ "$base_asset" != "$OC_ASSET" ]; then
-                echo "opencode-setup: standard build failed — trying $base_asset (no AVX2)…" >&2
-                if fetch "$(url_for "$OC_VER" "$base_asset")" "$tarball" && unpack "$tarball"; then
-                    rm -f "$tarball"
-                    write_wrapper
-                else
-                    rm -f "$tarball" 2>/dev/null || true
-                    echo "opencode-setup: baseline download failed" >&2
-                fi
-            fi
-        fi
-    fi
+int open(const char *path, int flags, ...) {
+  static int (*real_open)(const char *, int, ...) = 0;
+  if (!real_open) real_open = (int (*)(const char *, int, ...))dlsym(RTLD_NEXT, "open");
+  path = redirect_path(path);
+  if (flags & O_CREAT) { va_list ap; va_start(ap, flags); mode_t m=(mode_t)va_arg(ap,int); va_end(ap); return real_open(path, flags, m); }
+  return real_open(path, flags);
+}
+int openat(int dirfd, const char *path, int flags, ...) {
+  static int (*real_openat)(int, const char *, int, ...) = 0;
+  if (!real_openat) real_openat = (int (*)(int, const char *, int, ...))dlsym(RTLD_NEXT, "openat");
+  path = redirect_path(path);
+  if (flags & O_CREAT) { va_list ap; va_start(ap, flags); mode_t m=(mode_t)va_arg(ap,int); va_end(ap); return real_openat(dirfd, path, flags, m); }
+  return real_openat(dirfd, path, flags);
+}
+typedef int (*ga_fn)(const char*,const char*,const struct addrinfo*,struct addrinfo**);
+static ga_fn real_ga(void) { static ga_fn c; if (!c) c=(ga_fn)dlsym(RTLD_NEXT,"getaddrinfo"); return c; }
+static int encode_qname(const char *host, unsigned char *out, size_t outlen) {
+  size_t used=0; const char *p=host;
+  while (*p) { const char *dot=strchr(p,'.'); size_t len=dot?(size_t)(dot-p):strlen(p);
+    if (len==0||len>63||used+len+2>outlen) return -1;
+    out[used++]=(unsigned char)len; memcpy(out+used,p,len); used+=len;
+    if (!dot) break; p=dot+1; if (!*p) break; }
+  if (used+1>outlen) return -1; out[used++]=0; return (int)used;
+}
+static int skip_name(const unsigned char *pkt, int len, int off) {
+  while (off < len) { unsigned char l=pkt[off]; if (l==0) return off+1;
+    if ((l&0xC0)==0xC0) return off+2<=len?off+2:-1; off+=l+1; } return -1;
+}
+static int query_a(const char *server, const char *host, struct in_addr *addrs, int max_addrs) {
+  unsigned char pkt[1500]; struct sockaddr_in sa; struct timeval tv; struct timespec ts;
+  int fd,qlen,off,qdcount,ancount,found=0; uint16_t id; ssize_t n;
+  memset(&sa,0,sizeof(sa)); sa.sin_family=AF_INET; sa.sin_port=htons(53);
+  if (inet_pton(AF_INET,server,&sa.sin_addr)!=1) return -1;
+  clock_gettime(CLOCK_MONOTONIC,&ts); id=(uint16_t)((ts.tv_nsec^(getpid()<<8))&0xFFFF);
+  memset(pkt,0,12); pkt[0]=id>>8; pkt[1]=id&0xFF; pkt[2]=0x01; pkt[5]=0x01;
+  qlen=encode_qname(host,pkt+12,sizeof(pkt)-16); if (qlen<0) return -1;
+  off=12+qlen; pkt[off++]=0; pkt[off++]=1; pkt[off++]=0; pkt[off++]=1;
+  fd=socket(AF_INET,SOCK_DGRAM,0); if (fd<0) return -1;
+  tv.tv_sec=3; tv.tv_usec=0; setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&tv,sizeof(tv));
+  if (sendto(fd,pkt,off,0,(struct sockaddr*)&sa,sizeof(sa))!=off) { close(fd); return -1; }
+  n=recvfrom(fd,pkt,sizeof(pkt),0,NULL,NULL); close(fd);
+  if (n<12||pkt[0]!=(id>>8)||pkt[1]!=(id&0xFF)||(pkt[3]&0x0F)) return -1;
+  qdcount=(pkt[4]<<8)|pkt[5]; ancount=(pkt[6]<<8)|pkt[7]; off=12;
+  for (int i=0;i<qdcount;i++) { off=skip_name(pkt,(int)n,off); if (off<0||off+4>n) return -1; off+=4; }
+  for (int i=0;i<ancount&&found<max_addrs;i++) {
+    int type,rdlen; off=skip_name(pkt,(int)n,off); if (off<0||off+10>n) break;
+    type=(pkt[off]<<8)|pkt[off+1]; rdlen=(pkt[off+8]<<8)|pkt[off+9]; off+=10;
+    if (off+rdlen>n) break; if (type==1&&rdlen==4) memcpy(&addrs[found++],pkt+off,4); off+=rdlen;
+  } return found;
+}
+static uint16_t resolve_port(const char *service) {
+  if (!service||!*service) return 0; char *end; long v=strtol(service,&end,10);
+  if (*end=='\0'&&v>=0&&v<=65535) return (uint16_t)v;
+  if (!strcmp(service,"https")) return 443; if (!strcmp(service,"http")) return 80; return 0;
+}
+static int build_result(const struct in_addr *addrs, int count, uint16_t port,
+  const struct addrinfo *hints, struct addrinfo **res) {
+  struct addrinfo *head=NULL,*tail=NULL;
+  int socktype=hints&&hints->ai_socktype?hints->ai_socktype:SOCK_STREAM;
+  int protocol=hints&&hints->ai_protocol?hints->ai_protocol:(socktype==SOCK_DGRAM?IPPROTO_UDP:IPPROTO_TCP);
+  for (int i=0;i<count;i++) {
+    struct addrinfo *ai=calloc(1,sizeof(*ai)); struct sockaddr_in *sin=calloc(1,sizeof(*sin));
+    if (!ai||!sin) { free(ai); free(sin); freeaddrinfo(head); return EAI_MEMORY; }
+    sin->sin_family=AF_INET; sin->sin_port=htons(port); sin->sin_addr=addrs[i];
+    ai->ai_family=AF_INET; ai->ai_socktype=socktype; ai->ai_protocol=protocol;
+    ai->ai_addrlen=sizeof(*sin); ai->ai_addr=(struct sockaddr*)sin;
+    if (tail) tail->ai_next=ai; else head=ai; tail=ai;
+  } if (!head) return EAI_NONAME; *res=head; return 0;
+}
+int getaddrinfo(const char *node, const char *service,
+  const struct addrinfo *hints, struct addrinfo **res) {
+  ga_fn orig=real_ga(); struct in_addr addrs[8]; int rc;
+  static const char *ns[] = {"8.8.8.8","1.1.1.1","8.8.4.4"};
+  if (!node||!*node) { if (!orig) return EAI_SYSTEM; return orig(node,service,hints,res); }
+  if (hints) { if (hints->ai_flags&AI_NUMERICHOST) { if (!orig) return EAI_SYSTEM; return orig(node,service,hints,res); }
+    if (hints->ai_family!=AF_UNSPEC&&hints->ai_family!=AF_INET) { if (!orig) return EAI_SYSTEM; return orig(node,service,hints,res); } }
+  for (int i=0;i<3;i++) {
+    int found=query_a(ns[i],node,addrs,8);
+    if (found>0) { int brc=build_result(addrs,found,resolve_port(service),hints,res);
+      return brc!=0?brc:0; }
+  } if (!orig) return EAI_SYSTEM; return orig(node,service,hints,res);
+}
+static struct hostent g_he; static char g_he_name[256]; static char *g_he_aliases[1];
+static struct in_addr g_he_addrs[8]; static char *g_he_addr_list[9];
+struct hostent *gethostbyname2(const char *name, int af) {
+  static struct hostent *(*real_ghn2)(const char*,int)=0; struct in_addr addrs[8]; int found=0;
+  static const char *ns[] = {"8.8.8.8","1.1.1.1","8.8.4.4"};
+  if (!real_ghn2) real_ghn2=(struct hostent*(*)(const char*,int))dlsym(RTLD_NEXT,"gethostbyname2");
+  if (af!=AF_INET&&af!=AF_UNSPEC) return real_ghn2?real_ghn2(name,af):NULL;
+  if (!name||!*name) return real_ghn2?real_ghn2(name,af):NULL;
+  for (int i=0;i<3&&found<=0;i++) found=query_a(ns[i],name,addrs,8);
+  if (found<=0) return real_ghn2?real_ghn2(name,af):NULL;
+  memset(&g_he,0,sizeof(g_he)); strncpy(g_he_name,name,sizeof(g_he_name)-1);
+  g_he_aliases[0]=NULL; for (int i=0;i<found;i++) { g_he_addrs[i]=addrs[i]; g_he_addr_list[i]=(char*)&g_he_addrs[i]; }
+  g_he_addr_list[found]=NULL; g_he.h_name=g_he_name; g_he.h_aliases=g_he_aliases;
+  g_he.h_addrtype=AF_INET; g_he.h_length=4; g_he.h_addr_list=g_he_addr_list; return &g_he;
+}
+struct hostent *gethostbyname(const char *name) { return gethostbyname2(name,AF_INET); }
+int getifaddrs(struct ifaddrs **ifap) {
+  struct ifaddrs *ifa; struct sockaddr_in *addr,*mask;
+  if (!ifap) { errno=EINVAL; return -1; }
+  ifa=(struct ifaddrs*)calloc(1,sizeof(*ifa));
+  addr=(struct sockaddr_in*)calloc(1,sizeof(*addr));
+  mask=(struct sockaddr_in*)calloc(1,sizeof(*mask));
+  if (!ifa||!addr||!mask) { free(ifa); free(addr); free(mask); errno=ENOMEM; return -1; }
+  ifa->ifa_name=strdup("lo"); ifa->ifa_flags=IFF_UP|IFF_LOOPBACK|IFF_RUNNING;
+  addr->sin_family=AF_INET; addr->sin_addr.s_addr=htonl(INADDR_LOOPBACK);
+  mask->sin_family=AF_INET; mask->sin_addr.s_addr=htonl(0xFF000000u);
+  ifa->ifa_addr=(struct sockaddr*)addr; ifa->ifa_netmask=(struct sockaddr*)mask;
+  *ifap=ifa; return 0;
+}
+void freeifaddrs(struct ifaddrs *ifa) {
+  while (ifa) { struct ifaddrs *n=ifa->ifa_next;
+    free(ifa->ifa_name); free(ifa->ifa_addr); free(ifa->ifa_netmask); free(ifa); ifa=n; }
+}
+STUBC
+  cat > "$stub_map" <<'STUBMAP'
+GLIBC_2.17 {
+  global: getaddrinfo; gethostbyname; gethostbyname2; open; open64; openat; fopen; getifaddrs; freeifaddrs;
+  local: *;
+};
+STUBMAP
+  if "$cc" -shared -fPIC -O2 -ldl -Wl,--version-script="$stub_map" -o "$stub_so" "$stub_c" 2>/dev/null; then
+    echo "opencode-setup: installed DNS/getifaddrs shim → $stub_so"
+    rm -f "$PREFIX/lib/libinvapp-getifaddrs.so"
+  else
+    echo "opencode-setup: shim compile failed (need gcc-glibc)" >&2
+    rm -f "$stub_so"
+  fi
+  rm -f "$stub_c" "$stub_map"
+}
+build_opencode_shim
+rm -f "$HOME/.bun/bin/opencode" 2>/dev/null || true
+cp -f "$WRAPPER" "$HOME/.bun/bin/opencode"
+chmod 700 "$HOME/.bun/bin/opencode"
+hash -r 2>/dev/null || true
+export PATH="$PREFIX/bin:$HOME/.bun/bin:$PATH"
+if ! head -1 "$WRAPPER" | grep -q bash; then
+  echo "opencode-setup: wrapper write failed (still a bun symlink?)" >&2
+  exit 1
 fi
-
-[ -n "${OC_BIN:-}" ] && [ -x "${OC_BIN:-}" ] || { echo "opencode-setup: install failed (binary missing)" >&2; exit 1; }
-ensure_glibc || { echo "opencode-setup: glibc missing" >&2; exit 1; }
-write_wrapper
-
+if ! command -v opencode >/dev/null 2>&1; then
+  echo "opencode-setup: wrapper not on PATH" >&2
+  exit 1
+fi
 echo "opencode-setup: probing opencode --version…"
-if "$PREFIX/bin/opencode" --version; then
-    echo "OK (v${OPENCODE_INSTALLED_VERSION:-unknown}). Run: td-ai / opencode-server   # service 0.0.0.0:4000"
+if opencode --version 2>&1; then
+  rm -rf "$HOME/.cache/opencode" 2>/dev/null || true
+  case "$OC_VER" in 1.*|0.*)
+    for pkg in "$HOME/.config/opencode/package.json" "$HOME/repos"/*/.opencode/package.json; do
+      [ -f "$pkg" ] || continue
+      if grep -q '@opencode-ai/plugin@local\|"@opencode-ai/plugin": "local"' "$pkg" 2>/dev/null; then
+        echo "opencode-setup: fixing plugin@local in $pkg (V1 only)"
+        sed -i 's/@opencode-ai\/plugin@local/@opencode-ai\/plugin@latest/g; s/"@opencode-ai\/plugin": "local"/"@opencode-ai\/plugin": "latest"/g' "$pkg" 2>/dev/null || true
+      fi
+    done
+    ;;
+  esac
+  echo "OK (v$OC_VER). Run: td-ai / opencode-server   # service 0.0.0.0:4000; Preview → http://127.0.0.1:4000/"
+  OC_PW=$(sed -n 's/.*"password"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$HOME/.config/opencode/service.json" 2>/dev/null | head -1)
+  if [ -n "$OC_PW" ]; then echo "Verify: curl -u opencode:$OC_PW http://127.0.0.1:4000/api/info (JSON, not HTML)"; fi
+  echo "If chat fails with 'typo in the url or port': rm -rf ~/.cache/opencode && opencode-fix-net && td-ai"
 else
-    echo "opencode-setup: wrapper installed but the binary failed under glibc" >&2
-    exit 1
+  case "$(uname -m)" in x86_64|amd64)
+    echo "opencode-setup: standard x64 binary failed — trying baseline (no AVX2)…" >&2
+    OC_ASSET_BASE="${OC_ASSET%.tar.gz}-baseline.tar.gz"
+    OC_URL_BASE="https://opencode.ai/files/bin/$OC_VER/$OC_ASSET_BASE"
+    OC_TAR="$TMPDIR/$OC_ASSET_BASE"
+    if curl -fL --retry 2 --retry-delay 2 -o "$OC_TAR" "$OC_URL_BASE" 2>/dev/null; then
+      rm -rf "$OC_DIR.new"; mkdir -p "$OC_DIR.new"
+      if tar -xzf "$OC_TAR" -C "$OC_DIR.new" 2>/dev/null; then
+        FOUND=$(find "$OC_DIR.new" -type f -name opencode 2>/dev/null | head -1)
+        if [ -n "$FOUND" ] && [ -f "$FOUND" ]; then
+          chmod +x "$FOUND"; rm -rf "$OC_DIR"; mv "$OC_DIR.new" "$OC_DIR"
+          OC_BIN=$(find "$OC_DIR" -type f -name opencode 2>/dev/null | head -1)
+          sed -i "s|^OC_BIN=.*|OC_BIN=\"$OC_BIN\"|" "$WRAPPER" 2>/dev/null || true
+          if opencode --version 2>&1; then
+            echo "OK (v$OC_VER baseline). Run: td-ai" 
+            rm -rf "$HOME/.cache/opencode" 2>/dev/null || true
+            exit 0
+          fi
+        fi
+      fi
+    fi
+    ;;
+  esac
+  echo "opencode-setup: wrapper installed but binary failed under glibc" >&2
+  echo "Binary: $OC_BIN" >&2
+  exit 1
 fi

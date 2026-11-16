@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <Preference
+        app:key="bun_status"
+        app:title="@string/title_bun_status"
+        app:summary="@string/summary_bun_status_loading"
+        app:selectable="false"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="bun_refresh"
+        app:title="@string/title_bun_refresh"
+        app:summary="@string/summary_bun_refresh"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="bun_doctor"
+        app:title="@string/title_bun_doctor"
+        app:summary="@string/summary_bun_doctor"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="bun_upgrade_check"
+        app:title="@string/title_bun_upgrade_check"
+        app:summary="@string/summary_bun_upgrade_check"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="bun_update_apk"
+        app:title="@string/title_bun_update_apk"
+        app:summary="@string/summary_bun_update_apk"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="bun_hint"
+        app:title="@string/title_bun_hint"
+        app:summary="@string/summary_bun_hint"
+        app:selectable="false"
+        app:persistent="false"/>
+
+</PreferenceScreen>

@@ -12,15 +12,13 @@ string literals. On device, the same asset files are installed with
 `writeExecutableAsset` (`ShellLibraryInstaller`, `ResourceScriptsInstaller`,
 `TermuxHackerThemeInstaller`).
 
-Note: `bin/bun`, `bin/bunx`, `bin/bun-doctor`, `bin/node`, `td-dev`, `td-ai`,
-`td-ai-stop`, and `opencode-server` are installed from shared `bin/` assets on
-both device and container. What remains a Java string literal in
-`TermuxBunInstaller.java` is mainly `opencode-setup` (glibc/`ld-linux` wrapper
-plus the Android DNS shim) and a few `td-*` helpers whose device and container
-UX intentionally differ — they carry on-device hints ("reopen the app",
-"drawer → Preview") that are meaningless in a container. Those stay gated on
-an on-device validation pass: the glibc/`ld-linux` glue cannot be runtime-checked
-here.
+Note: `bin/bun`, `bin/bunx`, `bin/bun-doctor`, `bin/bun-version`,
+`bin/bun-upgrade`, `bin/node`, `td-dev`, `td-ai`, `td-ai-stop`,
+`opencode-server`, `opencode-setup`, `opencode-fix-net`, `cursor-agent-setup`,
+`td-agent-worker`, and `td-upgrade` are installed from shared `bin/` assets on
+both device and container. Remaining Java string literals in
+`TermuxBunInstaller.java` are mostly device-only helpers (scaffold / JDK / OCR /
+screenshot) that still need a follow-up unification pass.
 
 ## What is in here
 
@@ -267,10 +265,10 @@ installers (`ShellLibraryInstaller`, `ResourceScriptsInstaller`,
 `TermuxHackerThemeInstaller`). When you edit a helper/config/shortcut, edit it
 there and both the image and the APK pick it up on the next build.
 
-The remaining divergence — `opencode-setup` and the `td-*` helpers whose
-device/container UX intentionally differs, still Java string literals in
-`TermuxBunInstaller.java` — is the only place two copies of a helper still
-exist (see "Note" above).
+Phase 19 moved `opencode-setup`, `opencode-fix-net`, `cursor-agent-setup`,
+`td-agent-worker`, and `td-upgrade` into `assets/invapp/bin/`. Remaining
+Java literals in `TermuxBunInstaller.java` are mostly device-only helpers
+(`td-scaffold`, JDK, OCR, screenshot) — still a follow-up unification batch.
 
 Parity checks worth running after a change:
 

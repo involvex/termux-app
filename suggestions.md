@@ -1,13 +1,13 @@
 # InVxTermux — Feature Suggestions Report
 
-> Generated: 2026-09-22 · Updated: 2026-11-15 (Phase 18) · Scope: `com.involvex.termux_app`
+> Generated: 2026-09-22 · Updated: 2026-11-15 (Phase 19) · Scope: `com.involvex.termux_app`
 > Pillars: Terminal-first · PC ↔ phone (`~/repos`) · Preview (`127.0.0.1`) · AI CLI (`td-ai` → OpenCode `:4000`)
 > Non-goals respected: no full in-app IDE / multi-tab browser, no public tunnels by default, no per-npm wrappers.
 > Sources: `README.md`, `ROADMAP.md`, `AGENTS.md`, `docs/*.md`, `app/build.gradle`, `app/src/main/java/com/invapp/...`, `terminal-emulator`, `termux-shared`, `termux-api`.
 
 ## Feature Suggestions Report
 
-### Done (Phase 17–18 / earlier)
+### Done (Phase 17–19 / earlier)
 
 | ID | Status | Notes |
 |----|--------|-------|
@@ -15,15 +15,17 @@
 | FEAT-003 | **done (Phase 18)** | Error page + Scan/Reload/LAN/QR actions + error detail |
 | FEAT-004 | **done (Phase 17)** | QR LAN via ZXing encoder; live Wi-Fi IP watcher still optional |
 | FEAT-005 | **done (Phase 18)** | Settings AI Doctor (status, repair, host, version pin) |
+| FEAT-006 | **done (Phase 19)** | Settings Bun card + `bun-version` / `bun-upgrade --check` (APK-only update) |
 | FEAT-007 | **done (Phase 17)** | Git badges + branch sheet + safe pull + `td-sync` |
 | FEAT-011 | **done** | Copy/export last error in workflow More menu |
+| FEAT-012 | **done (Phase 19)** | Preferred-ports Settings + background notification + deep-link Preview |
+| FEAT-017 | **done (Phase 19)** | Widget Run… args/env dialog + optional `td-dev` catalog |
 
 ### High Priority Suggestions
 
 | ID | Category | Description | Impact | Effort |
 |----|----------|-------------|--------|--------|
 | FEAT-001 | Platform / Maintainability | Bump `targetSdkVersion` 28 → 34/35 + edge-to-edge | High | High |
-| FEAT-006 | Workflow | Bun update checker (`bun-upgrade`) with SHA verify | High | Medium |
 | FEAT-008 | Reliability | Terminal session persist + crash recovery | High | High |
 | FEAT-009 | Backup | One-tap backup/restore (`~/repos` manifest + dotfiles) | High | Medium |
 | FEAT-010 | Security | LAN exposure guard + biometric/app lock for Preview/AI | High | Medium |
@@ -32,12 +34,10 @@
 
 | ID | Category | Description | Impact | Effort |
 |----|----------|-------------|--------|--------|
-| FEAT-012 | Workflow | Configurable preferred-ports + notification (not just snackbar) | Medium | Low |
 | FEAT-013 | Scaffold | `td-scaffold` hardening: `react-ts` default, README/.gitignore, offline cache | Medium | Low |
 | FEAT-014 | Preview | WebView console → logcat + clear-data + desktop/mobile UA toggle | Medium | Low |
 | FEAT-015 | Terminal UX | Theme picker (beyond hacker green) + font size gesture | Medium | Medium |
 | FEAT-016 | Keys | Visual extra-keys editor (drag reorder, import/export) | Medium | Medium |
-| FEAT-017 | Widgets | Run-once with args + `stop-ai` / `td-dev` task shortcuts | Medium | Low |
 | FEAT-018 | Onboarding | First-launch checklist wizard | Medium | Medium |
 | FEAT-019 | Deps | Dependabot + AGP/JDK audit, `commons-io:2.5` cap review | Medium | Low |
 
@@ -231,10 +231,11 @@
 
 ## Suggested Next Steps (for maintainers)
 
-> Phase 18 shipped FEAT-003 / FEAT-005 (Preview error actions + AI Doctor). Phase 17 shipped FEAT-004 / FEAT-007.
+> Phase 19 shipped FEAT-006 / FEAT-012 / FEAT-017 + AI script asset unification.
+> Phase 18 shipped FEAT-003 / FEAT-005. Phase 17 shipped FEAT-004 / FEAT-007.
 
 1. Accept/reject FEAT-001 scope first (targetSdk bump blocks Play + Android 15 work) — branch + device matrix.
-2. Next polish candidates: FEAT-006 (Bun version card), FEAT-012 (preferred-port notification), FEAT-017 (widget run-with-args).
+2. Reliability candidates: FEAT-008 (session persist), FEAT-009 (backup/restore), FEAT-010 (LAN guard).
 3. File issues for FEAT-020 emulator FIXMEs individually with xterm vectors.
 
 ## Appendix — Where to Implement

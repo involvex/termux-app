@@ -425,7 +425,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mIsVisible = false;
 
         if (mPreferredPortWatcher != null) {
-            mPreferredPortWatcher.stop();
+            mPreferredPortWatcher.enterBackground();
         }
 
         if (mTermuxTerminalSessionActivityClient != null)

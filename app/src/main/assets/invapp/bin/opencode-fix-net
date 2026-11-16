@@ -1,19 +1,30 @@
 #!@BASH@
-# InVxTermux container -- opencode-fix-net.
-# Rebuilds the wrapper/glibc bits, keeps an existing binary when present.
+# InVxTermux — opencode-fix-net (DNS/CA seed + shim rebuild).
 set -e
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 
-if [ ! -x "$PREFIX/bin/opencode-setup" ]; then
-    echo "opencode-fix-net: opencode-setup missing" >&2
-    exit 1
+echo "opencode-fix-net: seeding DNS/CA…"
+mkdir -p "$PREFIX/glibc/etc/ssl/certs" "$PREFIX/lib" "$PREFIX/tmp"
+printf '%s\n' 'nameserver 8.8.8.8' 'nameserver 1.1.1.1' | tee \
+  "$PREFIX/etc/resolv.conf" "$PREFIX/glibc/etc/resolv.conf" >/dev/null
+printf '%s\n' '127.0.0.1 localhost' '::1 localhost' | tee \
+  "$PREFIX/etc/hosts" "$PREFIX/glibc/etc/hosts" >/dev/null
+pkg install -y openssl-glibc ca-certificates 2>/dev/null || true
+if [ -f "$PREFIX/etc/tls/cert.pem" ]; then
+  ln -sfn "$PREFIX/etc/tls/cert.pem" \
+    "$PREFIX/glibc/etc/ssl/certs/ca-certificates.crt"
 fi
-echo "opencode-fix-net: rebuilding glibc wrapper (keeps binary if present)…"
-if [ -x "$PREFIX/libexec/opencode/opencode" ]; then
-    opencode-setup --wrap-only
+rm -rf "$HOME/.cache/opencode" 2>/dev/null || true
+echo "opencode-fix-net: rebuilding shim via opencode-setup (keeps binary if present)…"
+if [ ! -x "$PREFIX/bin/opencode" ]; then
+  echo "opencode missing — run opencode-setup first" >&2
+  exit 1
+fi
+OPENCODE_VERSION="${OPENCODE_VERSION:-}" opencode-setup
+if [ -f "$PREFIX/lib/libinvapp-opencode-shim.so" ]; then
+  echo "OK: shim present → $PREFIX/lib/libinvapp-opencode-shim.so"
 else
-    echo "opencode missing — run opencode-setup first" >&2
-    exit 1
+  echo "WARN: shim missing — install gcc-glibc and re-run" >&2
 fi
-echo "opencode-fix-net: verifying…"
-opencode --version
+echo "Test (Bionic): curl -sI https://models.opencode.ai/api.json | head -2"
+echo "Then: cd ~/repos/copilot && pkill -f opencode; td-ai"
