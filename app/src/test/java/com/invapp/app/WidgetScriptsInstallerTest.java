@@ -13,7 +13,7 @@ import static org.junit.Assert.assertTrue;
 
 public class WidgetScriptsInstallerTest {
 
-    private static final int CATALOG_SIZE = 20;
+    private static final int CATALOG_SIZE = 21;
 
     @Test
     public void catalog_coversDefaultsAndOptionals() {
@@ -28,12 +28,27 @@ public class WidgetScriptsInstallerTest {
         assertEquals(WidgetScriptsInstaller.ID_STOP_AI, ids[15]);
         assertEquals(WidgetScriptsInstaller.ID_TD_UPGRADE, ids[16]);
         assertEquals(WidgetScriptsInstaller.ID_STOP_AGENT_WORKER, ids[17]);
-        assertEquals(WidgetScriptsInstaller.ID_TD_AI, ids[18]);
-        assertEquals(WidgetScriptsInstaller.ID_AGENT_WORKER, ids[19]);
+        assertEquals(WidgetScriptsInstaller.ID_TD_DEV, ids[18]);
+        assertEquals(WidgetScriptsInstaller.ID_TD_AI, ids[19]);
+        assertEquals(WidgetScriptsInstaller.ID_AGENT_WORKER, ids[20]);
         assertEquals(ids.length, WidgetScriptsInstaller.CATALOG_LABELS.length);
         assertEquals(4, WidgetScriptsInstaller.DEFAULT_FOREGROUND_IDS.length);
-        assertEquals(14, WidgetScriptsInstaller.OPTIONAL_FOREGROUND_IDS.length);
+        assertEquals(15, WidgetScriptsInstaller.OPTIONAL_FOREGROUND_IDS.length);
         assertEquals(1, WidgetScriptsInstaller.DEFAULT_TASK_IDS.length);
+    }
+
+    @Test
+    public void runOnceCommand_quotesArgsAndEnv() {
+        // Path may be null off-device; still cover quoting helpers.
+        assertTrue(WidgetScriptsInstaller.isSafeShellFragment("dev --host"));
+        assertFalse(WidgetScriptsInstaller.isSafeShellFragment("a;b"));
+        assertFalse(WidgetScriptsInstaller.isSafeShellFragment("a$(b)"));
+        assertEquals(Arrays.asList("a", "b"),
+            WidgetScriptsInstaller.parseArgTokens(" a  b "));
+        assertEquals(Arrays.asList("PORT=5173"),
+            WidgetScriptsInstaller.parseEnvAssignments("PORT=5173"));
+        assertEquals("'hello'", WidgetScriptsInstaller.shellSingleQuote("hello"));
+        assertEquals("'x'\\''y'", WidgetScriptsInstaller.shellSingleQuote("x'y"));
     }
 
     @Test
@@ -183,7 +198,7 @@ public class WidgetScriptsInstallerTest {
 
         boolean[] speakAndAi = new boolean[CATALOG_SIZE];
         speakAndAi[0] = true;
-        speakAndAi[18] = true;
+        speakAndAi[19] = true; // ID_TD_AI (ID_TD_DEV is at 18)
         List<String> ids = WidgetScriptsInstaller.filterCatalogOrder(speakAndAi);
         assertEquals(Arrays.asList(
             WidgetScriptsInstaller.ID_CLIPBOARD_SPEAK,

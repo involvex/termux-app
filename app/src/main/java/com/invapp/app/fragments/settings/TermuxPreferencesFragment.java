@@ -63,6 +63,17 @@ public class TermuxPreferencesFragment extends PreferenceFragmentCompat {
             });
         }
 
+        SwitchPreferenceCompat notifyPorts = findPreference("notify_preferred_ports");
+        if (notifyPorts != null) {
+            notifyPorts.setChecked(PreviewPortPrefs.isNotifyPreferredPorts(context));
+            notifyPorts.setOnPreferenceChangeListener((preference, newValue) -> {
+                boolean enabled = Boolean.TRUE.equals(newValue);
+                PreviewPortPrefs.setNotifyPreferredPorts(context, enabled);
+                notifyPorts.setChecked(enabled);
+                return true;
+            });
+        }
+
         configureLaunchPrefs(context);
 
         Preference integratedTools = findPreference("integrated_tools");

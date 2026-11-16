@@ -27,6 +27,7 @@ public final class PreviewPortPrefs {
     private static final String KEY_PREFERRED = "preferred_ports";
     private static final String KEY_RECENT = "recent_ports";
     private static final String KEY_STARRED = "starred_ports";
+    private static final String KEY_NOTIFY = "notify_preferred_ports";
     private static final String SEP = ",";
     private static final int MAX_RECENT = 8;
     private static final int MAX_STARRED = 16;
@@ -80,6 +81,15 @@ public final class PreviewPortPrefs {
 
     public static boolean isPreferred(@NonNull Context context, int port) {
         return indexOf(getPreferredPorts(context), port) >= 0;
+    }
+
+    /** Default true: notify when a preferred port appears while backgrounded. */
+    public static boolean isNotifyPreferredPorts(@NonNull Context context) {
+        return prefs(context).getBoolean(KEY_NOTIFY, true);
+    }
+
+    public static void setNotifyPreferredPorts(@NonNull Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(KEY_NOTIFY, enabled).apply();
     }
 
     @NonNull

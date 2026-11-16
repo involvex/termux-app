@@ -1,0 +1,74 @@
+#!@BASH@
+# InVxTermux — Bun update checker only (never self-replaces .incbin / bun upgrade).
+# Usage: bun-upgrade [--check] [--help]
+. "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
+
+CHECK_ONLY=0
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help)
+            echo "usage: bun-upgrade [--check]"
+            echo "  Compare stamp + bun --version; never runs 'bun upgrade'."
+            echo "  Exit 0 when matched or missing check; 1 on mismatch / glibc hint."
+            exit 0
+            ;;
+        --check) CHECK_ONLY=1 ;;
+        *)
+            echo "bun-upgrade: unknown arg: $arg" >&2
+            echo "usage: bun-upgrade [--check]" >&2
+            exit 2
+            ;;
+    esac
+done
+
+STAMP="$PREFIX/var/lib/invapp/bun.version"
+STAMPED=""
+[ -f "$STAMP" ] && STAMPED=$(tr -d '[:space:]' < "$STAMP")
+
+RUNNING=""
+if command -v bun >/dev/null 2>&1; then
+    RUNNING=$(bun --version 2>/dev/null | head -1 || true)
+fi
+
+RELEASES_URL="https://github.com/involvex/termux-app/releases"
+
+echo "=== bun-upgrade: check (APK-bundled; no bun upgrade) ==="
+echo "  stamped:  ${STAMPED:-unknown}"
+echo "  running:  ${RUNNING:-missing}"
+
+RC=0
+if [ -z "$RUNNING" ]; then
+    echo "  status:   bun missing — reopen the app so TermuxBunInstaller can extract"
+    RC=1
+elif [ -n "$STAMPED" ] && [ "$RUNNING" != "$STAMPED" ]; then
+    echo "  status:   mismatch — install a newer InVxTermux APK"
+    echo "            $RELEASES_URL"
+    echo "            (do not run 'bun upgrade' — glibc/wrong binary → SIGSYS)"
+    RC=1
+else
+    echo "  status:   ok (matches stamp)"
+fi
+
+# Soft glibc warning
+if [ -x "$HOME/.bun/bin/bun" ]; then
+    RESOLVED=$(readlink -f "$(command -v bun)" 2>/dev/null || command -v bun || true)
+    case "$RESOLVED" in
+        "$HOME/.bun"/*)
+            echo "  warning: PATH bun is under ~/.bun (curl|bash) — prefer $PREFIX/bin/bun"
+            RC=1
+            ;;
+    esac
+fi
+
+if [ "$CHECK_ONLY" = 1 ] || [ "$RC" != 0 ]; then
+    exit "$RC"
+fi
+
+echo ""
+echo "Bun is shipped inside the APK (.incbin). To update:"
+echo "  1. Download a newer release APK:"
+echo "     $RELEASES_URL"
+echo "  2. Install it (same signature / sharedUserId)."
+echo "  3. Reopen the app — TermuxBunInstaller refreshes \$PREFIX/libexec/bun."
+echo "Never: curl … bun.sh/install | bash   or   bun upgrade"
+exit 0

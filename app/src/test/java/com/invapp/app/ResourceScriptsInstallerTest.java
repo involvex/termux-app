@@ -182,8 +182,10 @@ public class ResourceScriptsInstallerTest {
     public void linuxBody_forkSafeExtractAndRun() {
         String body = ResourceScriptsInstaller.linuxBody();
         assertTrue(body.contains("LD_PRELOAD="));
-        assertTrue("host proot needs Termux libs",
-            body.contains("LD_LIBRARY_PATH=\"$PREFIX/lib\""));
+        assertTrue("host bash needs Termux libs (preserve existing path)",
+            body.contains("LD_LIBRARY_PATH=\"$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\""));
+        assertTrue("isolated runner uses proot-libs, not full $PREFIX/lib",
+            body.contains("LD_LIBRARY_PATH=\"\\$PROOT_LIBS\""));
         assertTrue(body.contains("PROOT_LOADER"));
         assertTrue(body.contains("libexec/proot-bin"));
         assertTrue(body.contains("no bin/sh"));

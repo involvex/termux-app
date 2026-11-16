@@ -2,7 +2,8 @@
 
 | Symptom | Fix |
 |---|---|
-| `Unknown signal 31 (SIGSYS)` on Bun | Use bundled `$PREFIX/libexec/bun`; never `bun.sh/install`. Delete `node_modules` + lockfile if a PC lockfile pinned `linux-*` natives, then `bun i` on the phone |
+| `Unknown signal 31 (SIGSYS)` on Bun | Use bundled `$PREFIX/libexec/bun`; never `bun.sh/install` or `bun upgrade`. Check with `bun-upgrade --check` / Settings → **Bun**. Delete `node_modules` + lockfile if a PC lockfile pinned `linux-*` natives, then `bun i` on the phone |
+| Preferred-port snackbar only / no background alert | Settings → **Notify on preferred ports** (default on). Notification deep-links Preview when a watched port appears while the app is backgrounded |
 | `/usr/bin/env: bad interpreter` on npm/npx | Open a **new** session after update (redirector rewrites shebangs). `pkg install nodejs` if npm is missing |
 | `Permission denied` on `tsc` / bins | Project is under shared storage (**noexec**). Move to `~/repos` |
 | OpenJDK install stuck / `java` dlopen / Bad system call | Run `td-jdk-setup` (installs recommends incl. `libandroid-shmem`). `jdk-doctor` for details. See [OpenJDK 17](openjdk.md) |
