@@ -198,7 +198,7 @@ public class WidgetScriptsInstallerTest {
 
         boolean[] speakAndAi = new boolean[CATALOG_SIZE];
         speakAndAi[0] = true;
-        speakAndAi[18] = true;
+        speakAndAi[19] = true; // ID_TD_AI (ID_TD_DEV is at 18)
         List<String> ids = WidgetScriptsInstaller.filterCatalogOrder(speakAndAi);
         assertEquals(Arrays.asList(
             WidgetScriptsInstaller.ID_CLIPBOARD_SPEAK,
