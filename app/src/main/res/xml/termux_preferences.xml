@@ -41,6 +41,20 @@
         app:defaultValue="true"
         app:persistent="false"/>
 
+    <SwitchPreferenceCompat
+        app:key="preview_show_console"
+        app:title="@string/title_preview_show_console"
+        app:summary="@string/summary_preview_show_console"
+        app:defaultValue="false"
+        app:persistent="false"/>
+
+    <SwitchPreferenceCompat
+        app:key="preview_desktop_ua"
+        app:title="@string/title_preview_desktop_ua"
+        app:summary="@string/summary_preview_desktop_ua"
+        app:defaultValue="false"
+        app:persistent="false"/>
+
     <Preference
         app:key="bun"
         app:title="@string/title_bun"

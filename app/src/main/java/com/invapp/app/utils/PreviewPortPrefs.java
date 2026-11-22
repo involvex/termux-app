@@ -30,9 +30,23 @@ public final class PreviewPortPrefs {
     private static final String KEY_NOTIFY = "notify_preferred_ports";
     /** One-time Copy LAN / QR LAN exposure confirm (“don’t ask again”). */
     private static final String KEY_LAN_SHARE_CONFIRMED = "lan_share_confirmed";
+    /** Forward WebView console to sheet + logcat (default off). */
+    private static final String KEY_SHOW_CONSOLE = "preview_show_console";
+    /** Use a desktop Chrome user-agent (default off = mobile). */
+    private static final String KEY_DESKTOP_UA = "preview_desktop_ua";
     private static final String SEP = ",";
     private static final int MAX_RECENT = 8;
     private static final int MAX_STARRED = 16;
+    /** Cap console sheet lines to avoid unbounded growth. */
+    public static final int MAX_CONSOLE_LINES = 200;
+
+    /**
+     * Desktop Chrome UA for Settings → Preview → Desktop site.
+     * Kept as a constant so tests can assert without spawning WebView.
+     */
+    public static final String DESKTOP_USER_AGENT =
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+            + "Chrome/120.0.0.0 Safari/537.36";
 
     private PreviewPortPrefs() {}
 
@@ -101,6 +115,32 @@ public final class PreviewPortPrefs {
 
     public static void setLanShareConfirmed(@NonNull Context context, boolean confirmed) {
         prefs(context).edit().putBoolean(KEY_LAN_SHARE_CONFIRMED, confirmed).apply();
+    }
+
+    /** Default false: WebView console sheet and logcat sink stay off. */
+    public static boolean isShowConsole(@NonNull Context context) {
+        return prefs(context).getBoolean(KEY_SHOW_CONSOLE, false);
+    }
+
+    public static void setShowConsole(@NonNull Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(KEY_SHOW_CONSOLE, enabled).apply();
+    }
+
+    /** Default false: keep the WebView mobile user-agent. */
+    public static boolean isDesktopUserAgent(@NonNull Context context) {
+        return prefs(context).getBoolean(KEY_DESKTOP_UA, false);
+    }
+
+    public static void setDesktopUserAgent(@NonNull Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(KEY_DESKTOP_UA, enabled).apply();
+    }
+
+    /**
+     * Whether a console message should be recorded.
+     * Pure gate for tests — no allocations when {@code enabled} is false.
+     */
+    public static boolean shouldRecordConsole(boolean enabled) {
+        return enabled;
     }
 
     @NonNull

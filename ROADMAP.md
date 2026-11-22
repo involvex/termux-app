@@ -261,6 +261,19 @@ https://github.com/involvex/termux-app
 - Terminal-widget Auto Backup rules: explicit sharedpref include/exclude
   (main app stays `allowBackup="false"`)
 
+### 22. See what’s wrong — offline Help + Preview console + diagnostics (done)
+
+- **Help** (drawer / Preview error **Help**): Markwon offline docs from
+  `assets/help/` (`install`, `workflow`, `ai`, `troubleshooting`, `configure`,
+  `openjdk`, `cursor-agent`); title filter; in-app `invapp://help/…` links;
+  external http(s) opens the browser. Gradle `copyHelpAssets` keeps assets in
+  sync with `docs/`
+- Settings → Preview: **Show Preview console** (sheet + Debug logcat;
+  `WebContentsDebuggingEnabled` only while on) and **Desktop site** (UA toggle)
+- Settings → Debugging → **Export diagnostics zip** →
+  `~/storage/shared/InVxTermux/diag-YYYYMMDD-HHmm.zip` (report.md + versions +
+  AI stamps; no secrets; consent dialog; Log Level unchanged)
+
 ## Non-goals (for now)
 
 - Full in-app IDE / multi-tab browser

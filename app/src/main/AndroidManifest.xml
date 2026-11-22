@@ -92,8 +92,9 @@
         <activity
             android:name=".app.activities.HelpActivity"
             android:exported="false"
-            android:label="@string/application_name"
+            android:label="@string/title_help"
             android:parentActivityName=".app.TermuxActivity"
+            android:theme="@style/Theme.TermuxApp.DayNight.NoActionBar"
             android:resizeableActivity="true"
             tools:targetApi="n" />
 

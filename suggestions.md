@@ -1,6 +1,6 @@
 # InVxTermux — Feature Suggestions Report
 
-> Generated: 2026-09-22 · Updated: 2026-11-22 (Phase 21) · Scope: `com.involvex.termux_app`
+> Generated: 2026-09-22 · Updated: 2026-11-22 (Phase 22) · Scope: `com.involvex.termux_app`
 > Pillars: Terminal-first · PC ↔ phone (`~/repos`) · Preview (`127.0.0.1`) · AI CLI (`td-ai` → OpenCode `:4000`)
 > Non-goals respected: no full in-app IDE / multi-tab browser, no public tunnels by default, no per-npm wrappers.
 > Sources: `README.md`, `ROADMAP.md`, `AGENTS.md`, `docs/*.md`, `app/build.gradle`, `app/src/main/java/com/invapp/...`, `terminal-emulator`, `termux-shared`, `termux-api`.
@@ -23,7 +23,10 @@
 | FEAT-011 | **done** | Copy/export last error in workflow More menu |
 | FEAT-012 | **done (Phase 19)** | Preferred-ports Settings + background notification + deep-link Preview |
 | FEAT-013 | **done (Phase 7)** | `td-scaffold` already seeds README/.gitignore, `react-ts` default, `--here` / `--no-install` |
+| FEAT-014 | **done (Phase 22)** | Console sheet + logcat (gated) + desktop UA; Clear data already shipped |
 | FEAT-017 | **done (Phase 19)** | Widget Run… args/env dialog + optional `td-dev` catalog |
+| FEAT-023 | **done (Phase 22)** | Settings → Debugging → Export diagnostics zip (no secrets) |
+| FEAT-024 | **done (Phase 22, narrowed)** | Offline Markwon Help + Preview error Help → troubleshooting |
 
 ### High Priority Suggestions
 
@@ -35,7 +38,6 @@
 
 | ID | Category | Description | Impact | Effort |
 |----|----------|-------------|--------|--------|
-| FEAT-014 | Preview | WebView console → logcat + clear-data + desktop/mobile UA toggle | Medium | Low |
 | FEAT-015 | Terminal UX | Theme picker (beyond hacker green) + font size gesture | Medium | Medium |
 | FEAT-016 | Keys | Visual extra-keys editor (drag reorder, import/export) | Medium | Medium |
 | FEAT-018 | Onboarding | First-launch checklist wizard | Medium | Medium |
@@ -48,8 +50,6 @@
 | FEAT-020 | Emulator | xterm conformance pass (reverse-wrap, ECH attrs, DECOM rect) | Medium | High |
 | FEAT-021 | Maintainability | Fix deprecated APIs (`NotificationUtils`, `KeyboardUtils`, back dispatcher) | Low | Low |
 | FEAT-022 | Accessibility/i18n | TalkBack labels, font-scale, RTL, string audit | Medium | Medium |
-| FEAT-023 | Diagnostics | One-tap `logcat.txt` + `stat` bundle for Report Issue | Low | Low |
-| FEAT-024 | Docs | Offline Help + site search + deep-link Preview/AI docs | Low | Low |
 | FEAT-025 | Tunnels (opt-in) | Explicit opt-in LAN-only helpers (Tailscale/Cloudflared guard-railed) | Low | High |
 
 ---
@@ -142,11 +142,8 @@
 - **Suggestion:** Default `react-ts` (not `vanilla`) for real apps; seed `.gitignore` (node_modules/dist), `README.md` with Preview/LAN steps, `vite.config` host/port pinned; cache `create-vite` tarball under `$PREFIX/var/td-cache` for offline retry; add `--here` (scaffold in cwd) + `--no-install` flags. Validate name (no spaces, no `/storage` noexec path).
 - **Non-goal guard:** No native/Capacitor packaging — PWA build stays the path.
 
-### FEAT-014 — WebView diagnostics (Confidence: 78%)
-- **Files:** `LocalhostPreviewActivity.java:87-104`.
-- **Current:** `LOAD_NO_CACHE`, JS+DOM on, no console visibility.
-- **Suggestion:** Debug toggle (Settings → Preview): `WebView.setWebContentsDebuggingEnabled`, forward `console.log` via `WebChromeClient.onConsoleMessage` to logcat + on-screen log sheet; buttons: Reload, Clear cache/cookies/storage, UA toggle (mobile/desktop). Keep default `LOAD_NO_CACHE` for dev correctness.
-- **Perf:** Zero cost when toggle off.
+### FEAT-014 — WebView diagnostics (Confidence: 78%) — **done Phase 22**
+- **Shipped:** Settings → Show Preview console + Desktop site; console sheet + Debug logcat when on; Clear data already present.
 
 ### FEAT-015 — Theme + font controls (Confidence: 75%)
 - **Files:** `TermuxHackerThemeInstaller.java`, `~/.termux/colors.properties`, `TerminalViewPreferencesFragment.java`.
@@ -195,16 +192,11 @@
 - **Suggestion:** Content-descriptions for Preview chips/Scan/Copy LAN/AI/Stop AI; min 48dp targets; honor font-scale in dialogs; extract all hardcoded strings; add `de`/`zh` starter bundle if contributors exist; haptic on extra-keys long-press.
 - **Test:** TalkBack walkthrough + font-size 200%.
 
-### FEAT-023 — One-tap diagnostics bundle (Confidence: 87%)
-- **Files:** `SettingsActivity.java`, Debugging prefs fragments, `TermuxService`.
-- **Current:** Manual `logcat -d > logcat.txt`; Report Issue `YES` attaches stat+dump.
-- **Suggestion:** Settings → Diagnostics → "Export bundle" (`logcat.txt` + `stat` + versions: app/Bun/bootstrap/OpenCode/shim/ABI) to `~/storage/shared/InVxTermux/diag-*.zip`; auto-redact (`Verbose` PII stays out of `Normal`). Reduces issue triage time.
-- **Security:** Explicit consent + preview before share; default Log Level back to `Normal` after export.
+### FEAT-023 — One-tap diagnostics bundle (Confidence: 87%) — **done Phase 22**
+- **Shipped:** Settings → Debugging → Export diagnostics zip under `InVxTermux/diag-*.zip` (report + versions + AI stamps; consent; no secrets).
 
-### FEAT-024 — Offline help + search (Confidence: 79%)
-- **Files:** `HelpActivity.java`, `docs/*.md`, `mkdocs.yml`, `site/`.
-- **Current:** Markwon renders help; docs on GitHub Pages.
-- **Suggestion:** Bundle `docs/{workflow,ai,troubleshooting,install}.md` offline in Help with search field + deep-links (`invtermux://preview?port=5173`, `invtermux://ai`) from error pages (FEAT-003) and wizard (FEAT-018).
+### FEAT-024 — Offline help + search (Confidence: 79%) — **done Phase 22 (narrowed)**
+- **Shipped:** Markwon `HelpActivity` + `assets/help/` subset; filter; Preview error Help → troubleshooting.
 
 ### FEAT-025 — Opt-in tunnels (explicit non-goal, guard-railed) (Confidence: 60%)
 - **Files:** `LanShareHelper.java`, `ROADMAP.md:151-155` (Non-goals).
@@ -222,12 +214,13 @@
 
 ## Suggested Next Steps (for maintainers)
 
+> Phase 22 shipped FEAT-014 / FEAT-023 / FEAT-024 (narrowed) — cut as v0.210.0 when ready.
 > Phase 21 shipped FEAT-009 → v0.209.0.
 > Phase 20 shipped FEAT-008 (narrowed) + FEAT-010 (narrowed) → v0.208.0.
 > Phase 19 shipped FEAT-006 / FEAT-012 / FEAT-017 + AI script asset unification.
 
 1. Next platform: FEAT-001 targetSdk 34/35 + edge-to-edge on its own branch + device matrix.
-2. Optional polish: FEAT-023 diagnostics zip beside Backup.
+2. Optional polish: FEAT-015 themes / FEAT-016 drag extra-keys (chrome only).
 3. File issues for FEAT-020 emulator FIXMEs individually with xterm vectors.
 
 ## Appendix — Where to Implement

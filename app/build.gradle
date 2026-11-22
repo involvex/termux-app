@@ -155,9 +155,19 @@ tasks.withType(JavaCompile).configureEach {
     dependsOn(downloadBunBootstraps)
 }
 
+// Keep offline Help assets in sync with docs/ (subset only).
+task copyHelpAssets(type: Copy) {
+    from("$rootDir/docs") {
+        include "install.md", "workflow.md", "ai.md", "troubleshooting.md",
+            "configure.md", "openjdk.md", "cursor-agent.md"
+    }
+    into("$projectDir/src/main/assets/help")
+}
+
 tasks.named("preBuild").configure {
     dependsOn(downloadBootstraps)
     dependsOn(downloadBunBootstraps)
+    dependsOn(copyHelpAssets)
 }
 
 // NDK .incbin needs the zip files before assembling libinvapp-bun.

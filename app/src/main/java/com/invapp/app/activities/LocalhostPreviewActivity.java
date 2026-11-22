@@ -12,6 +12,7 @@ import android.util.TypedValue;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
+import android.webkit.ConsoleMessage;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -26,6 +27,7 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -39,6 +41,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.google.android.material.snackbar.Snackbar;
 import com.invapp.R;
 import com.invapp.app.utils.AiSessionHelper;
+import com.invapp.app.utils.HelpIndex;
 import com.invapp.app.utils.LanShareHelper;
 import com.invapp.app.utils.LocalhostPortScanner;
 import com.invapp.app.utils.PreferredPortWatcher;
@@ -46,11 +49,14 @@ import com.invapp.app.utils.PreviewPortPrefs;
 import com.invapp.app.utils.QrCodeHelper;
 import com.invapp.app.utils.WorkflowHelper;
 import com.invapp.shared.interact.ShareUtils;
+import com.invapp.shared.logger.Logger;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -96,6 +102,18 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
     @NonNull
     private String mCurrentPathAndQuery = "/";
     private boolean mShowingErrorPage;
+    private boolean mConsoleEnabled;
+    @Nullable
+    private View mConsolePanel;
+    @Nullable
+    private TextView mConsoleLog;
+    @Nullable
+    private ScrollView mConsoleScroll;
+    @Nullable
+    private String mDefaultUserAgent;
+    private final ArrayDeque<String> mConsoleLines = new ArrayDeque<>();
+
+    private static final String LOG_TAG = "LocalhostPreview";
 
     private final Runnable mAutoScanTick = new Runnable() {
         @Override
@@ -152,6 +170,20 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        mDefaultUserAgent = settings.getUserAgentString();
+        mConsoleEnabled = PreviewPortPrefs.isShowConsole(this);
+        applyDesktopUserAgent(settings);
+        applyConsoleDebuggingEnabled();
+        mConsolePanel = findViewById(R.id.preview_console_panel);
+        mConsoleLog = findViewById(R.id.preview_console_log);
+        mConsoleScroll = findViewById(R.id.preview_console_scroll);
+        Button consoleClear = findViewById(R.id.preview_console_clear_button);
+        if (mConsolePanel != null) {
+            mConsolePanel.setVisibility(mConsoleEnabled ? View.VISIBLE : View.GONE);
+        }
+        if (consoleClear != null) {
+            consoleClear.setOnClickListener(v -> clearConsoleSheet());
+        }
         mWebView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -251,6 +283,16 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
                         mProgress.setProgress(newProgress);
                     }
                 }
+            }
+
+            @Override
+            public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
+                if (!PreviewPortPrefs.shouldRecordConsole(mConsoleEnabled)
+                    || consoleMessage == null) {
+                    return false;
+                }
+                appendConsoleMessage(consoleMessage);
+                return true;
             }
         });
 
@@ -908,6 +950,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             + "<a class=\"action\" href=\"invapp://preview/reload\">Reload</a>"
             + "<a class=\"action\" href=\"invapp://preview/lan\">Copy LAN</a>"
             + "<a class=\"action\" href=\"invapp://preview/qr\">QR LAN</a>"
+            + "<a class=\"action\" href=\"invapp://preview/help\">Help</a>"
             + "</p>"
             + "<ul>"
             + "<li>Is <code>bun run dev</code> / <code>td-dev</code> running?</li>"
@@ -957,6 +1000,10 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             case "qr":
                 showQrLanForCurrentPort();
                 return true;
+            case "help":
+                startActivity(HelpActivity.createIntent(this,
+                    HelpIndex.PAGE_TROUBLESHOOTING));
+                return true;
             default:
                 return true;
         }
@@ -968,6 +1015,55 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
             .replace("<", "&lt;")
             .replace(">", "&gt;")
             .replace("\"", "&quot;");
+    }
+
+    private void applyDesktopUserAgent(@NonNull WebSettings settings) {
+        if (PreviewPortPrefs.isDesktopUserAgent(this)) {
+            settings.setUserAgentString(PreviewPortPrefs.DESKTOP_USER_AGENT);
+        } else if (mDefaultUserAgent != null) {
+            settings.setUserAgentString(mDefaultUserAgent);
+        }
+    }
+
+    private void applyConsoleDebuggingEnabled() {
+        WebView.setWebContentsDebuggingEnabled(mConsoleEnabled);
+    }
+
+    private void appendConsoleMessage(@NonNull ConsoleMessage message) {
+        String level = message.messageLevel() != null
+            ? message.messageLevel().name() : "LOG";
+        String line = String.format(Locale.US, "[%s] %s (%s:%d)",
+            level,
+            message.message() != null ? message.message() : "",
+            message.sourceId() != null ? message.sourceId() : "?",
+            message.lineNumber());
+        Logger.logDebug(LOG_TAG, line);
+        mMainHandler.post(() -> {
+            mConsoleLines.addLast(line);
+            while (mConsoleLines.size() > PreviewPortPrefs.MAX_CONSOLE_LINES) {
+                mConsoleLines.removeFirst();
+            }
+            if (mConsoleLog != null) {
+                StringBuilder sb = new StringBuilder();
+                for (String l : mConsoleLines) {
+                    if (sb.length() > 0) {
+                        sb.append('\n');
+                    }
+                    sb.append(l);
+                }
+                mConsoleLog.setText(sb.toString());
+            }
+            if (mConsoleScroll != null) {
+                mConsoleScroll.post(() -> mConsoleScroll.fullScroll(View.FOCUS_DOWN));
+            }
+        });
+    }
+
+    private void clearConsoleSheet() {
+        mConsoleLines.clear();
+        if (mConsoleLog != null) {
+            mConsoleLog.setText("");
+        }
     }
 
     @Override
@@ -984,6 +1080,7 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
         mAutoScanActive.set(false);
         mMainHandler.removeCallbacks(mAutoScanTick);
         mScanExecutor.shutdownNow();
+        WebView.setWebContentsDebuggingEnabled(false);
         if (mWebView != null) {
             mWebView.destroy();
             mWebView = null;
