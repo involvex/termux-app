@@ -62,6 +62,13 @@
         app:persistent="false"
         app:fragment="com.invapp.app.fragments.settings.IntegratedToolsPreferencesFragment"/>
 
+    <Preference
+        app:key="backup"
+        app:title="@string/title_backup"
+        app:summary="@string/summary_backup"
+        app:persistent="false"
+        app:fragment="com.invapp.app.fragments.settings.BackupPreferencesFragment"/>
+
     <ListPreference
         app:key="launch_page"
         app:title="@string/title_launch_page"

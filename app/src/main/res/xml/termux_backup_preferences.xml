@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <Preference
+        app:key="backup_status"
+        app:title="@string/title_backup_status"
+        app:summary="@string/summary_backup_status_loading"
+        app:selectable="false"
+        app:persistent="false"/>
+
+    <SwitchPreferenceCompat
+        app:key="backup_include_secrets"
+        app:title="@string/title_backup_include_secrets"
+        app:summary="@string/summary_backup_include_secrets"
+        app:defaultValue="false"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="backup_export"
+        app:title="@string/title_backup_export"
+        app:summary="@string/summary_backup_export"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="backup_restore"
+        app:title="@string/title_backup_restore"
+        app:summary="@string/summary_backup_restore"
+        app:persistent="false"/>
+
+    <Preference
+        app:key="backup_hint"
+        app:title="@string/title_backup_hint"
+        app:summary="@string/summary_backup_hint"
+        app:selectable="false"
+        app:persistent="false"/>
+
+</PreferenceScreen>

@@ -1,6 +1,6 @@
 # InVxTermux — Feature Suggestions Report
 
-> Generated: 2026-09-22 · Updated: 2026-11-22 (Phase 20) · Scope: `com.involvex.termux_app`
+> Generated: 2026-09-22 · Updated: 2026-11-22 (Phase 21) · Scope: `com.involvex.termux_app`
 > Pillars: Terminal-first · PC ↔ phone (`~/repos`) · Preview (`127.0.0.1`) · AI CLI (`td-ai` → OpenCode `:4000`)
 > Non-goals respected: no full in-app IDE / multi-tab browser, no public tunnels by default, no per-npm wrappers.
 > Sources: `README.md`, `ROADMAP.md`, `AGENTS.md`, `docs/*.md`, `app/build.gradle`, `app/src/main/java/com/invapp/...`, `terminal-emulator`, `termux-shared`, `termux-api`.
@@ -18,6 +18,7 @@
 | FEAT-006 | **done (Phase 19)** | Settings Bun card + `bun-version` / `bun-upgrade --check` (APK-only update) |
 | FEAT-007 | **done (Phase 17)** | Git badges + branch sheet + safe pull + `td-sync` |
 | FEAT-008 | **done (Phase 20, narrowed)** | `SessionSnapshot` cwd/title + Restore snackbar (fresh shells; no pty replay) |
+| FEAT-009 | **done (Phase 21)** | Settings → Backup zip (repos manifest, ~/.termux, shortcuts, prefs; secrets opt-in) |
 | FEAT-010 | **done (Phase 20, narrowed)** | Loopback default + Copy LAN/QR confirm; biometric/auto-stop deferred |
 | FEAT-011 | **done** | Copy/export last error in workflow More menu |
 | FEAT-012 | **done (Phase 19)** | Preferred-ports Settings + background notification + deep-link Preview |
@@ -29,7 +30,6 @@
 | ID | Category | Description | Impact | Effort |
 |----|----------|-------------|--------|--------|
 | FEAT-001 | Platform / Maintainability | Bump `targetSdkVersion` 28 → 34/35 + edge-to-edge | High | High |
-| FEAT-009 | Backup | One-tap backup/restore (`~/repos` manifest + dotfiles) | High | Medium |
 
 ### Medium Priority Suggestions
 
@@ -118,11 +118,8 @@
 ### FEAT-008 — Session persist + crash recovery (Confidence: 80%) — **done Phase 20 (narrowed)**
 - **Shipped:** `SessionSnapshot` (`invapp_session_snapshot`) persists cwd+title; cold-start snackbar **Restore N** → fresh shells via `createTermuxSession`. No pty/scrollback replay. Skips RUN/failsafe/`auto_start_console`.
 
-### FEAT-009 — One-tap backup / restore (Confidence: 86%)
-- **Files:** `termux-shared/.../file/FileUtils.java:1483` (TODOs on iterate/copy), `app/.../filepicker/TermuxDocumentsProvider.java`, `res/xml/data_extraction_rules.xml:8` (backup TODO).
-- **Current:** Wiki link only; `data_extraction_rules.xml` has uncontrolled backup TODO.
-- **Suggestion:** Settings → Backup: export `repos-manifest.json` (remote URLs + branches), `~/.termux/*`, `~/.shortcuts/*`, `extra-keys` + quick-bar prefs to `~/storage/shared/InVxTermux/backup-YYYYMMDD.zip` (requires `termux-setup-storage`). Restore reverses + `td-clone` missing repos. Fix backup rules with explicit `<include>/<exclude>` (exclude `$PREFIX`, `node_modules`, `.git` by default, opt-in).
-- **Security:** Never include tokens (`.npmrc`, `.git-credentials`, `opencode auth.json`) without explicit checkbox + warning.
+### FEAT-009 — One-tap backup / restore (Confidence: 86%) — **done Phase 21**
+- **Shipped:** Settings → Backup (`BackupHelper` / `BackupPreferencesFragment`); zip under `~/storage/shared/InVxTermux/`; secrets opt-in; widget Auto Backup rules tightened. Main app stays `allowBackup="false"`.
 
 ### FEAT-010 — LAN exposure guard + lock (Confidence: 83%) — **done Phase 20 (narrowed)**
 - **Shipped:** `AiPrefs` / `opencode-server` default `127.0.0.1`; Copy LAN / QR LAN first-use confirm + don’t-ask-again. **Deferred:** biometric/app lock, auto-Stop-AI on background.
@@ -225,12 +222,12 @@
 
 ## Suggested Next Steps (for maintainers)
 
+> Phase 21 shipped FEAT-009 → v0.209.0.
 > Phase 20 shipped FEAT-008 (narrowed) + FEAT-010 (narrowed) → v0.208.0.
 > Phase 19 shipped FEAT-006 / FEAT-012 / FEAT-017 + AI script asset unification.
-> Phase 18 shipped FEAT-003 / FEAT-005. Phase 17 shipped FEAT-004 / FEAT-007.
 
-1. Next reliability: FEAT-009 backup/restore (+ optional FEAT-023 diagnostics zip).
-2. Then FEAT-001 targetSdk 34/35 + edge-to-edge on its own branch + device matrix.
+1. Next platform: FEAT-001 targetSdk 34/35 + edge-to-edge on its own branch + device matrix.
+2. Optional polish: FEAT-023 diagnostics zip beside Backup.
 3. File issues for FEAT-020 emulator FIXMEs individually with xterm vectors.
 
 ## Appendix — Where to Implement

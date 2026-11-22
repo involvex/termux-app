@@ -249,6 +249,18 @@ https://github.com/involvex/termux-app
 - **Copy LAN / QR LAN** first-use confirm (same Wi‑Fi only, not a public
   tunnel) with don’t-ask-again
 
+### 21. One-tap backup / restore (done)
+
+- Settings → **Backup**: export `backup-YYYYMMDD.zip` to
+  `~/storage/shared/InVxTermux/` (needs storage / `termux-setup-storage`)
+- Zip contents: `repos-manifest.json` (name/url/branch — not `~/repos` trees),
+  `~/.termux`, `~/.shortcuts`, workflow bar + extra-keys prefs
+- Secrets (`.npmrc`, `.git-credentials`, OpenCode auth) omitted unless
+  **Include secrets** is checked
+- Restore overwrites those trees/prefs; offers `td-clone` for missing remotes
+- Terminal-widget Auto Backup rules: explicit sharedpref include/exclude
+  (main app stays `allowBackup="false"`)
+
 ## Non-goals (for now)
 
 - Full in-app IDE / multi-tab browser
