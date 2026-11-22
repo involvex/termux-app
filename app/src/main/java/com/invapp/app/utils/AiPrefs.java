@@ -18,20 +18,21 @@ public final class AiPrefs {
     public static final String KEY_OPENCODE_HOST = "opencode_host";
     public static final String KEY_OPENCODE_VERSION = "opencode_version";
 
-    /** Default bind for {@code td-ai} / OpenCode service (LAN-friendly). */
+    /** Explicit LAN bind for {@code td-ai} / OpenCode service. */
     public static final String HOST_WILDCARD = "0.0.0.0";
-    /** Loopback-only bind. */
+    /** Default bind: loopback-only (opt in to LAN via Settings / OPENCODE_HOST). */
     public static final String HOST_LOOPBACK = "127.0.0.1";
 
     private AiPrefs() {}
 
     @NonNull
     public static String getOpenCodeHost(@NonNull Context context) {
-        String host = prefs(context).getString(KEY_OPENCODE_HOST, HOST_WILDCARD);
-        if (HOST_LOOPBACK.equals(host)) {
-            return HOST_LOOPBACK;
+        // Default loopback when the key was never set; a stored 0.0.0.0 stays.
+        String host = prefs(context).getString(KEY_OPENCODE_HOST, HOST_LOOPBACK);
+        if (HOST_WILDCARD.equals(host)) {
+            return HOST_WILDCARD;
         }
-        return HOST_WILDCARD;
+        return HOST_LOOPBACK;
     }
 
     public static void setOpenCodeHost(@NonNull Context context, @NonNull String host) {

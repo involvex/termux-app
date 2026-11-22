@@ -2,12 +2,14 @@
 # InVxTermux — opencode-server [port|stop|status]
 #
 # Start/stop the OpenCode V2 *background service* (preferred), with defaults
-# hostname 0.0.0.0 and port 4000. Replaces legacy opencode-v2-server shims that
-# pointed at ~/.opencode/bin (broken under this package id).
+# hostname 127.0.0.1 and port 4000. Opt in to LAN with OPENCODE_HOST=0.0.0.0
+# (Settings → AI Doctor → uncheck loopback, or drawer AI injects that env).
+# Replaces legacy opencode-v2-server shims that pointed at ~/.opencode/bin
+# (broken under this package id).
 #
-#   opencode-server           # start on :4000
-#   opencode-server 4000      # start on a custom port
-#   OPENCODE_HOST=127.0.0.1 opencode-server
+#   opencode-server                 # start on 127.0.0.1:4000
+#   opencode-server 4000            # start on a custom port
+#   OPENCODE_HOST=0.0.0.0 opencode-server
 #   opencode-server stop
 #   opencode-server status
 #
@@ -15,7 +17,7 @@
 . "${INVAPP_LIB_DIR:-$PREFIX/lib/invapp}/env.sh"
 
 PORT_DEFAULT=4000
-HOST="${OPENCODE_HOST:-0.0.0.0}"
+HOST="${OPENCODE_HOST:-127.0.0.1}"
 PW_FILE="$PREFIX/var/lib/invapp/opencode-password"
 
 remove_legacy_v2_shims() {
@@ -236,7 +238,8 @@ usage: opencode-server [port]
        opencode-server status
 
 Starts the OpenCode V2 background service (opencode service start).
-Defaults: hostname 0.0.0.0, port 4000.
+Defaults: hostname 127.0.0.1, port 4000.
+LAN: OPENCODE_HOST=0.0.0.0 opencode-server
 EOF
         exit 0
         ;;

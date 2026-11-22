@@ -52,7 +52,7 @@ See `ROADMAP.md`.
 | node shim | `$PREFIX/bin/node` → bun if `nodejs` package not installed |
 | Default cwd | `~/repos` (exec-capable). `~/storage/shared` is browse/sync only (**noexec**) |
 | Preview | Drawer **Preview** → Scan + chips (loopback by default); any `http`/`https` URL in the bar/WebView; **Copy LAN** / **QR LAN** / long-press chip → `http://<wifi-ip>:<port>` when bound on `0.0.0.0` |
-| AI helper | `opencode-setup` / `td-ai` → `opencode-server` → OpenCode V2 **`service start`** on `:4000` (binds **`0.0.0.0`** by default; Preview uses `127.0.0.1`). Removes legacy `opencode-v2*` shims. Setup downloads official V2 `opencode-linux-*.tar.gz` from `opencode.ai/files/bin` (live lookup, fallback `2.0.6`), then `glibc` + ld-linux wrapper with **`LD_PRELOAD=` empty** and DNS shim via **`ld-linux --preload $PREFIX/lib/libinvapp-opencode-shim.so`**. Override `OPENCODE_HOST` / port arg. Drawer **AI** probes missing/installed/ready (`GET /api/info` + Basic auth); **Stop AI** / `opencode-server stop`. On-demand into `$PREFIX`, not baked into APK |
+| AI helper | `opencode-setup` / `td-ai` → `opencode-server` → OpenCode V2 **`service start`** on `:4000` (binds **`127.0.0.1`** by default; LAN via `OPENCODE_HOST=0.0.0.0` or AI Doctor). Preview uses `127.0.0.1`. Removes legacy `opencode-v2*` shims. Setup downloads official V2 `opencode-linux-*.tar.gz` from `opencode.ai/files/bin` (live lookup, fallback `2.0.6`), then `glibc` + ld-linux wrapper with **`LD_PRELOAD=` empty** and DNS shim via **`ld-linux --preload $PREFIX/lib/libinvapp-opencode-shim.so`**. Drawer **AI** probes missing/installed/ready (`GET /api/info` + Basic auth); **Stop AI** / `opencode-server stop`. On-demand into `$PREFIX`, not baked into APK |
 | Cursor Agent | `cursor-agent-setup` → official `agent-cli-package.tar.gz` (glibc Node 24; **never** Bun / `curl\|bash`). `$PREFIX/bin/agent` runs bundled `node` via `ld-linux` + same DNS shim. Cloud My Machines: `agent login` then `td-agent-worker start` → https://cursor.com/agents. Pin `CURSOR_AGENT_VERSION=…`; after `agent update` run `cursor-agent-setup --wrap-only`. Stack refresh: `td-upgrade` (pkg + opencode + agent rewrap + Bun stamp; no `bun upgrade`) |
 | Dev server | `td-dev [script]` → `bun run` with Preview/LAN hints |
 | Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`); `pwa` / `pwa-react` add `vite-plugin-pwa` |
@@ -118,9 +118,10 @@ See `ROADMAP.md`.
 - Leftover `opencode-v2` / `opencode-v2-server` → missing `~/.opencode/bin/opencode`
   — remove those shims (`opencode-setup` / `opencode-server` do it) and use
   `$PREFIX/bin/opencode` + `opencode-server` / `td-ai` only.
-- `getifaddrs returned an error` — non-fatal for web bind on `0.0.0.0`;
-  never use `--mdns`. Override with `OPENCODE_HOST=127.0.0.1 td-ai` if needed.
-  Firewall/VPN may block LAN clients; Preview defaults to loopback and can open any http(s) URL.
+- `getifaddrs returned an error` — non-fatal when binding `0.0.0.0`;
+  never use `--mdns`. Default bind is already `127.0.0.1`; LAN is
+  `OPENCODE_HOST=0.0.0.0 td-ai`. Firewall/VPN may block LAN clients;
+  Preview defaults to loopback and can open any http(s) URL.
 - Banner missing / duplicated / in the wrong place — the hook is
   `$PREFIX/etc/profile.d/invapp-banner.sh`, the renderer
   `$PREFIX/lib/invapp/banner.sh`, and the art is **pre-rendered** (no figlet,
@@ -343,7 +344,7 @@ ivx-doctor           # read-only health report (--strict, --network)
 ivx-cleanup          # interactive remove: pkg / cargo / bun -g / npm -g / pip / uv
 ivx-disk-analyze     # df/du: prefix, home, guests, large files
 ivx-fix-dpkg-scripts # heal dpkg info/format + maintainer shebangs
-td-ai                # OpenCode service on 0.0.0.0:4000 → Preview 127.0.0.1 / LAN Copy
+td-ai                # OpenCode service on 127.0.0.1:4000 → Preview; LAN: OPENCODE_HOST=0.0.0.0
 # Linux guests (optional, device-only):
 # td-proot-linux                # Ubuntu shell (td-resource-linux)
 # td-proot-linux --gui          # TigerVNC + XFCE/openbox → AVNC on :5902
@@ -391,7 +392,7 @@ without testing bootstrap + all ABIs.
 | NDK | `29.0.14206865`, `ndk-build` (`Android.mk` per module) |
 | JDK (build) | `17` (Android Studio Flamingo+) |
 | Java compat | `1.8` + `coreLibraryDesugaring` (`desugar_jdk_libs:1.1.5`) |
-| App version | `versionCode 208`, `versionName 0.207.0` (semver-enforced at build) |
+| App version | `versionCode 209`, `versionName 0.208.0` (semver-enforced at build) |
 | Bootstrap | `2026.02.12-r1+apt.android-7` (aarch64/arm/i686/x86_64, SHA-256 verified); android-5: `2022.04.28-r6` |
 | Bun | `1.4.4` official `bun-linux-{aarch64,x64}-android.zip` (SHA-256 verified, `.incbin` into `libinvapp-bun`, extracted by `TermuxBunInstaller`) |
 | Editor | 4-space, LF, UTF-8, final newline (`.editorconfig`); 2-space for `*.yaml` |
@@ -483,8 +484,8 @@ termux-app/
 - Format `major.minor.patch(-prerelease)(+buildmetadata)`, always with patch:
   `0.200.0`, `0.201.0-beta.1`, never `v0.1`. Tag as `v0.200.0`.
 - `app/build.gradle:validateVersionName()` fails the build on bad versions.
-  - Keep `termux-shared`/`terminal-emulator` versions (`0.207.0`) in
- sync when cutting releases.
+  - Keep `termux-shared`/`terminal-emulator` versions (`0.208.0`) in
+    sync when cutting releases.
 
 ### Code style / quality
 
@@ -599,7 +600,7 @@ Manual:
 | Bootstrap missing/checksum | Let `downloadBootstraps` fetch from `termux-packages` releases; don't hand-place `$PREFIX` |
 | Bun signal 31 / not found | Use bundled `$PREFIX/libexec/bun`; `downloadBunBootstraps`; never `bun.sh/install` on device |
 | `Permission denied` bins | Move project to `~/repos` (shared storage is noexec) |
-| Phantom kill `[signal 9]` (Android 12+) | OS phantom/excessive-CPU killer — see issue #2366 / AG docs; disable trimming or upgrade to 12L/13 |
+| Phantom kill `[signal 9]` (Android 12+) | OS phantom/excessive-CPU killer — see issue #2366; next cold start offers **Restore** snackbar for last cwds (no history) |
 | Plugin install fail | Same-source APKs only (sharedUserId+signature); uninstall all, reinstall set |
 
 ## 7. Code Review Checklist

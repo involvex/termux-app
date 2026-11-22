@@ -21,6 +21,7 @@ import com.invapp.shared.interact.ShareUtils;
 import com.invapp.shared.termux.shell.command.runner.terminal.TermuxSession;
 import com.invapp.shared.termux.interact.TextInputDialogUtils;
 import com.invapp.app.TermuxActivity;
+import com.invapp.app.utils.SessionSnapshot;
 import com.invapp.shared.termux.terminal.TermuxTerminalSessionClientBase;
 import com.invapp.shared.termux.TermuxConstants;
 import com.invapp.app.TermuxService;
@@ -35,6 +36,7 @@ import com.invapp.terminal.TextStyle;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.util.List;
 import java.util.Properties;
 
 /** The {@link TerminalSessionClient} implementation that may require an {@link Activity} for its interface methods. */
@@ -96,6 +98,12 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
         // Store current session in shared preferences so that it can be restored later in
         // {@link #onStart} if needed.
         setCurrentStoredSession();
+
+        // Also refresh cwd/title snapshot for cold-start restore after process death.
+        TermuxService service = mActivity.getTermuxService();
+        if (service != null) {
+            service.persistSessionSnapshot();
+        }
 
         // Release mBellSoundPool resources, specially to prevent exceptions like the following to be thrown
         // java.util.concurrent.TimeoutException: android.media.SoundPool.finalize() timed out after 10 seconds
@@ -386,6 +394,40 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
 
             mActivity.getDrawer().closeDrawers();
         }
+    }
+
+    /**
+     * Recreate interactive shells in snapshotted working directories (fresh
+     * pty — no scrollback). Focuses the last created session.
+     *
+     * @return number of sessions created
+     */
+    public int restoreSessions(@NonNull List<SessionSnapshot.Entry> entries) {
+        TermuxService service = mActivity.getTermuxService();
+        if (service == null || entries.isEmpty()) {
+            return 0;
+        }
+        int created = 0;
+        TerminalSession last = null;
+        for (SessionSnapshot.Entry entry : entries) {
+            if (service.getTermuxSessionsSize() >= MAX_SESSIONS) {
+                break;
+            }
+            if (entry == null || entry.cwd == null || entry.cwd.isEmpty()) {
+                continue;
+            }
+            TermuxSession session = service.createTermuxSession(
+                null, null, null, entry.cwd, false, entry.title);
+            if (session == null) {
+                continue;
+            }
+            last = session.getTerminalSession();
+            created++;
+        }
+        if (last != null) {
+            setCurrentSession(last);
+        }
+        return created;
     }
 
     public void setCurrentStoredSession() {

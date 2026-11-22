@@ -238,6 +238,17 @@ https://github.com/involvex/termux-app
   `td-agent-worker`, `td-upgrade` from `TermuxBunInstaller` Java literals
   into `app/src/main/assets/invapp/bin/` (container seed parity)
 
+### 20. Session continuity + safer LAN (done)
+
+- **Session restore** after process death / Android 12+ phantom kill: persist
+  cwd + title for interactive sessions (`SessionSnapshot`); cold start with no
+  live sessions offers **Restore N** (fresh shells in last directories — no
+  scrollback). Skip on RUN shortcut / failsafe / `auto_start_console`
+- **OpenCode loopback by default**: `opencode-server` / `AiPrefs` default
+  `127.0.0.1`; LAN is opt-in (`OPENCODE_HOST=0.0.0.0` or AI Doctor toggle)
+- **Copy LAN / QR LAN** first-use confirm (same Wi‑Fi only, not a public
+  tunnel) with don’t-ask-again
+
 ## Non-goals (for now)
 
 - Full in-app IDE / multi-tab browser
@@ -255,9 +266,10 @@ td-dev                    # vite on :5173
 ```
 
 ```bash
-# AI web UI in Preview
+# AI web UI in Preview (binds 127.0.0.1:4000 by default)
 td-ai          # or: drawer → AI (skips start if :4000 already up)
 # Preview opens on :4000
+# LAN: OPENCODE_HOST=0.0.0.0 td-ai   # or AI Doctor → uncheck loopback
 # drawer → Stop AI   # when done
 ```
 

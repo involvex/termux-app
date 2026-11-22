@@ -61,6 +61,8 @@ import com.invapp.app.utils.LanShareHelper;
 import com.invapp.app.utils.LaunchPrefs;
 import com.invapp.app.utils.LocalhostPortScanner;
 import com.invapp.app.utils.PreferredPortWatcher;
+import com.invapp.app.utils.PreviewPortPrefs;
+import com.invapp.app.utils.SessionSnapshot;
 import com.invapp.app.utils.WorkflowBarHelper;
 import com.invapp.app.utils.WorkflowHelper;
 import com.invapp.shared.termux.crash.TermuxCrashUtils;
@@ -508,7 +510,24 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                         if (intent != null && intent.getExtras() != null) {
                             launchFailsafe = intent.getExtras().getBoolean(TERMUX_ACTIVITY.EXTRA_FAILSAFE_SESSION, false);
                         }
-                        mTermuxTerminalSessionActivityClient.addNewSession(launchFailsafe, null);
+                        boolean isRunShortcut = !mIsActivityRecreated && intent != null
+                            && Intent.ACTION_RUN.equals(intent.getAction());
+                        boolean autoStart = LaunchPrefs.isAutoStartConsole(this);
+                        boolean hasInject = intent != null
+                            && intent.hasExtra(EXTRA_INJECT_SHELL_COMMAND);
+                        List<SessionSnapshot.Entry> snapshot = SessionSnapshot.load(
+                            this, TermuxConstants.TERMUX_HOME_DIR_PATH);
+                        if (!hasInject && SessionSnapshot.shouldOfferRestore(
+                                mIsActivityRecreated,
+                                false,
+                                !snapshot.isEmpty(),
+                                isRunShortcut,
+                                autoStart,
+                                launchFailsafe)) {
+                            offerSessionRestore(snapshot);
+                        } else {
+                            mTermuxTerminalSessionActivityClient.addNewSession(launchFailsafe, null);
+                        }
                     } catch (WindowManager.BadTokenException e) {
                         // Activity finished - ignore.
                     }
@@ -1128,6 +1147,48 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     /**
+     * After process death: offer restoring shells in the last known cwds
+     * (fresh pty — history was not kept). Dismiss starts one default session.
+     */
+    private void offerSessionRestore(@NonNull final List<SessionSnapshot.Entry> snapshot) {
+        View root = findViewById(R.id.activity_termux_root_view);
+        if (root == null || snapshot.isEmpty()) {
+            mTermuxTerminalSessionActivityClient.addNewSession(false, null);
+            return;
+        }
+        final boolean[] handled = {false};
+        Snackbar snackbar = Snackbar.make(root,
+                getString(R.string.msg_session_restore_offer, snapshot.size()),
+                Snackbar.LENGTH_INDEFINITE);
+        snackbar.setAction(R.string.action_session_restore, v -> {
+            handled[0] = true;
+            int created = mTermuxTerminalSessionActivityClient.restoreSessions(snapshot);
+            SessionSnapshot.clear(this);
+            if (created <= 0) {
+                mTermuxTerminalSessionActivityClient.addNewSession(false, null);
+            } else {
+                showToast(getString(R.string.msg_session_restore_done, created), true);
+            }
+            flushPendingInjectShellCommand();
+        });
+        snackbar.addCallback(new Snackbar.Callback() {
+            @Override
+            public void onDismissed(@NonNull Snackbar transientBottomBar, int event) {
+                if (handled[0] || mTermuxService == null) {
+                    return;
+                }
+                if (!mTermuxService.isTermuxSessionsEmpty()) {
+                    return;
+                }
+                SessionSnapshot.clear(TermuxActivity.this);
+                mTermuxTerminalSessionActivityClient.addNewSession(false, null);
+                flushPendingInjectShellCommand();
+            }
+        });
+        snackbar.show();
+    }
+
+    /**
      * When OpenCode is already healthy and bound on {@code 0.0.0.0}, offer
      * copying the LAN URL (same Wi‑Fi) without opening Preview chips.
      */
@@ -1147,6 +1208,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         Snackbar.make(root, R.string.msg_workflow_ai_lan_hint, Snackbar.LENGTH_LONG)
             .setAction(R.string.action_workflow_ai_copy_lan, v -> {
+                // Same one-time LAN exposure gate as Preview Copy LAN / QR LAN.
+                PreviewPortPrefs.setLanShareConfirmed(this, true);
                 ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                 if (cm != null) {
                     cm.setPrimaryClip(ClipData.newPlainText("opencode-lan", url));

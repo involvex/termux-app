@@ -3,10 +3,11 @@
 InVxTermux attaches [OpenCode V2](https://opencode.ai/v2/docs/) as a web
 UI and opens it in Preview. Prefer the **background service**
 (`opencode service start` via `opencode-server` / `td-ai`), bind
-`0.0.0.0`, fixed port **4000**, stable password, verify with
+**`127.0.0.1` by default** (LAN opt-in: `OPENCODE_HOST=0.0.0.0`), fixed
+port **4000**, stable password, verify with
 `curl -u opencode:<pw> http://127.0.0.1:4000/api/info` (must return
-JSON `{data:...}`, not HTML — HTML means V1 routes). No mDNS in V2,
-plain HTTP for LAN/MyFritz.
+JSON `{data:...}`, not HTML — HTML means V1 routes). No mDNS in V2;
+plain HTTP when you opt into LAN.
 
 Do **not** keep `opencode-v2` / `opencode-v2-server` shims (they point at
 `~/.opencode/bin` and break under this package id). The only CLI is
@@ -16,7 +17,8 @@ Do **not** keep `opencode-v2` / `opencode-v2-server` shims (they point at
 
 ```bash
 opencode-setup          # once — official V2 linux tarball + glibc wrapper
-td-ai                   # alias → opencode-server (service 0.0.0.0:4000)
+td-ai                   # alias → opencode-server (service 127.0.0.1:4000)
+# or: OPENCODE_HOST=0.0.0.0 td-ai   # LAN opt-in
 # or: opencode-server [port]
 # Preview → http://127.0.0.1:4000/
 opencode-server stop    # or: td-ai-stop / drawer → Stop AI
@@ -64,9 +66,10 @@ port locally and surface **Copy LAN** / **QR LAN** for the other device.
 - **Never** `export PATH=$PREFIX/glibc/bin:$PATH` — those ELFs break the shell
   (`Permission denied` on `grep`/`ls`/`gcc`).
 - Wrapper sets `SSL_CERT_FILE` / `NODE_EXTRA_CA_CERTS` to Termux’s CA bundle
-- Bind **`0.0.0.0`** by default so other devices on the same Wi‑Fi can open
-  OpenCode (drawer **Preview → Copy LAN / QR LAN**). In-app Preview stays on
-  `127.0.0.1:4000`. Never `--mdns`. Override: `OPENCODE_HOST=127.0.0.1 td-ai`.
+- Bind **`127.0.0.1`** by default. Opt in to LAN with
+  `OPENCODE_HOST=0.0.0.0 td-ai` or Settings → **AI Doctor** → uncheck
+  loopback, then drawer **Preview → Copy LAN / QR LAN** (first use confirms
+  same-Wi‑Fi only). In-app Preview stays on `127.0.0.1:4000`. Never `--mdns`.
   Firewall/VPN may block LAN; `getifaddrs` log noise is non-fatal for bind.
 - OpenCode is **not** baked into the APK; it installs into `$PREFIX` on demand
 - Prefer **one** server: background `opencode service` *or* foreground

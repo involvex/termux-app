@@ -437,7 +437,7 @@ if opencode --version 2>&1; then
     done
     ;;
   esac
-  echo "OK (v$OC_VER). Run: td-ai / opencode-server   # service 0.0.0.0:4000; Preview → http://127.0.0.1:4000/"
+  echo "OK (v$OC_VER). Run: td-ai / opencode-server   # service 127.0.0.1:4000 (LAN: OPENCODE_HOST=0.0.0.0); Preview → http://127.0.0.1:4000/"
   OC_PW=$(sed -n 's/.*"password"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$HOME/.config/opencode/service.json" 2>/dev/null | head -1)
   if [ -n "$OC_PW" ]; then echo "Verify: curl -u opencode:$OC_PW http://127.0.0.1:4000/api/info (JSON, not HTML)"; fi
   echo "If chat fails with 'typo in the url or port': rm -rf ~/.cache/opencode && opencode-fix-net && td-ai"

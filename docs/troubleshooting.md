@@ -17,7 +17,7 @@
 | Low disk / find what eats space | `ivx-disk-analyze` (overview) · `ivx-disk-analyze guests` · `ivx-disk-analyze large ~/repos` |
 | OpenCode `Permission denied` / LIBC / postinstall / SIGSYS | Re-run `opencode-setup` (official V2 tarball + glibc). Do not `unset LD_PRELOAD` |
 | OpenCode `AI_APICallError` / “typo in the url or port” | Local `:4000` OK; Zen/provider broken. `rm -rf ~/.cache/opencode`, re-auth, seed glibc DNS/CA, `opencode-setup` / Settings → **AI Doctor** → Repair, retry from `~/repos/…` (V1 only: fix `@opencode-ai/plugin@local` → `latest`) |
-| OpenCode `getifaddrs returned an error` | Non-fatal for `0.0.0.0` bind; V2 has no `--mdns`. Override `OPENCODE_HOST=127.0.0.1 td-ai` if needed. Preview uses `127.0.0.1:4000` / `/api/info` |
+| OpenCode `getifaddrs returned an error` | Non-fatal when binding `0.0.0.0`; V2 has no `--mdns`. Default is already `127.0.0.1`. Preview uses `127.0.0.1:4000` / `/api/info` |
 | Preview blank / wrong port | OpenCode is `:4000` — there is no `/api` on `:5000`. Drawer **AI** opens Preview after health; tap Reload if early |
 | `opencode-v2: missing …/.opencode/bin/opencode` | Remove legacy shims: `rm -f $PREFIX/bin/opencode-v2*`; use `opencode` + `opencode-server` / `td-ai` |
 | Tab completion missing for bun/pkg/npm | Open a **new** session after app update. Optional: `pkg install bash-completion`. Completers live under `$PREFIX/etc/bash_completion.d/` |
@@ -34,7 +34,7 @@
 | Extra keys only show ESC/nav | Swipe the key bar **left/right** for workflow page (pull / bun i / …). **Tools → Customize keys…** or **Settings → Customize keybinds** |
 | Extra keys show weird symbols (⎈ ⎋ ⇱) | `extra-keys-style=all` — set `extra-keys-style=none` or run **Customize keybinds → Reset** (writes text HOME/END/CTRL) |
 | Green-bar `ls` folders | Hacker theme ANSI clash — new session or replace `~/.termux/colors.properties` |
-| Phantom kill `[signal 9]` (Android 12+) | OS phantom/CPU killer — see upstream Termux issue [#2366](https://github.com/termux/termux-app/issues/2366) |
+| Phantom kill `[signal 9]` (Android 12+) | OS phantom/CPU killer — see upstream [#2366](https://github.com/termux/termux-app/issues/2366). On next cold start with no live sessions, tap **Restore** on the snackbar to reopen shells in the last cwds (history is not kept) |
 | Plugin install fail | Same signature + `sharedUserId` source only; uninstall all, reinstall set |
 
 More agent-oriented notes live in [`AGENTS.md`](https://github.com/involvex/termux-app/blob/master/AGENTS.md)

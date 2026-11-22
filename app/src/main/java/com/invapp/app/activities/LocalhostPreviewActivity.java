@@ -21,6 +21,7 @@ import android.webkit.WebStorage;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -478,13 +479,13 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
     }
 
     private void copyLanUrlForPort(int port) {
-        resolveLanShareUrl(port, url ->
+        confirmLanShareThen(() -> resolveLanShareUrl(port, url ->
             ShareUtils.copyTextToClipboard(this, url,
-                getString(R.string.msg_preview_lan_copied, url)));
+                getString(R.string.msg_preview_lan_copied, url))));
     }
 
     private void showQrLanForPort(int port) {
-        resolveLanShareUrl(port, url -> {
+        confirmLanShareThen(() -> resolveLanShareUrl(port, url -> {
             int sizePx = (int) TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, 240f, getResources().getDisplayMetrics());
             Bitmap qr = QrCodeHelper.encodeQrBitmap(url, sizePx);
@@ -516,7 +517,41 @@ public final class LocalhostPreviewActivity extends AppCompatActivity {
                         getString(R.string.msg_preview_lan_copied, url)))
                 .setNegativeButton(android.R.string.ok, null)
                 .show();
-        });
+        }));
+    }
+
+    /**
+     * First Copy LAN / QR LAN: confirm same-Wi‑Fi exposure (not a public tunnel).
+     * Persists “don’t ask again” in {@link PreviewPortPrefs}.
+     */
+    private void confirmLanShareThen(@NonNull final Runnable proceed) {
+        if (PreviewPortPrefs.hasConfirmedLanShare(this)) {
+            proceed.run();
+            return;
+        }
+        float density = getResources().getDisplayMetrics().density;
+        int pad = (int) (24 * density);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(pad, pad / 2, pad, 0);
+        TextView message = new TextView(this);
+        message.setText(R.string.msg_preview_lan_confirm);
+        root.addView(message);
+        final CheckBox dontAsk = new CheckBox(this);
+        dontAsk.setText(R.string.msg_preview_lan_confirm_dont_ask);
+        dontAsk.setChecked(true);
+        root.addView(dontAsk);
+        new AlertDialog.Builder(this)
+            .setTitle(R.string.title_preview_lan_confirm)
+            .setView(root)
+            .setPositiveButton(android.R.string.ok, (d, w) -> {
+                if (dontAsk.isChecked()) {
+                    PreviewPortPrefs.setLanShareConfirmed(this, true);
+                }
+                proceed.run();
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
     }
 
     /**

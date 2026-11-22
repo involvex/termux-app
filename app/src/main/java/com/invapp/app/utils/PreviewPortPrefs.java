@@ -28,6 +28,8 @@ public final class PreviewPortPrefs {
     private static final String KEY_RECENT = "recent_ports";
     private static final String KEY_STARRED = "starred_ports";
     private static final String KEY_NOTIFY = "notify_preferred_ports";
+    /** One-time Copy LAN / QR LAN exposure confirm (“don’t ask again”). */
+    private static final String KEY_LAN_SHARE_CONFIRMED = "lan_share_confirmed";
     private static final String SEP = ",";
     private static final int MAX_RECENT = 8;
     private static final int MAX_STARRED = 16;
@@ -90,6 +92,15 @@ public final class PreviewPortPrefs {
 
     public static void setNotifyPreferredPorts(@NonNull Context context, boolean enabled) {
         prefs(context).edit().putBoolean(KEY_NOTIFY, enabled).apply();
+    }
+
+    /** True after the user confirmed LAN share (or checked don’t-ask-again). */
+    public static boolean hasConfirmedLanShare(@NonNull Context context) {
+        return prefs(context).getBoolean(KEY_LAN_SHARE_CONFIRMED, false);
+    }
+
+    public static void setLanShareConfirmed(@NonNull Context context, boolean confirmed) {
+        prefs(context).edit().putBoolean(KEY_LAN_SHARE_CONFIRMED, confirmed).apply();
     }
 
     @NonNull

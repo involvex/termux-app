@@ -110,6 +110,9 @@
     <string name="msg_preview_lan_loopback_only">Port :%1$d is loopback-only — start the server on 0.0.0.0 to share on Wi‑Fi</string>
     <string name="msg_preview_lan_no_wifi">No Wi‑Fi IP found — connect to a network first</string>
     <string name="msg_preview_lan_unavailable">Could not build a LAN URL for this port</string>
+    <string name="title_preview_lan_confirm">Share on Wi‑Fi?</string>
+    <string name="msg_preview_lan_confirm">This URL is reachable by other devices on the same Wi‑Fi — not a public tunnel.</string>
+    <string name="msg_preview_lan_confirm_dont_ask">Don\'t ask again</string>
     <string name="title_preferred_ports">Preferred Preview ports</string>
     <string name="summary_preferred_ports">Comma-separated ports floated in Scan and port-detect snackbars</string>
     <string name="hint_preferred_ports">4000,3000,5173,8080</string>
@@ -172,7 +175,7 @@
     <string name="title_ai_doctor_stop">Stop AI</string>
     <string name="summary_ai_doctor_stop">SIGTERM listeners on :4000</string>
     <string name="title_ai_doctor_host_loopback">Bind loopback only (127.0.0.1)</string>
-    <string name="summary_ai_doctor_host_loopback">Off = 0.0.0.0 (LAN). Applied on next Start / Repair</string>
+    <string name="summary_ai_doctor_host_loopback">On = default. Off = 0.0.0.0 (LAN). Applied on next Start / Repair</string>
     <string name="title_ai_doctor_version">OPENCODE_VERSION pin</string>
     <string name="summary_ai_doctor_version">Empty = live V2 lookup on Repair</string>
     <string name="summary_ai_doctor_version_pinned">Pinned: %1$s</string>
@@ -325,6 +328,11 @@
     <string name="msg_workflow_ai_health_timeout">OpenCode :4000 not healthy yet — opening Preview anyway (Reload if blank)</string>
     <string name="msg_workflow_ai_error_hint">Recent terminal error — paste into OpenCode?</string>
     <string name="msg_workflow_ai_error_copied">Error copied — paste in OpenCode (Preview)</string>
+
+    <!-- Session restore after process death / phantom kill -->
+    <string name="msg_session_restore_offer">Restore %1$d session(s)? History was not kept (process restart).</string>
+    <string name="action_session_restore">Restore</string>
+    <string name="msg_session_restore_done">Restored %1$d session(s) — fresh shells in last directories</string>
 
     <string name="action_report_issue">Report Issue</string>
     <string name="msg_generating_report">Generating Report</string>

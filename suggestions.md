@@ -1,13 +1,13 @@
 # InVxTermux — Feature Suggestions Report
 
-> Generated: 2026-09-22 · Updated: 2026-11-15 (Phase 19) · Scope: `com.involvex.termux_app`
+> Generated: 2026-09-22 · Updated: 2026-11-22 (Phase 20) · Scope: `com.involvex.termux_app`
 > Pillars: Terminal-first · PC ↔ phone (`~/repos`) · Preview (`127.0.0.1`) · AI CLI (`td-ai` → OpenCode `:4000`)
 > Non-goals respected: no full in-app IDE / multi-tab browser, no public tunnels by default, no per-npm wrappers.
 > Sources: `README.md`, `ROADMAP.md`, `AGENTS.md`, `docs/*.md`, `app/build.gradle`, `app/src/main/java/com/invapp/...`, `terminal-emulator`, `termux-shared`, `termux-api`.
 
 ## Feature Suggestions Report
 
-### Done (Phase 17–19 / earlier)
+### Done (Phase 17–20 / earlier)
 
 | ID | Status | Notes |
 |----|--------|-------|
@@ -17,8 +17,11 @@
 | FEAT-005 | **done (Phase 18)** | Settings AI Doctor (status, repair, host, version pin) |
 | FEAT-006 | **done (Phase 19)** | Settings Bun card + `bun-version` / `bun-upgrade --check` (APK-only update) |
 | FEAT-007 | **done (Phase 17)** | Git badges + branch sheet + safe pull + `td-sync` |
+| FEAT-008 | **done (Phase 20, narrowed)** | `SessionSnapshot` cwd/title + Restore snackbar (fresh shells; no pty replay) |
+| FEAT-010 | **done (Phase 20, narrowed)** | Loopback default + Copy LAN/QR confirm; biometric/auto-stop deferred |
 | FEAT-011 | **done** | Copy/export last error in workflow More menu |
 | FEAT-012 | **done (Phase 19)** | Preferred-ports Settings + background notification + deep-link Preview |
+| FEAT-013 | **done (Phase 7)** | `td-scaffold` already seeds README/.gitignore, `react-ts` default, `--here` / `--no-install` |
 | FEAT-017 | **done (Phase 19)** | Widget Run… args/env dialog + optional `td-dev` catalog |
 
 ### High Priority Suggestions
@@ -26,15 +29,12 @@
 | ID | Category | Description | Impact | Effort |
 |----|----------|-------------|--------|--------|
 | FEAT-001 | Platform / Maintainability | Bump `targetSdkVersion` 28 → 34/35 + edge-to-edge | High | High |
-| FEAT-008 | Reliability | Terminal session persist + crash recovery | High | High |
 | FEAT-009 | Backup | One-tap backup/restore (`~/repos` manifest + dotfiles) | High | Medium |
-| FEAT-010 | Security | LAN exposure guard + biometric/app lock for Preview/AI | High | Medium |
 
 ### Medium Priority Suggestions
 
 | ID | Category | Description | Impact | Effort |
 |----|----------|-------------|--------|--------|
-| FEAT-013 | Scaffold | `td-scaffold` hardening: `react-ts` default, README/.gitignore, offline cache | Medium | Low |
 | FEAT-014 | Preview | WebView console → logcat + clear-data + desktop/mobile UA toggle | Medium | Low |
 | FEAT-015 | Terminal UX | Theme picker (beyond hacker green) + font size gesture | Medium | Medium |
 | FEAT-016 | Keys | Visual extra-keys editor (drag reorder, import/export) | Medium | Medium |
@@ -115,11 +115,8 @@
   - `td-sync` helper: loop `~/repos/*` → fetch + ff-only pull, summary for widget `git-pull-repos`.
 - **Perf:** Run git off UI thread (already pattern in `mScanExecutor`); cache status 10s.
 
-### FEAT-008 — Session persist + crash recovery (Confidence: 80%)
-- **Files:** `app/.../TermuxActivity.java`, `TermuxService.java`, `terminal/TermuxTerminalSessionServiceClient.java`, `TermuxSessionsListViewController.java`.
-- **Current:** No session restore after process kill / Android 12+ phantom kill `[signal 9]`.
-- **Suggestion:** Persist open sessions (cwd, cmd, title, `~/repos` context) to `SharedPreferences`/JSON on pause; on restart offer "Restore N sessions" snackbar that re-creates shells (not full pty replay — fresh shells in same cwd + history hint). Log phantom-kill signature and link `troubleshooting.md:15`.
-- **Effort high** — needs lifecycle + service testing across OEMs.
+### FEAT-008 — Session persist + crash recovery (Confidence: 80%) — **done Phase 20 (narrowed)**
+- **Shipped:** `SessionSnapshot` (`invapp_session_snapshot`) persists cwd+title; cold-start snackbar **Restore N** → fresh shells via `createTermuxSession`. No pty/scrollback replay. Skips RUN/failsafe/`auto_start_console`.
 
 ### FEAT-009 — One-tap backup / restore (Confidence: 86%)
 - **Files:** `termux-shared/.../file/FileUtils.java:1483` (TODOs on iterate/copy), `app/.../filepicker/TermuxDocumentsProvider.java`, `res/xml/data_extraction_rules.xml:8` (backup TODO).
@@ -127,11 +124,8 @@
 - **Suggestion:** Settings → Backup: export `repos-manifest.json` (remote URLs + branches), `~/.termux/*`, `~/.shortcuts/*`, `extra-keys` + quick-bar prefs to `~/storage/shared/InVxTermux/backup-YYYYMMDD.zip` (requires `termux-setup-storage`). Restore reverses + `td-clone` missing repos. Fix backup rules with explicit `<include>/<exclude>` (exclude `$PREFIX`, `node_modules`, `.git` by default, opt-in).
 - **Security:** Never include tokens (`.npmrc`, `.git-credentials`, `opencode auth.json`) without explicit checkbox + warning.
 
-### FEAT-010 — LAN exposure guard + lock (Confidence: 83%)
-- **Files:** `LocalhostPreviewActivity.java:274-284` (loopback allowlist), `LanShareHelper`, `AiSessionHelper`, `docs/ai.md:40-43`.
-- **Current:** Preview WebView loopback-only (good); `td-ai` binds `0.0.0.0:4000` by default for LAN.
-- **Suggestion:** (1) Pre-Copy-LAN / pre-`td-ai` confirm sheet first time ("Exposes to same Wi-Fi"), (2) optional biometric/app lock for Preview + AI screens (`BiometricPrompt`, `SET` flag), (3) auto-Stop-AI on app background toggle, (4) audit `shouldOverrideUrlLoading` + `cleartext` to ensure no `https→http` downgrade outside localhost.
-- **Why:** Test-key APKs + wildcard bind = LAN neighbor risk on public Wi-Fi.
+### FEAT-010 — LAN exposure guard + lock (Confidence: 83%) — **done Phase 20 (narrowed)**
+- **Shipped:** `AiPrefs` / `opencode-server` default `127.0.0.1`; Copy LAN / QR LAN first-use confirm + don’t-ask-again. **Deferred:** biometric/app lock, auto-Stop-AI on background.
 
 ### FEAT-011 — Copy-last-error + transcript export (Confidence: 90%)
 - **Files:** `AiSessionHelper.java:370-422` (`extractLastErrorSnippet`, `ERROR_LINE` regex), `PreferredPortWatcher`.
@@ -231,11 +225,12 @@
 
 ## Suggested Next Steps (for maintainers)
 
+> Phase 20 shipped FEAT-008 (narrowed) + FEAT-010 (narrowed) → v0.208.0.
 > Phase 19 shipped FEAT-006 / FEAT-012 / FEAT-017 + AI script asset unification.
 > Phase 18 shipped FEAT-003 / FEAT-005. Phase 17 shipped FEAT-004 / FEAT-007.
 
-1. Accept/reject FEAT-001 scope first (targetSdk bump blocks Play + Android 15 work) — branch + device matrix.
-2. Reliability candidates: FEAT-008 (session persist), FEAT-009 (backup/restore), FEAT-010 (LAN guard).
+1. Next reliability: FEAT-009 backup/restore (+ optional FEAT-023 diagnostics zip).
+2. Then FEAT-001 targetSdk 34/35 + edge-to-edge on its own branch + device matrix.
 3. File issues for FEAT-020 emulator FIXMEs individually with xterm vectors.
 
 ## Appendix — Where to Implement

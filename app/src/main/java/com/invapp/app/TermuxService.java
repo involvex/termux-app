@@ -22,6 +22,7 @@ import com.invapp.R;
 import com.invapp.app.event.SystemEventReceiver;
 import com.invapp.app.terminal.TermuxTerminalSessionActivityClient;
 import com.invapp.app.terminal.TermuxTerminalSessionServiceClient;
+import com.invapp.app.utils.SessionSnapshot;
 import com.invapp.shared.termux.plugins.TermuxPluginUtils;
 import com.invapp.shared.data.IntentUtils;
 import com.invapp.shared.net.uri.UriUtils;
@@ -617,6 +618,8 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         if (mTermuxTerminalSessionActivityClient != null)
             mTermuxTerminalSessionActivityClient.termuxSessionListNotifyUpdated();
 
+        persistSessionSnapshot();
+
         updateNotification();
 
         // No need to recreate the activity since it likely just started and theme should already have applied
@@ -653,9 +656,47 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
             // activity in is foreground
             if (mTermuxTerminalSessionActivityClient != null)
                 mTermuxTerminalSessionActivityClient.termuxSessionListNotifyUpdated();
+
+            persistSessionSnapshot();
         }
 
         updateNotification();
+    }
+
+    /**
+     * Write live interactive session cwd/title for cold-start restore after
+     * process death. Skips plugin execution sessions.
+     */
+    public synchronized void persistSessionSnapshot() {
+        List<SessionSnapshot.Entry> entries = new ArrayList<>();
+        for (TermuxSession session : mShellManager.mTermuxSessions) {
+            if (session == null) {
+                continue;
+            }
+            ExecutionCommand command = session.getExecutionCommand();
+            if (command != null && command.isPluginExecutionCommand) {
+                continue;
+            }
+            TerminalSession terminalSession = session.getTerminalSession();
+            if (terminalSession == null) {
+                continue;
+            }
+            String cwd = terminalSession.getCwd();
+            if (cwd == null || cwd.isEmpty()) {
+                if (command != null) {
+                    cwd = command.workingDirectory;
+                }
+            }
+            if (cwd == null || cwd.isEmpty()) {
+                continue;
+            }
+            String title = terminalSession.mSessionName;
+            if (title == null || title.isEmpty()) {
+                title = terminalSession.getTitle();
+            }
+            entries.add(new SessionSnapshot.Entry(cwd, title));
+        }
+        SessionSnapshot.save(this, entries, TermuxConstants.TERMUX_HOME_DIR_PATH);
     }
 
 
