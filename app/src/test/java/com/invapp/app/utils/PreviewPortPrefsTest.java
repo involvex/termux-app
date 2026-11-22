@@ -51,4 +51,17 @@ public class PreviewPortPrefsTest {
         assertTrue(LocalhostPortScanner.isPreferredPort(4096));
         assertFalse(LocalhostPortScanner.isPreferredPort(12345));
     }
+
+    @Test
+    public void shouldRecordConsole_gatesSink() {
+        assertFalse(PreviewPortPrefs.shouldRecordConsole(false));
+        assertTrue(PreviewPortPrefs.shouldRecordConsole(true));
+    }
+
+    @Test
+    public void desktopUserAgent_isNonEmptyChrome() {
+        assertTrue(PreviewPortPrefs.DESKTOP_USER_AGENT.contains("Chrome"));
+        assertTrue(PreviewPortPrefs.DESKTOP_USER_AGENT.contains("Linux"));
+        assertTrue(PreviewPortPrefs.MAX_CONSOLE_LINES > 0);
+    }
 }

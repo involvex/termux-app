@@ -74,6 +74,28 @@ public class TermuxPreferencesFragment extends PreferenceFragmentCompat {
             });
         }
 
+        SwitchPreferenceCompat showConsole = findPreference("preview_show_console");
+        if (showConsole != null) {
+            showConsole.setChecked(PreviewPortPrefs.isShowConsole(context));
+            showConsole.setOnPreferenceChangeListener((preference, newValue) -> {
+                boolean enabled = Boolean.TRUE.equals(newValue);
+                PreviewPortPrefs.setShowConsole(context, enabled);
+                showConsole.setChecked(enabled);
+                return true;
+            });
+        }
+
+        SwitchPreferenceCompat desktopUa = findPreference("preview_desktop_ua");
+        if (desktopUa != null) {
+            desktopUa.setChecked(PreviewPortPrefs.isDesktopUserAgent(context));
+            desktopUa.setOnPreferenceChangeListener((preference, newValue) -> {
+                boolean enabled = Boolean.TRUE.equals(newValue);
+                PreviewPortPrefs.setDesktopUserAgent(context, enabled);
+                desktopUa.setChecked(enabled);
+                return true;
+            });
+        }
+
         configureLaunchPrefs(context);
 
         Preference integratedTools = findPreference("integrated_tools");

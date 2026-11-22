@@ -30,4 +30,16 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory
+        app:key="diagnostics"
+        app:title="@string/title_diagnostics">
+
+        <Preference
+            app:key="export_diagnostics"
+            app:title="@string/title_export_diagnostics"
+            app:summary="@string/summary_export_diagnostics"
+            app:persistent="false" />
+
+    </PreferenceCategory>
+
 </PreferenceScreen>

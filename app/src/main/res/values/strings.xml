@@ -85,6 +85,12 @@
     <string name="action_style_terminal">Style</string>
     <string name="action_toggle_keep_screen_on">Keep screen on</string>
     <string name="action_open_help">Help</string>
+    <string name="title_help">Help</string>
+    <string name="hint_help_search">Filter help pages…</string>
+    <string name="msg_help_page_missing">Help page not found</string>
+    <string name="msg_help_open_link_failed">No app can open that link</string>
+    <string name="action_preview_help">Help</string>
+    <string name="desc_preview_help">Open offline troubleshooting Help</string>
     <string name="action_open_settings">Settings</string>
     <string name="action_open_preview">Preview</string>
     <string name="title_localhost_preview">Localhost Preview</string>
@@ -119,6 +125,12 @@
     <string name="msg_preferred_ports_saved">Preferred ports saved</string>
     <string name="title_notify_preferred_ports">Notify on preferred ports</string>
     <string name="summary_notify_preferred_ports">When a watched port appears while the app is in the background</string>
+    <string name="title_preview_show_console">Show Preview console</string>
+    <string name="summary_preview_show_console">Forward console.log / errors to a sheet and logcat (Debug)</string>
+    <string name="title_preview_desktop_ua">Desktop site</string>
+    <string name="summary_preview_desktop_ua">Use a desktop Chrome user-agent in Preview</string>
+    <string name="title_preview_console">Console</string>
+    <string name="action_preview_console_clear">Clear log</string>
     <string name="notification_channel_preview_ports">Preferred Preview ports</string>
     <string name="notification_channel_preview_ports_desc">Alerts when a preferred localhost port starts listening</string>
     <string name="notification_preview_port_title">Port :%1$d ready</string>
@@ -262,6 +274,14 @@
     <string name="entry_launch_terminal">Terminal</string>
     <string name="title_auto_start_console">Auto-open new console</string>
     <string name="summary_auto_start_console">On launch, create a new terminal session instead of restoring the last one</string>
+    <string name="title_diagnostics">Diagnostics</string>
+    <string name="title_export_diagnostics">Export diagnostics zip</string>
+    <string name="summary_export_diagnostics">Write diag-YYYYMMDD-HHmm.zip (app info, logcat, Bun/OpenCode stamps) under ~/storage/shared/InVxTermux — no secrets</string>
+    <string name="msg_diag_export_confirm">Export a diagnostics zip with app info and a logcat dump? Secrets (.npmrc, OpenCode auth) are omitted. Log Level is not changed.</string>
+    <string name="msg_diag_export_ok">Saved %1$s</string>
+    <string name="msg_diag_export_failed">Diagnostics export failed</string>
+    <string name="msg_diag_working">Exporting diagnostics…</string>
+
     <string name="title_backup">Backup</string>
     <string name="summary_backup">Export or restore repos manifest, ~/.termux, shortcuts, and prefs</string>
     <string name="title_backup_status">Status</string>

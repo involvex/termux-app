@@ -1,0 +1,41 @@
+# Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `Unknown signal 31 (SIGSYS)` on Bun | Use bundled `$PREFIX/libexec/bun`; never `bun.sh/install` or `bun upgrade`. Check with `bun-upgrade --check` / Settings → **Bun**. Delete `node_modules` + lockfile if a PC lockfile pinned `linux-*` natives, then `bun i` on the phone |
+| Preferred-port snackbar only / no background alert | Settings → **Notify on preferred ports** (default on). Notification deep-links Preview when a watched port appears while the app is backgrounded |
+| `/usr/bin/env: bad interpreter` on npm/npx | Open a **new** session after update (redirector rewrites shebangs). `pkg install nodejs` if npm is missing |
+| `Permission denied` on `tsc` / bins | Project is under shared storage (**noexec**). Move to `~/repos` |
+| OpenJDK install stuck / `java` dlopen / Bad system call | Run `td-jdk-setup` (installs recommends incl. `libandroid-shmem`). `jdk-doctor` for details. See [OpenJDK 17](openjdk.md) |
+| `dpkg: corrupt info database format file …/info/format` | Older helpers damaged `format` (must be `1\n`). Reopen app or `ivx-fix-dpkg-scripts`, or `printf '1\n' > "$PREFIX/var/lib/dpkg/info/format"` |
+| `dpkg: too-long line or missing newline in …/*.triggers` | Corrupt `info/*.triggers` (often a glued shebang from older fixers). Run `ivx-fix-dpkg-scripts`, then `rm -f "$PREFIX/var/lib/dpkg/info/<pkg>.triggers" && pkg install -f <pkg>` |
+| `pd run` / proot → guest `libc.so` / host `libtalloc` / `libandroid-shmem` / `execve(bash)` ENOENT | Stage host deps into `$PREFIX/libexec/proot-libs` (not full `$PREFIX/lib`); wrapper shebang `#!/system/bin/sh` + `LD_PRELOAD=`. After `pkg reinstall proot`, rewrap (ELF overwrote `bin/proot`). Then `pd reset ubuntu && pd install ubuntu` if rootfs is incomplete. |
+| `td-resource-linux --run` → `libandroid-support` / `libtalloc` / `libandroid-shmem` | Same proot-libs staging; `export LD_LIBRARY_PATH=$PREFIX/lib` for host shell; reopen app to rewrite `run.sh` |
+| Host bash → `libandroid-support` / `libreadline` not found after proot | `LD_LIBRARY_PATH` was left as `libexec/proot-libs` only. Run `export LD_LIBRARY_PATH=$PREFIX/lib` (new sessions auto-heal via `profile.d/invapp.sh`) |
+| `pd login kali-rolling` → `execve("/usr/bin/bash")` ENOENT | Unsupported on this fork. Use `td-proot-nethunter setup` (kali.download), not Hub/`pd` |
+| Global tool clutter (pkg / cargo / bun / npm / pip / uv) | `ivx-cleanup` interactive menu |
+| Low disk / find what eats space | `ivx-disk-analyze` (overview) · `ivx-disk-analyze guests` · `ivx-disk-analyze large ~/repos` |
+| OpenCode `Permission denied` / LIBC / postinstall / SIGSYS | Re-run `opencode-setup` (official V2 tarball + glibc). Do not `unset LD_PRELOAD` |
+| OpenCode `AI_APICallError` / “typo in the url or port” | Local `:4000` OK; Zen/provider broken. `rm -rf ~/.cache/opencode`, re-auth, seed glibc DNS/CA, `opencode-setup` / Settings → **AI Doctor** → Repair, retry from `~/repos/…` (V1 only: fix `@opencode-ai/plugin@local` → `latest`) |
+| OpenCode `getifaddrs returned an error` | Non-fatal when binding `0.0.0.0`; V2 has no `--mdns`. Default is already `127.0.0.1`. Preview uses `127.0.0.1:4000` / `/api/info` |
+| Preview blank / wrong port | OpenCode is `:4000` — there is no `/api` on `:5000`. Drawer **AI** opens Preview after health; tap Reload if early |
+| `opencode-v2: missing …/.opencode/bin/opencode` | Remove legacy shims: `rm -f $PREFIX/bin/opencode-v2*`; use `opencode` + `opencode-server` / `td-ai` |
+| Tab completion missing for bun/pkg/npm | Open a **new** session after app update. Optional: `pkg install bash-completion`. Completers live under `$PREFIX/etc/bash_completion.d/` |
+| Banner missing on login | `ivx-configure status` — hook must exist and the shell must be interactive (`bash -lc` and `ssh host cmd` are silent by design). `IVX_FORCE`-free repro: `ivx-configure banner preview`. Reopen the app if the hook is missing |
+| Banner shows garbled blocks / wraps | Terminal too narrow for `pixelfont`; it falls back automatically. Pin it: `ivx-configure banner style mini` (or `plain`) |
+| Banner appears in scripts / widgets / ssh commands | It should not — the hook requires `-t 1` + interactive `$-`. Check `ivx-configure doctor` for a stray `banner.sh` edit, and use `INVAPP_NO_BANNER=1` |
+| `ivx-configure: PREFIX is not set` | Run it inside Termux (`PREFIX` is exported by the shell). `bash ~/…/ivx-configure` outside the app has no prefix |
+| `ivx-configure banner text` says figlet is missing | `pkg install figlet`, or pass `--font-file /path/to/font.flf`. Built-in styles need nothing |
+| Custom banner art did not take effect | Style must be `custom` and `${XDG_CONFIG_HOME:-~/.config}/invapp/art.txt` must be non-empty. `ivx-configure banner show` then `banner preview` |
+| Config edit broke the banner | The renderer ignores source errors; `ivx-configure doctor` names the file, `ivx-configure reset` restores defaults |
+| `ivx-configure completions all` skips tools | Generators only run for installed binaries — the table marks them `no`. Install the tool first, then re-run |
+| Doctor `FAIL` on a container | Android-only checks (redirector, `termux-api`) are informational when `INVAPP_ON_DEVICE=0`. `--strict` in CI should allow those |
+| `ivx-doctor` says the banner hook is missing | Reopen the app (it reseeds on start) or run `td-upgrade` on device. `ivx-configure` and `ivx-doctor` are re-written every launch |
+| Extra keys only show ESC/nav | Swipe the key bar **left/right** for workflow page (pull / bun i / …). **Tools → Customize keys…** or **Settings → Customize keybinds** |
+| Extra keys show weird symbols (⎈ ⎋ ⇱) | `extra-keys-style=all` — set `extra-keys-style=none` or run **Customize keybinds → Reset** (writes text HOME/END/CTRL) |
+| Green-bar `ls` folders | Hacker theme ANSI clash — new session or replace `~/.termux/colors.properties` |
+| Phantom kill `[signal 9]` (Android 12+) | OS phantom/CPU killer — see upstream [#2366](https://github.com/termux/termux-app/issues/2366). On next cold start with no live sessions, tap **Restore** on the snackbar to reopen shells in the last cwds (history is not kept) |
+| Plugin install fail | Same signature + `sharedUserId` source only; uninstall all, reinstall set |
+
+More agent-oriented notes live in [`AGENTS.md`](https://github.com/involvex/termux-app/blob/master/AGENTS.md)
+in the repository.

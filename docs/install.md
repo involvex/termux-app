@@ -4,6 +4,9 @@ Install **only** from this fork’s
 [GitHub Releases](https://github.com/involvex/termux-app/releases)
 (first release: **v0.200.0**).
 
+In the app, drawer **Help** opens these docs offline (no network). Preview
+error pages also link to Troubleshooting.
+
 ## Which APK?
 
 For Android **7+**, pick an `apt-android-7` build:
