@@ -34,7 +34,7 @@
 
 | ID | Category | Description | Impact | Effort |
 |----|----------|-------------|--------|--------|
-| FEAT-001 | Platform / Maintainability | Bump `targetSdkVersion` 28 → 34/35 + edge-to-edge | High | High |
+| FEAT-001 | Platform / Maintainability | Bump `targetSdkVersion` 28 → 34 + edge-to-edge (Phase 25) | High | High |
 
 ### Medium Priority Suggestions
 
@@ -58,17 +58,10 @@
 
 ## Details
 
-### FEAT-001 — Target SDK 28 → 34/35 + edge-to-edge (Confidence: 95%)
-- **Files:** `app/build.gradle:45-46`, `gradle.properties:18-21`, `app/src/main/AndroidManifest.xml`, `termux-shared/.../view/KeyboardUtils.java:108`, `app/.../terminal/io/FullScreenWorkAround.java`, `app/.../TermuxService.java`.
-- **Current:** `minSdk 21`, `targetSdk 28`, `compileSdk 36`. AGP `9.4.0`, NDK `29.0.14206865`. `TODO: flag deprecated for API 30, use WindowInset API`.
-- **Problem:** Play requires target ~34+; Android 12+ phantom-killer / foreground-service types, 13+ photo picker / `getifaddrs` noise, 15 edge-to-edge enforcement all hit a target-28 app. Back/nav + keyboard insets are fragile.
-- **Suggestion:**
-  1. Bump in a branch: `targetSdk 34` (then 35), test `TermuxService` foreground types (`dataSync`/`connectedDevice` as needed), `RUN_COMMAND` + Boot receiver `RECEIVER_EXPORTED` flags, `POST_NOTIFICATIONS` runtime ask.
-  2. Migrate `KeyboardUtils` + `FullScreenWorkAround` to `WindowInsetsCompat` / `WindowInsetsControllerCompat`; enable edge-to-edge (`enableEdgeToEdge()`) in `TermuxActivity` + `LocalhostPreviewActivity` + `SettingsActivity`.
-  3. Migrate `onBackPressed` deprecation in `LocalhostPreviewActivity:297` to `OnBackPressedDispatcher`.
-  4. Full matrix: `assembleDebug` × 4 ABIs + `:app:assembleDebug`, `./gradlew test lint`, install on Android 8 / 12 / 14 / 15, check Preview, AI `:4000`, Widget, API screenshot.
-- **Security/perf:** Reduces background-kill + permission regressions; no hot-path cost.
-- **Keep:** `minSdk 21` path still tested; keep `apt-android-5` deprecated note.
+### FEAT-001 — Target SDK 28 → 34 + edge-to-edge (Confidence: 95%) — **Phase 25**
+- **Files:** `gradle.properties`, `AndroidManifest.xml`, `TermuxService`, `RunCommandService`, `KeyboardUtils`, `FullScreenWorkAround`, activities.
+- **Shipped (narrowed to 34):** `targetSdk 34`, FGS `specialUse`, `POST_NOTIFICATIONS`, immutable PendingIntents, edge-to-edge + IME insets, OnBackPressedDispatcher. Legacy storage flags kept for minSdk 21; target-34 scoped-storage still relies on `termux-setup-storage` / MANAGE_EXTERNAL_STORAGE where granted.
+- **Deferred:** bump to 35, full storage-model rewrite, biometric lock.
 
 ### FEAT-002 — Preview history + favorites + auto-scan (Confidence: 90%)
 - **Files:** `app/.../activities/LocalhostPreviewActivity.java:137-184`, `app/.../utils/LocalhostPortScanner.java`, `app/.../utils/PreferredPortWatcher.java`, `res/layout/activity_localhost_preview.xml`.
@@ -229,8 +222,8 @@
 - Visual extra-keys drag reorder, presets, import/export (FEAT-016)
 - `targetSdk 34` + edge-to-edge / FGS types / `POST_NOTIFICATIONS` (FEAT-001)
 
-1. Chrome polish: FEAT-015 themes + FEAT-016 drag extra-keys (own PR; device verify).
-2. Platform: FEAT-001 `targetSdk 34` + edge-to-edge on its own branch + device matrix.
+1. Device matrix for FEAT-001 / Phase 25: Android 8 / 12 / 14 / 15 (sessions, Preview, AI, Widget, keyboard).
+2. Optional later: targetSdk 35, FEAT-018 onboarding, FEAT-019 deps audit.
 3. File issues for FEAT-020 emulator FIXMEs individually with xterm vectors.
 
 ## Appendix — Where to Implement

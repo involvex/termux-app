@@ -6,6 +6,8 @@
 | Preferred-port snackbar only / no background alert | Settings → **Notify on preferred ports** (default on). Notification deep-links Preview when a watched port appears while the app is backgrounded |
 | `/usr/bin/env: bad interpreter` on npm/npx | Open a **new** session after update (redirector rewrites shebangs). `pkg install nodejs` if npm is missing |
 | `Permission denied` on `tsc` / bins | Project is under shared storage (**noexec**). Move to `~/repos` |
+| No session / port notification on Android 13+ | Allow notifications when prompted (`POST_NOTIFICATIONS`). Settings → Apps → InVxTermux → Notifications |
+| Shared storage / `~/storage/shared` empty after update | `targetSdk 34` still uses legacy + `MANAGE_EXTERNAL_STORAGE` where granted — run `termux-setup-storage` and grant All files access if the OEM prompts |
 | OpenJDK install stuck / `java` dlopen / Bad system call | Run `td-jdk-setup` (installs recommends incl. `libandroid-shmem`). `jdk-doctor` for details. See [OpenJDK 17](openjdk.md) |
 | `dpkg: corrupt info database format file …/info/format` | Older helpers damaged `format` (must be `1\n`). Reopen app or `ivx-fix-dpkg-scripts`, or `printf '1\n' > "$PREFIX/var/lib/dpkg/info/format"` |
 | `dpkg: too-long line or missing newline in …/*.triggers` | Corrupt `info/*.triggers` (often a glued shebang from older fixers). Run `ivx-fix-dpkg-scripts`, then `rm -f "$PREFIX/var/lib/dpkg/info/<pkg>.triggers" && pkg install -f <pkg>` |
