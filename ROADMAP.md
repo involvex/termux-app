@@ -289,10 +289,17 @@ https://github.com/involvex/termux-app
   `proot-libs` for `td-resource-linux`
 - **Bun messaging** — `td-resource-bun` is read-only; APK pin only
 
+### 24. Theme + extra-keys polish (in progress)
+
+- **FEAT-015** — Settings theme picker (Hacker / Matcha / Paper / System) +
+  font-size stepper (12sp floor); Reset to Hacker v2
+- **FEAT-016** — Visual page-2 extra-keys editor (drag reorder, presets,
+  import/export under `InVxTermux/keys/`); chrome only (no ExtraKeysView drag)
+
 ### Planned for 0.211.0 (stub)
 
-- Theme picker + font stepper (FEAT-015) and visual extra-keys reorder
-  (FEAT-016), then `targetSdk 34` + edge-to-edge (FEAT-001) on its own branch
+- Phase 24 themes / extra-keys, then `targetSdk 34` + edge-to-edge (FEAT-001)
+  on its own branch
 
 ## Non-goals (for now)
 

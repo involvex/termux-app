@@ -333,8 +333,33 @@
     <string name="msg_widget_scripts_running">Running %1$s…</string>
     <string name="title_customize_extra_keys">Extra keys</string>
     <string name="msg_customize_extra_keys">Pick workflow keys (page 2). Page 1 is always ESC/HOME/CTRL/… as text. Swipe the key bar left/right for page 2. Apply writes termux.properties (style=none).</string>
+    <string name="msg_extra_keys_drag_hint">Drag ☰ to reorder. Check keys to show on page 2. Page 1 stays ESC/HOME/CTRL as text.</string>
+    <string name="label_drag_handle">☰</string>
+    <string name="action_extra_keys_presets">Presets</string>
+    <string name="action_extra_keys_export">Export</string>
+    <string name="action_extra_keys_import">Import</string>
+    <string name="preset_extra_keys_minimal">Minimal</string>
+    <string name="preset_extra_keys_bun_dev">Bun Dev</string>
+    <string name="preset_extra_keys_ai">AI</string>
     <string name="msg_extra_keys_updated">Extra keys updated — swipe the bar for workflow keys</string>
+    <string name="msg_extra_keys_exported">Exported to %1$s</string>
+    <string name="msg_extra_keys_imported">Imported — tap OK to save</string>
     <string name="error_extra_keys_write_failed">Could not write termux.properties</string>
+    <string name="error_extra_keys_storage">Shared storage not ready — run termux-setup-storage</string>
+    <string name="error_extra_keys_export">Could not export keys JSON</string>
+    <string name="error_extra_keys_import">Could not import keys JSON</string>
+    <string name="error_extra_keys_import_missing">No keys file — export first (InVxTermux/keys/)</string>
+    <string name="termux_terminal_view_theme_title">Terminal theme</string>
+    <string name="termux_terminal_view_theme_summary">Hacker / Matcha / Paper / System (writes colors.properties)</string>
+    <string name="termux_terminal_view_font_size_title">Font size</string>
+    <string name="termux_terminal_view_font_size_summary">Current: %1$d (pinch also works)</string>
+    <string name="termux_terminal_view_font_smaller">Smaller</string>
+    <string name="termux_terminal_view_font_larger">Larger</string>
+    <string name="termux_terminal_view_theme_reset_title">Reset to Hacker v2</string>
+    <string name="termux_terminal_view_theme_reset_summary">Recopy stock palette and night-mode=true</string>
+    <string name="msg_theme_applied">Theme applied</string>
+    <string name="error_theme_apply">Could not apply theme: %1$s</string>
+    <string name="msg_theme_custom_confirm">colors.properties has no InvApp mark. Overwrite with this theme?</string>
     <string name="title_right_drawer_tools">Tools</string>
     <string name="action_paste">Paste</string>
     <string name="sheet_section_clipboard">Clipboard</string>

@@ -40,8 +40,8 @@
 
 | ID | Category | Description | Impact | Effort |
 |----|----------|-------------|--------|--------|
-| FEAT-015 | Terminal UX | Theme picker (beyond hacker green) + font size gesture | Medium | Medium |
-| FEAT-016 | Keys | Visual extra-keys editor (drag reorder, import/export) | Medium | Medium |
+| FEAT-015 | Terminal UX | Theme picker + font stepper (Phase 24) | Medium | Medium |
+| FEAT-016 | Keys | Visual extra-keys editor drag/presets/import (Phase 24) | Medium | Medium |
 | FEAT-018 | Onboarding | First-launch checklist wizard | Medium | Medium |
 | FEAT-019 | Deps | Dependabot + AGP/JDK audit, `commons-io:2.5` cap review | Medium | Low |
 

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <TextView
+        android:id="@+id/extra_keys_editor_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="8dp"
+        android:paddingBottom="4dp"
+        android:text="@string/msg_extra_keys_drag_hint"
+        android:textAppearance="?android:attr/textAppearanceSmall" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/extra_keys_editor_list"
+        android:layout_width="match_parent"
+        android:layout_height="280dp"
+        android:overScrollMode="ifContentScrolls" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingTop="4dp">
+
+        <Button
+            android:id="@+id/extra_keys_btn_presets"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/action_extra_keys_presets" />
+
+        <Button
+            android:id="@+id/extra_keys_btn_export"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/action_extra_keys_export" />
+
+        <Button
+            android:id="@+id/extra_keys_btn_import"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/action_extra_keys_import" />
+    </LinearLayout>
+</LinearLayout>
