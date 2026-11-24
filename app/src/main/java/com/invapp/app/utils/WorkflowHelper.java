@@ -503,9 +503,7 @@ public final class WorkflowHelper {
                 "status", "--porcelain=v1", "-b"
             );
             pb.directory(projectDir);
-            pb.environment().put("PATH", TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH);
-            pb.environment().put("HOME", TermuxConstants.TERMUX_HOME_DIR_PATH);
-            pb.environment().put("PREFIX", TermuxConstants.TERMUX_PREFIX_DIR_PATH);
+            putTermuxNativeEnv(pb);
             pb.redirectErrorStream(true);
             Process p = pb.start();
             StringBuilder out = new StringBuilder();
@@ -541,8 +539,7 @@ public final class WorkflowHelper {
                 "branch", "--format=%(refname:short)"
             );
             pb.directory(projectDir);
-            pb.environment().put("PATH", TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH);
-            pb.environment().put("HOME", TermuxConstants.TERMUX_HOME_DIR_PATH);
+            putTermuxNativeEnv(pb);
             pb.redirectErrorStream(true);
             Process p = pb.start();
             List<String> names = new ArrayList<>();
@@ -636,6 +633,19 @@ public final class WorkflowHelper {
         } catch (NumberFormatException e) {
             return 0;
         }
+    }
+
+    /**
+     * Env for forked native Termux binaries launched from the app process
+     * (Repos picker git status). Without {@code LD_LIBRARY_PATH=$PREFIX/lib},
+     * Android's linker fails with {@code libpcre2-8.so not found} on git.
+     */
+    private static void putTermuxNativeEnv(@NonNull ProcessBuilder pb) {
+        Map<String, String> env = pb.environment();
+        env.put("PATH", TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH);
+        env.put("HOME", TermuxConstants.TERMUX_HOME_DIR_PATH);
+        env.put("PREFIX", TermuxConstants.TERMUX_PREFIX_DIR_PATH);
+        env.put("LD_LIBRARY_PATH", TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH);
     }
 
     private static void waitBriefly(@NonNull Process p, int seconds) {

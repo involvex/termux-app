@@ -11,6 +11,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -1825,17 +1826,53 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void showStylingDialog() {
         Intent stylingIntent = new Intent();
-        stylingIntent.setClassName(TermuxConstants.TERMUX_STYLING_PACKAGE_NAME, TermuxConstants.TERMUX_STYLING_APP.TERMUX_STYLING_ACTIVITY_NAME);
+        stylingIntent.setClassName(TermuxConstants.TERMUX_STYLING_PACKAGE_NAME,
+            TermuxConstants.TERMUX_STYLING_APP.TERMUX_STYLING_ACTIVITY_NAME);
         try {
             startActivity(stylingIntent);
-        } catch (ActivityNotFoundException | IllegalArgumentException e) {
-            // The startActivity() call is not documented to throw IllegalArgumentException.
-            // However, crash reporting shows that it sometimes does, so catch it here.
-            new AlertDialog.Builder(this).setMessage(getString(R.string.error_styling_not_installed))
-                .setPositiveButton(R.string.action_styling_install,
-                    (dialog, which) -> ActivityUtils.startActivity(this, new Intent(Intent.ACTION_VIEW, Uri.parse(TermuxConstants.TERMUX_STYLING_FDROID_PACKAGE_URL))))
-                .setNegativeButton(android.R.string.cancel, null).show();
+            return;
+        } catch (ActivityNotFoundException | IllegalArgumentException ignored) {
+            // Try the modern main activity name used by newer Termux:Styling builds.
         }
+        try {
+            Intent main = new Intent();
+            main.setClassName(TermuxConstants.TERMUX_STYLING_PACKAGE_NAME,
+                TermuxConstants.TERMUX_STYLING_APP.TERMUX_STYLING_MAIN_ACTIVITY_NAME);
+            startActivity(main);
+            return;
+        } catch (ActivityNotFoundException | IllegalArgumentException e) {
+            // Fall through to install / wrong-package dialog.
+        }
+
+        // Stock Termux:Styling cannot shareUserId / signature with this fork.
+        final String stockStylingPackage = "com.termux.styling";
+        boolean stockInstalled = false;
+        try {
+            getPackageManager().getPackageInfo(stockStylingPackage, 0);
+            stockInstalled = true;
+        } catch (PackageManager.NameNotFoundException ignored) {
+            // not installed
+        }
+        String message;
+        if (stockInstalled) {
+            message = getString(R.string.error_styling_stock_installed,
+                TermuxConstants.TERMUX_STYLING_APP_NAME,
+                stockStylingPackage,
+                TermuxConstants.TERMUX_STYLING_PACKAGE_NAME);
+        } else {
+            message = getString(R.string.error_styling_not_installed,
+                TermuxConstants.TERMUX_STYLING_APP_NAME,
+                TermuxConstants.TERMUX_STYLING_PACKAGE_NAME);
+        }
+        // F-Droid only has stock Styling — point at this fork's GitHub Releases.
+        Uri installUri = Uri.parse(TermuxConstants.TERMUX_GITHUB_REPO_URL + "/releases");
+        new AlertDialog.Builder(this)
+            .setMessage(message)
+            .setPositiveButton(R.string.action_styling_install,
+                (dialog, which) -> ActivityUtils.startActivity(this,
+                    new Intent(Intent.ACTION_VIEW, installUri)))
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
     }
     private void toggleKeepScreenOn() {
         if (mTerminalView.getKeepScreenOn()) {

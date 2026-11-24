@@ -205,9 +205,12 @@ public final class BackupHelper {
             ProcessBuilder pb = new ProcessBuilder(
                 gitBin.getAbsolutePath(), "remote", "get-url", "origin");
             pb.directory(projectDir);
+            // Renamed-fork apt binaries need $PREFIX/lib (libpcre2-8.so etc.).
             pb.environment().put("PATH", TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH);
             pb.environment().put("HOME", TermuxConstants.TERMUX_HOME_DIR_PATH);
             pb.environment().put("PREFIX", TermuxConstants.TERMUX_PREFIX_DIR_PATH);
+            pb.environment().put("LD_LIBRARY_PATH",
+                TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH);
             pb.redirectErrorStream(true);
             Process p = pb.start();
             StringBuilder out = new StringBuilder();
