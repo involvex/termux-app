@@ -28,12 +28,17 @@ package logic here. Docs: https://involvex.github.io/termux-app/
 
 Key shared entry points:
 
-- `termux-shared/.../com/termux/shared/termux/TermuxConstants.java` — package
+- `termux-shared/.../com/invapp/shared/termux/TermuxConstants.java` — package
   names, `$PREFIX`, forking guide (read its javadoc before renaming anything).
+  `TERMUX_PACKAGE_NAME` = `applicationId` (`com.involvex.termux_app`);
+  `TERMUX_APP_JAVA_PACKAGE_NAME` = AGP `namespace` (`com.invapp`) for class
+  FQCNs (`RunCommandService`, `TermuxActivity`, …).
 - `app/src/main/cpp/` — `termux-bootstrap.c` + `bun-bootstrap.c` with
   `.incbin` zips, built via `app/src/main/cpp/Android.mk` (`libinvapp-bun`,
   redirector `libinvapp-redirector.so`).
 - `app/build.gradle` — version, variants, bootstrap/Bun download tasks.
+- `docs/run-command.md` — RUN_COMMAND intent for this fork + **copy-paste
+  agent brief** for other repos that drive the phone via `adb` / plugins.
 
 ### This fork — InVxTermux / Terminal Dev (`com.involvex.termux_app`)
 
@@ -562,6 +567,15 @@ termux-app/
 - **InVx Terminal Widget** (`com.involvex.termux_app.terminalwidget`) —
   `:termux-terminal-widget` (gardockt fork): command-output home widget via
   `RUN_COMMAND` (not classic Termux:Widget).
+- **RUN_COMMAND for agents / other projects:** never use stock `com.termux`
+  names. Package `com.involvex.termux_app`, service class
+  `com.invapp.app.RunCommandService`, extras prefix
+  `com.involvex.termux_app.RUN_COMMAND_*`, files under
+  `/data/data/com.involvex.termux_app/files`, cwd prefer `~/repos`, require
+  `allow-external-apps=true`. Full schema + **copy-paste AGENTS block**:
+  `docs/run-command.md` / https://involvex.github.io/termux-app/run-command/
+  Agent skills (any project): `ivx-termux-setup` + `ivx-termux-api` under
+  `skills/` (also install to `~/.agents/skills/`).
 - Variants: `apt-android-7` (primary) vs `apt-android-5` (deprecated). Never
   mix bootstrap zips across variants — app crashes at startup
   (`TermuxBootstrap.PackageVariant`).
@@ -643,7 +657,7 @@ Manual:
 - Upstream: https://github.com/termux/termux-app · Wiki: https://wiki.termux.com/wiki/
 - This fork: https://github.com/involvex/termux-app · Docs: https://involvex.github.io/termux-app/
 - Packages: https://github.com/termux/termux-packages · File layout: https://github.com/termux/termux-packages/wiki/Termux-file-system-layout
-- `RUN_COMMAND` intent: https://github.com/termux/termux-app/wiki/RUN_COMMAND-Intent · Libraries: https://github.com/termux/termux-app/wiki/Termux-Libraries
+- `RUN_COMMAND` (this fork): https://involvex.github.io/termux-app/run-command/ · `docs/run-command.md` (agent copy-paste block) · Upstream wiki (stock `com.termux` names only): https://github.com/termux/termux-app/wiki/RUN_COMMAND-Intent · Libraries: https://github.com/termux/termux-app/wiki/Termux-Libraries
 - Community: https://reddit.com/r/termux · Matrix: `#termux_termux:gitter.im`, `#termux_dev:gitter.im` · https://twitter.com/termuxdevs · support@termux.dev
 - Security (this fork): [SECURITY.md](SECURITY.md) · Upstream: https://termux.dev/security
 - Terminal refs: https://invisible-island.net/xterm/ctlseqs/ctlseqs.html · https://vt100.net/

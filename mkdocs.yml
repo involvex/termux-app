@@ -39,6 +39,7 @@ nav:
   - Install: install.md
   - First-run setup: configure.md
   - Phone + PC workflow: workflow.md
+  - RUN_COMMAND API: run-command.md
   - AI helper: ai.md
   - Cursor Agent: cursor-agent.md
   - OpenJDK 17: openjdk.md

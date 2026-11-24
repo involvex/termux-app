@@ -12,10 +12,22 @@ import java.util.Formatter;
 import java.util.List;
 
 /*
- * Version: v0.53.0
+ * Version: v0.54.0
  * SPDX-License-Identifier: MIT
  *
  * Changelog
+ *
+ * - 0.54.0 (2026-03-24)
+ *      - Added `TERMUX_APP_JAVA_PACKAGE_NAME` (`com.invapp`) for AGP `namespace`
+ *          / Java class FQCNs (distinct from `applicationId`
+ *          `com.involvex.termux_app`).
+ *      - Fixed `TERMUX_APP.BUILD_CONFIG_CLASS_NAME`,
+ *          `TERMUX_APP.TERMUX_ACTIVITY_NAME`, `TERMUX_SETTINGS_ACTIVITY_NAME`,
+ *          `TERMUX_SERVICE_NAME`, `RUN_COMMAND_SERVICE_NAME`, and file-receiver
+ *          class names to use the Java package (plugins were targeting the
+ *          wrong component after the applicationId rename).
+ *      - Pointed `RUN_COMMAND_SERVICE.RUN_COMMAND_API_HELP_URL` at this fork's
+ *          docs (`…/run-command/`) instead of a missing wiki page.
  *
  * - 0.1.0 (2021-03-08)
  *      - Initial Release.
@@ -355,6 +367,12 @@ public final class TermuxConstants {
     public static final String TERMUX_APP_NAME = "InVxTermux"; // Default: "InVxTermux"
     /** Termux package name */
     public static final String TERMUX_PACKAGE_NAME = "com.involvex.termux_app"; // Default: "com.involvex.termux_app"
+    /**
+     * Java / AGP {@code namespace} for classes in the main app module.
+     * Distinct from {@link #TERMUX_PACKAGE_NAME} ({@code applicationId}).
+     * Use for {@code ComponentName} / {@code setClassName} class FQCNs.
+     */
+    public static final String TERMUX_APP_JAVA_PACKAGE_NAME = "com.invapp"; // Default: "com.invapp"
     /** Termux GitHub repo name */
     public static final String TERMUX_GITHUB_REPO_NAME = "termux-app"; // Default: "termux-app"
     /** Termux GitHub repo url */
@@ -930,17 +948,17 @@ public final class TermuxConstants {
 
 
         /** Termux app BuildConfig class name */
-        public static final String BUILD_CONFIG_CLASS_NAME = TERMUX_PACKAGE_NAME + ".BuildConfig"; // Default: "com.invapp.BuildConfig"
+        public static final String BUILD_CONFIG_CLASS_NAME = TERMUX_APP_JAVA_PACKAGE_NAME + ".BuildConfig"; // Default: "com.invapp.BuildConfig"
 
         /** Termux app FileShareReceiverActivity class name */
-        public static final String FILE_SHARE_RECEIVER_ACTIVITY_CLASS_NAME = TERMUX_PACKAGE_NAME + ".app.api.file.FileShareReceiverActivity"; // Default: "com.invapp.app.api.file.FileShareReceiverActivity"
+        public static final String FILE_SHARE_RECEIVER_ACTIVITY_CLASS_NAME = TERMUX_APP_JAVA_PACKAGE_NAME + ".app.api.file.FileShareReceiverActivity"; // Default: "com.invapp.app.api.file.FileShareReceiverActivity"
 
         /** Termux app FileViewReceiverActivity class name */
-        public static final String FILE_VIEW_RECEIVER_ACTIVITY_CLASS_NAME = TERMUX_PACKAGE_NAME + ".app.api.file.FileViewReceiverActivity"; // Default: "com.invapp.app.api.file.FileViewReceiverActivity"
+        public static final String FILE_VIEW_RECEIVER_ACTIVITY_CLASS_NAME = TERMUX_APP_JAVA_PACKAGE_NAME + ".app.api.file.FileViewReceiverActivity"; // Default: "com.invapp.app.api.file.FileViewReceiverActivity"
 
 
         /** Termux app core activity name. */
-        public static final String TERMUX_ACTIVITY_NAME = TERMUX_PACKAGE_NAME + ".app.TermuxActivity"; // Default: "com.invapp.app.TermuxActivity"
+        public static final String TERMUX_ACTIVITY_NAME = TERMUX_APP_JAVA_PACKAGE_NAME + ".app.TermuxActivity"; // Default: "com.invapp.app.TermuxActivity"
 
         /**
          * Termux app core activity.
@@ -974,14 +992,14 @@ public final class TermuxConstants {
 
 
         /** Termux app settings activity name. */
-        public static final String TERMUX_SETTINGS_ACTIVITY_NAME = TERMUX_PACKAGE_NAME + ".app.activities.SettingsActivity"; // Default: "com.invapp.app.activities.SettingsActivity"
+        public static final String TERMUX_SETTINGS_ACTIVITY_NAME = TERMUX_APP_JAVA_PACKAGE_NAME + ".app.activities.SettingsActivity"; // Default: "com.invapp.app.activities.SettingsActivity"
 
 
 
 
 
         /** Termux app core service name. */
-        public static final String TERMUX_SERVICE_NAME = TERMUX_PACKAGE_NAME + ".app.TermuxService"; // Default: "com.invapp.app.TermuxService"
+        public static final String TERMUX_SERVICE_NAME = TERMUX_APP_JAVA_PACKAGE_NAME + ".app.TermuxService"; // Default: "com.invapp.app.TermuxService"
 
         /**
          * Termux app core service.
@@ -1124,16 +1142,16 @@ public final class TermuxConstants {
 
 
 
-        /** Termux app run command service name. */
-        public static final String RUN_COMMAND_SERVICE_NAME = TERMUX_PACKAGE_NAME + ".app.RunCommandService"; // Termux app service to receive commands from 3rd party apps "com.invapp.app.RunCommandService"
+        /** Termux app run command service name (Java FQCN; pair with {@link #TERMUX_PACKAGE_NAME} in ComponentName). */
+        public static final String RUN_COMMAND_SERVICE_NAME = TERMUX_APP_JAVA_PACKAGE_NAME + ".app.RunCommandService"; // Default: "com.invapp.app.RunCommandService"
 
         /**
          * Termux app run command service to receive commands sent by 3rd party apps.
          */
         public static final class RUN_COMMAND_SERVICE {
 
-            /** Termux RUN_COMMAND Intent help url */
-            public static final String RUN_COMMAND_API_HELP_URL = TERMUX_GITHUB_WIKI_REPO_URL + "/RUN_COMMAND-Intent"; // Default: "https://github.com/termux/termux-app/wiki/RUN_COMMAND-Intent"
+            /** Termux RUN_COMMAND Intent help url (this fork's docs; stock wiki uses {@code com.termux} names) */
+            public static final String RUN_COMMAND_API_HELP_URL = TERMUX_SITE_URL + "/run-command/"; // Default: "https://involvex.github.io/termux-app/run-command/"
 
 
             /** Intent action to execute command with RUN_COMMAND_SERVICE */

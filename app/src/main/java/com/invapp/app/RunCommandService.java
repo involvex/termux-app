@@ -32,7 +32,8 @@ import com.invapp.shared.shell.command.ExecutionCommand.Runner;
  * plugins that contains info on command execution and forwards the extras to {@link TermuxService}
  * for the actual execution.
  *
- * Check https://github.com/termux/termux-app/wiki/RUN_COMMAND-Intent for more info.
+ * Fork docs (package/paths): https://involvex.github.io/termux-app/run-command/
+ * Upstream semantics: https://github.com/termux/termux-app/wiki/RUN_COMMAND-Intent
  */
 public class RunCommandService extends Service {
 

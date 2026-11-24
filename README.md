@@ -65,6 +65,10 @@ source. Uninstall any other Termux / InVxTermux builds before switching sources
 - **InVx Terminal Widget** (`com.involvex.termux_app.terminalwidget`) —
   `:termux-terminal-widget` (command-output home widget). Grant **RUN_COMMAND**,
   open the app once, then add the widget. Not the same as classic Termux:Widget.
+  Fork package/path names for intents: [docs/run-command.md](docs/run-command.md)
+  (includes an AI-agent copy-paste block). Cursor skills:
+  [`skills/ivx-termux-setup`](skills/ivx-termux-setup) +
+  [`skills/ivx-termux-api`](skills/ivx-termux-api).
 - The app seeds `~/.shortcuts` templates on launch; manage via
   **Settings → Widget scripts** or the right-drawer **Widget scripts** button.
   Details: [docs/install.md](docs/install.md#plugins-api--widget).

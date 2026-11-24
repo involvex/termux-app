@@ -39,6 +39,7 @@ td-dev
 - Helpers: `td-scaffold`, `td-dev`, `td-clone`, `td-ai`
 - Hacker theme (matrix green on black)
 - Same stack as a [Docker/Podman container](docker.md) — same helpers, same theme
+- [RUN_COMMAND API](run-command.md) with fork package/paths + agent copy-paste brief
 
 ## Prefer a container?
 

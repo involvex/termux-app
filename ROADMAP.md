@@ -265,7 +265,7 @@ https://github.com/involvex/termux-app
 
 - **Help** (drawer / Preview error **Help**): Markwon offline docs from
   `assets/help/` (`install`, `workflow`, `ai`, `troubleshooting`, `configure`,
-  `openjdk`, `cursor-agent`); title filter; in-app `invapp://help/…` links;
+  `openjdk`, `cursor-agent`, `run-command`); title filter; in-app `invapp://help/…` links;
   external http(s) opens the browser. Gradle `copyHelpAssets` keeps assets in
   sync with `docs/`
 - Settings → Preview: **Show Preview console** (sheet + Debug logcat;

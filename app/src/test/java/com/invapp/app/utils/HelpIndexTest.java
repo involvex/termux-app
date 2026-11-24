@@ -20,6 +20,7 @@ public class HelpIndexTest {
         assertEquals("troubleshooting", HelpIndex.resolvePageId("Troubleshooting.md"));
         assertEquals("ai", HelpIndex.resolvePageId("invapp://help/ai"));
         assertEquals("cursor-agent", HelpIndex.resolvePageId("cursor-agent?x=1#top"));
+        assertEquals("run-command", HelpIndex.resolvePageId("invapp://help/run-command"));
         assertEquals(HelpIndex.PAGE_TROUBLESHOOTING,
             HelpIndex.resolvePageId("troubleshooting"));
     }

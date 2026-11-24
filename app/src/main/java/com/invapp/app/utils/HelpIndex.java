@@ -37,6 +37,7 @@ public final class HelpIndex {
         "configure",
         "openjdk",
         "cursor-agent",
+        "run-command",
     };
 
     private static final Map<String, String> TITLES;
@@ -50,6 +51,7 @@ public final class HelpIndex {
         m.put("configure", "ivx-configure");
         m.put("openjdk", "OpenJDK 17");
         m.put("cursor-agent", "Cursor Agent");
+        m.put("run-command", "RUN_COMMAND API");
         TITLES = Collections.unmodifiableMap(m);
     }
 

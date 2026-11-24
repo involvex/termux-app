@@ -31,6 +31,7 @@ Released under **GPLv3** (with exceptions documented in
 |---|---|
 | Issues | https://github.com/involvex/termux-app/issues |
 | Security | [SECURITY.md](https://github.com/involvex/termux-app/blob/master/SECURITY.md) |
+| RUN_COMMAND API | [run-command.md](run-command.md) (fork package/paths + agent brief) |
 
 ## Sponsors
 

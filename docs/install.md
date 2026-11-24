@@ -120,6 +120,9 @@ Widget). Install beside InVxTermux, grant **RUN_COMMAND**, open the app once to
 start the foreground service, then add the widget and set a shell command.
 This does **not** replace classic Termux:Widget / `~/.shortcuts`.
 
+Intent package names and paths differ from stock Termux — see
+[RUN_COMMAND API](run-command.md) (includes a copy-paste block for AI agents).
+
 Build locally: `./gradlew :termux-terminal-widget:assembleDebug`
 
 ## Build from source
