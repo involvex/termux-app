@@ -168,7 +168,7 @@ public final class ResourceScriptsInstaller {
             + "[ -x \"\\$PROOT_REAL\" ] || PROOT_REAL=\"\\$(command -v proot)\"\n"
             + "PROOT_LIBS=\"\\${INVAPP_PROOT_LIBDIR:-\\${PREFIX}/libexec/proot-libs}\"\n"
             + "mkdir -p \"\\$PROOT_LIBS\"\n"
-            + "for _pat in 'libtalloc.so*' 'libandroid-shmem.so*' 'libandroid-support.so*' 'libandroid-glob.so*'; do\n"
+            + "for _pat in 'libtalloc.so*' 'libandroid-shmem.so*' 'libandroid-support.so*' 'libandroid-glob.so*' 'libacl.so*'; do\n"
             + "  for _t in \"\\${PREFIX}/lib\"/\\$_pat; do\n"
             + "    [ -e \"\\$_t\" ] || continue\n"
             + "    ln -sf \"\\$_t\" \"\\$PROOT_LIBS/\" 2>/dev/null || cp -f \"\\$_t\" \"\\$PROOT_LIBS/\" 2>/dev/null || true\n"
@@ -289,10 +289,10 @@ public final class ResourceScriptsInstaller {
             + "fi\n"
             + "export PROOT_LOADER\n"
             + "# Stage host-tar deps into proot-libs (wrapper narrows LD_LIBRARY_PATH;\n"
-            + "# without libandroid-glob, host tar dies: CANNOT LINK … libandroid-glob.so).\n"
+            + "# without libandroid-glob/libacl, host tar dies: CANNOT LINK …).\n"
             + "PROOT_LIBS=\"${INVAPP_PROOT_LIBDIR:-$PREFIX/libexec/proot-libs}\"\n"
             + "mkdir -p \"$PROOT_LIBS\"\n"
-            + "for _pat in 'libtalloc.so*' 'libandroid-shmem.so*' 'libandroid-support.so*' 'libandroid-glob.so*'; do\n"
+            + "for _pat in 'libtalloc.so*' 'libandroid-shmem.so*' 'libandroid-support.so*' 'libandroid-glob.so*' 'libacl.so*'; do\n"
             + "  for _t in \"$PREFIX/lib\"/$_pat; do\n"
             + "    [ -e \"$_t\" ] || continue\n"
             + "    ln -sf \"$_t\" \"$PROOT_LIBS/\" 2>/dev/null || cp -f \"$_t\" \"$PROOT_LIBS/\" 2>/dev/null || true\n"
@@ -404,7 +404,10 @@ public final class ResourceScriptsInstaller {
             + "echo \"npm_config_os=${npm_config_os:-unset} npm_config_cpu=${npm_config_cpu:-unset}\"\n"
             + "echo \"Tip: bun install adds --os=android --cpu=arm64|x64 automatically via wrapper.\"\n"
             + "echo \"If a Windows lockfile pinned linux-* natives: rm -rf node_modules <lockfile> && bun i\"\n"
-            + "echo \"Doctor: bun-doctor\"\n";
+            + "echo \"Pin: APK-bundled Android Bun only — reopen the app to restore; never curl|bash bun.sh.\"\n"
+            + "echo \"     td-resource-bun is read-only health (does not install or downgrade).\"\n"
+            + "echo \"     bun-upgrade --check compares stamp; use a newer APK for upgrades.\"\n"
+            + "echo \"Doctor: bun-doctor · ivx-doctor\"\n";
     }
 
     /** OpenCode / Cursor Agent health — hints only, no downloads. */
@@ -428,7 +431,8 @@ public final class ResourceScriptsInstaller {
             + "ls -la \"$PREFIX/bin/agent\" 2>&1 || true\n"
             + "echo \"\"\n"
             + "echo \"Fixes: opencode-fix-net   # DNS/CA + shim rebuild\"\n"
-            + "echo \"Serve: td-ai / opencode-server   # service 0.0.0.0:4000; Preview → http://127.0.0.1:4000/\"\n"
+            + "echo \"Serve: td-ai / opencode-server   # foreground serve :4000; Preview → http://127.0.0.1:4000/\"\n"
+            + "echo \"TUI:   opencode   # wrapper attaches to :4000 or uses --standalone (no service.ensure)\"\n"
             + "echo \"Chat API fail ('typo in the url or port'): rm -rf ~/.cache/opencode && opencode-fix-net && td-ai\"\n";
     }
 

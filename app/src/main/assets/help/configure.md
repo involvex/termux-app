@@ -8,10 +8,12 @@ Core commands stay offline; only `network test` and `doctor --network` probe
 the network on purpose.
 
 ```bash
-ivx-configure            # interactive menu
-ivx-configure status     # what is installed / enabled
-ivx-configure network dns fix   # fix Go lookup … on [::1]:53
-ivx-doctor               # same as: ivx-configure doctor
+ivx-configure            # interactive menu (appearance / packages / network / …)
+ivx-setup                # components: bun / opencode / kilo / agent / linux
+ivx-fix                   # heal: dpkg / dns / opencode-net / kilo / paths
+ivx-doctor               # health report (+ PATH / ~/.bashrc dead entries)
+ivx-backup [--secrets]   # zip ~/.termux + shortcuts + repos manifest
+ivx-restore --latest     # restore that zip
 ivx-cleanup              # remove global pkg / cargo / bun / npm / pip / uv installs
 ivx-disk-analyze         # df/du report: prefix, home, guests, large files
 ivx-fix-dpkg-scripts     # heal dpkg info/format, *.triggers, maintainer shebangs

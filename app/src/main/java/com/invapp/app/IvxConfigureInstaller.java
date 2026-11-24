@@ -17,10 +17,16 @@ import java.nio.charset.StandardCharsets;
  *
  * <ul>
  *   <li>{@code $PREFIX/bin/ivx-configure} — banner / completions / packages /
- *       network / doctor menu (pure bash, no fzf/gum)</li>
+ *       network / doctor / setup / fix menu (pure bash, no fzf/gum)</li>
+ *   <li>{@code $PREFIX/bin/ivx-setup} — component installer
+ *       ({@code ivx-configure setup})</li>
+ *   <li>{@code $PREFIX/bin/ivx-fix} — heal dpkg/dns/opencode/kilo/paths
+ *       ({@code ivx-configure fix})</li>
  *   <li>{@code $PREFIX/bin/ivx-doctor} — thin wrapper for
  *       {@code ivx-configure doctor}, matching {@code bun-doctor} /
  *       {@code jdk-doctor}</li>
+ *   <li>{@code $PREFIX/bin/ivx-backup} / {@code ivx-restore} — portable
+ *       zip of {@code ~/.termux}, shortcuts, repos manifest</li>
  *   <li>{@code $PREFIX/bin/ivx-cleanup} — interactive cleanup for pkg / cargo /
  *       bun -g / npm -g / pip / uv tool</li>
  *   <li>{@code $PREFIX/bin/ivx-disk-analyze} — df/du disk report for prefix,
@@ -46,10 +52,14 @@ public final class IvxConfigureInstaller {
     private static final String LOG_TAG = "IvxConfigureInstaller";
 
     /** Bumped when the seeded shell assets change in a user-visible way. */
-    public static final String VERSION = "1.2.1";
+    public static final String VERSION = "1.3.0";
 
     public static final String ASSET_CONFIGURE = "invapp/bin/ivx-configure";
+    public static final String ASSET_SETUP = "invapp/bin/ivx-setup";
+    public static final String ASSET_FIX = "invapp/bin/ivx-fix";
     public static final String ASSET_DOCTOR = "invapp/bin/ivx-doctor";
+    public static final String ASSET_BACKUP = "invapp/bin/ivx-backup";
+    public static final String ASSET_RESTORE = "invapp/bin/ivx-restore";
     public static final String ASSET_CLEANUP = "invapp/bin/ivx-cleanup";
     public static final String ASSET_DISK = "invapp/bin/ivx-disk-analyze";
     public static final String ASSET_FIX_DPKG = "invapp/bin/ivx-fix-dpkg-scripts";
@@ -60,7 +70,11 @@ public final class IvxConfigureInstaller {
     public static final String ASSET_COMPLETION = "invapp/config/bash_completion.d/invapp-ivx.bash";
 
     public static final String BIN_CONFIGURE = "ivx-configure";
+    public static final String BIN_SETUP = "ivx-setup";
+    public static final String BIN_FIX = "ivx-fix";
     public static final String BIN_DOCTOR = "ivx-doctor";
+    public static final String BIN_BACKUP = "ivx-backup";
+    public static final String BIN_RESTORE = "ivx-restore";
     public static final String BIN_CLEANUP = "ivx-cleanup";
     public static final String BIN_DISK = "ivx-disk-analyze";
     public static final String BIN_FIX_DPKG = "ivx-fix-dpkg-scripts";
@@ -85,8 +99,28 @@ public final class IvxConfigureInstaller {
     }
 
     @NonNull
+    public static File setupFile() {
+        return new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, BIN_SETUP);
+    }
+
+    @NonNull
+    public static File fixFile() {
+        return new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, BIN_FIX);
+    }
+
+    @NonNull
     public static File doctorFile() {
         return new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, BIN_DOCTOR);
+    }
+
+    @NonNull
+    public static File backupFile() {
+        return new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, BIN_BACKUP);
+    }
+
+    @NonNull
+    public static File restoreFile() {
+        return new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, BIN_RESTORE);
     }
 
     @NonNull
@@ -152,8 +186,16 @@ public final class IvxConfigureInstaller {
         // Exec helpers: refreshed every start, like the td-resource scripts.
         ok &= TermuxBunInstaller.writeExec(configureFile(),
             TermuxBunInstaller.assetWithBashShebang(context, ASSET_CONFIGURE, bash));
+        ok &= TermuxBunInstaller.writeExec(setupFile(),
+            TermuxBunInstaller.assetWithBashShebang(context, ASSET_SETUP, bash));
+        ok &= TermuxBunInstaller.writeExec(fixFile(),
+            TermuxBunInstaller.assetWithBashShebang(context, ASSET_FIX, bash));
         ok &= TermuxBunInstaller.writeExec(doctorFile(),
             TermuxBunInstaller.assetWithBashShebang(context, ASSET_DOCTOR, bash));
+        ok &= TermuxBunInstaller.writeExec(backupFile(),
+            TermuxBunInstaller.assetWithBashShebang(context, ASSET_BACKUP, bash));
+        ok &= TermuxBunInstaller.writeExec(restoreFile(),
+            TermuxBunInstaller.assetWithBashShebang(context, ASSET_RESTORE, bash));
         ok &= TermuxBunInstaller.writeExec(cleanupFile(),
             TermuxBunInstaller.assetWithBashShebang(context, ASSET_CLEANUP, bash));
         ok &= TermuxBunInstaller.writeExec(diskAnalyzeFile(),

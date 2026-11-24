@@ -17,7 +17,7 @@
 
 set -u
 
-IVX_VERSION=1.1.9
+IVX_VERSION=1.2.0
 
 # $PREFIX is exported by Termux and by the seeded wrappers. Fall back to the
 # script's own location ($PREFIX/bin/ivx-configure) so a bare `bash
@@ -1586,8 +1586,62 @@ doc_bun() {
     case "${_ivx_stamp:-}" in
         '') docwarn "bun version stamp missing (bun.version)" ;;
         unsupported) dim "bun: not supported on this ABI (node fallback)" ;;
-        *) pass "bun stamp: $_ivx_stamp" ;;
+        *) pass "bun stamp: $_ivx_stamp (APK pin; reopen app to restore — never curl|bash bun.sh)" ;;
     esac
+    _ivx_which_bun=$(command -v bun 2>/dev/null || true)
+    case "$_ivx_which_bun" in
+        ''|"$PREFIX/bin/bun") : ;;
+        *)
+            docwarn "bun on PATH is $_ivx_which_bun (expected \$PREFIX/bin/bun — check ~/.bashrc PATH)"
+            ;;
+    esac
+}
+
+# Scan ~/.bashrc / ~/.profile for PATH exports that shadow \$PREFIX/bin or
+# point at missing dirs (read-only — never edits those files).
+doc_shell_paths() {
+    _ivx_rc_files=""
+    for _f in "${HOME:-}/.bashrc" "${HOME:-}/.profile" "${HOME:-}/.bash_profile"; do
+        [ -f "$_f" ] && _ivx_rc_files="$_ivx_rc_files $_f"
+    done
+    if [ -z "$_ivx_rc_files" ]; then
+        pass "no ~/.bashrc|~/.profile (PATH hooks stay in profile.d — good)"
+    else
+        for _f in $_ivx_rc_files; do
+            if grep -E '(^|[[:space:]])(export[[:space:]]+)?PATH=' "$_f" >/dev/null 2>&1; then
+                docwarn "$_f sets PATH — can shadow \$PREFIX/bin (prefer profile.d; never required for InVx)"
+            fi
+        done
+    fi
+    # Dead / shadowing dirs that often break kilo / bun / opencode.
+    _ivx_first=$(printf '%s' "${PATH:-}" | awk -F: '{print $1}')
+    case "$_ivx_first" in
+        "$PREFIX/bin") pass "PATH starts with \$PREFIX/bin" ;;
+        "${HOME:-}/.kilo/bin"|"$HOME/.kilo/bin")
+            docwarn "PATH starts with ~/.kilo/bin (raw glibc kilo ELF → 'required file not found'; run td-kilo-setup)" ;;
+        "${HOME:-}/.bun/bin"|"$HOME/.bun/bin")
+            docwarn "PATH starts with ~/.bun/bin (may shadow APK Bun / opencode wrappers)" ;;
+        *)
+            if [ -n "$_ivx_first" ]; then
+                docwarn "PATH starts with $_ivx_first (prefer \$PREFIX/bin first)"
+            fi
+            ;;
+    esac
+    _ivx_ifs=$IFS
+    IFS=:
+    for _p in ${PATH:-}; do
+        [ -n "$_p" ] || continue
+        case "$_p" in
+            "$PREFIX/bin"|"/system/bin"|"/system/xbin") continue ;;
+        esac
+        if [ ! -d "$_p" ]; then
+            docwarn "dead PATH entry (missing dir): $_p"
+        fi
+    done
+    IFS=$_ivx_ifs
+    if [ -f "${HOME:-}/.kilo/bin/kilo" ] && ! head -c 2 "${HOME:-}/.kilo/bin/kilo" 2>/dev/null | grep -q '#!'; then
+        docwarn "~/.kilo/bin/kilo looks like a raw ELF — run: td-kilo-setup --reinstall"
+    fi
 }
 
 doc_node_git_curl() {
@@ -1794,6 +1848,7 @@ cmd_doctor() {
     printf '\n  %sInVxTermux doctor%s  (ivx %s)\n' "$C_B" "$C_RST" "$IVX_VERSION"
     hr
     doc_prefix
+    doc_shell_paths
     doc_disk
     doc_redirector
     doc_bun
@@ -1808,7 +1863,7 @@ cmd_doctor() {
     hr
     printf '  %sPASS %d%s   %sWARN %d%s   %sFAIL %d%s\n' \
         "$C_G" "$DOC_PASS" "$C_RST" "$C_Y" "$DOC_WARN" "$C_RST" "$C_R" "$DOC_FAIL" "$C_RST"
-    printf '  %s\n' "deeper reports: bun-doctor · jdk-doctor · td-info · td-resource-ai"
+    printf '  %s\n' "deeper reports: bun-doctor · jdk-doctor · td-resource-ai · ivx-fix"
     if [ "$DOC_FAIL" -gt 0 ]; then
         return 1
     fi
@@ -1826,9 +1881,9 @@ cmd_ai() {
     case "$_ivx_sub" in
         status)
             if command -v opencode >/dev/null 2>&1; then
-                ok "opencode installed -- start with: td-ai"
+                ok "opencode installed -- start with: td-ai; TUI: opencode"
             else
-                dim "opencode not installed -- run: opencode-setup"
+                dim "opencode not installed -- run: opencode-setup  (or: ivx-setup opencode)"
             fi
             if command -v agent >/dev/null 2>&1; then
                 ok "cursor agent installed -- start with: td-agent-worker start"
@@ -1866,6 +1921,185 @@ cmd_ai() {
         *)
             err "usage: ivx-configure ai [status|opencode|agent]"
             return 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# setup (components) — also exposed as ivx-setup
+# ---------------------------------------------------------------------------
+cmd_setup() {
+    _ivx_sub=${1:-}
+    [ -n "$_ivx_sub" ] && shift
+    case "${_ivx_sub:-}" in
+        ''|menu)
+            while :; do
+                printf '\n  %sInVx setup — components%s\n' "$C_B" "$C_RST"
+                hr
+                printf '   1) Packages          essentials / quality / build / network\n'
+                printf '   2) Bun               status (APK pin; reopen app to restore)\n'
+                printf '   3) OpenCode          opencode-setup\n'
+                printf '   4) Kilo CLI          td-kilo-setup\n'
+                printf '   5) Cursor Agent      cursor-agent-setup\n'
+                printf '   6) Linux guest       td-resource-linux\n'
+                printf '   7) Completions       generate for installed tools\n'
+                printf '   8) Network DNS fix\n'
+                printf '   9) Doctor\n'
+                printf '   0) Full configure menu\n'
+                printf '   q) Quit\n'
+                ask '> '
+                case "${IVX_REPLY:-}" in
+                    1) packages_menu ;;
+                    2) cmd_setup bun; pause ;;
+                    3) cmd_setup opencode; pause ;;
+                    4) cmd_setup kilo; pause ;;
+                    5) cmd_setup agent; pause ;;
+                    6) cmd_setup linux; pause ;;
+                    7) cmd_completions all; pause ;;
+                    8) cmd_network dns fix; pause ;;
+                    9) cmd_doctor; pause ;;
+                    0) menu_main; return 0 ;;
+                    q|Q|quit|back) return 0 ;;
+                    '') : ;;
+                    *) warn "unknown choice: $IVX_REPLY" ;;
+                esac
+            done
+            ;;
+        bun)
+            info "Bun is APK-bundled (Android). td-resource-bun is read-only health."
+            if [ -x "$PREFIX/bin/bun" ]; then
+                "$PREFIX/bin/bun" --version 2>/dev/null || true
+            fi
+            if [ -f "$PREFIX/var/lib/invapp/bun.version" ]; then
+                info "stamp: $(tr -d '[:space:]' < "$PREFIX/var/lib/invapp/bun.version")"
+            fi
+            info "Upgrade: install a newer InVxTermux APK (never: curl|bash bun.sh / bun upgrade)"
+            command -v bun-doctor >/dev/null 2>&1 && bun-doctor || true
+            ;;
+        opencode|ai)
+            if [ -x "$PREFIX/bin/opencode-setup" ]; then
+                "$PREFIX/bin/opencode-setup" "$@"
+            else
+                err "opencode-setup missing — reopen the app"
+                return 1
+            fi
+            ;;
+        kilo)
+            if [ -x "$PREFIX/bin/td-kilo-setup" ]; then
+                "$PREFIX/bin/td-kilo-setup" --reinstall "$@"
+            else
+                err "td-kilo-setup missing — reopen the app"
+                return 1
+            fi
+            ;;
+        agent|cursor)
+            if [ -x "$PREFIX/bin/cursor-agent-setup" ]; then
+                "$PREFIX/bin/cursor-agent-setup" "$@"
+            else
+                err "cursor-agent-setup missing — reopen the app"
+                return 1
+            fi
+            ;;
+        linux|proot)
+            if [ -x "$PREFIX/bin/td-resource-linux" ]; then
+                "$PREFIX/bin/td-resource-linux" "$@"
+            else
+                err "td-resource-linux missing — reopen the app"
+                return 1
+            fi
+            ;;
+        packages|pkg)
+            cmd_packages "$@"
+            ;;
+        -h|--help|help)
+            cat <<'EOF'
+ivx-setup / ivx-configure setup — install / refresh components
+
+  ivx-setup                 interactive component menu
+  ivx-setup bun             show APK Bun pin / doctor hints
+  ivx-setup opencode        run opencode-setup
+  ivx-setup kilo            run td-kilo-setup --reinstall
+  ivx-setup agent           run cursor-agent-setup
+  ivx-setup linux           run td-resource-linux
+  ivx-setup packages …      same as ivx-configure packages
+EOF
+            ;;
+        *)
+            err "usage: ivx-setup [bun|opencode|kilo|agent|linux|packages|help]"
+            return 2
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# fix — heal common breakage (also: ivx-fix)
+# ---------------------------------------------------------------------------
+cmd_fix() {
+    _ivx_sub=${1:-}
+    [ -n "$_ivx_sub" ] && shift
+    case "${_ivx_sub:-}" in
+        ''|menu)
+            printf '\n  %sInVx fix%s\n' "$C_B" "$C_RST"
+            hr
+            printf '   1) dpkg scripts     ivx-fix-dpkg-scripts\n'
+            printf '   2) DNS / Go         network dns fix (+ go wrap)\n'
+            printf '   3) OpenCode net     opencode-fix-net\n'
+            printf '   4) Kilo wrapper     td-kilo-setup (rewrite wrappers)\n'
+            printf '   5) Paths doctor     ivx-doctor (PATH / bashrc scan)\n'
+            printf '   q) Quit\n'
+            ask '> '
+            case "${IVX_REPLY:-}" in
+                1) cmd_fix dpkg ;;
+                2) cmd_fix dns ;;
+                3) cmd_fix opencode ;;
+                4) cmd_fix kilo ;;
+                5) cmd_doctor; ;;
+                q|Q) return 0 ;;
+                *) warn "unknown choice" ;;
+            esac
+            ;;
+        dpkg|dpkg-scripts)
+            if [ -x "$PREFIX/bin/ivx-fix-dpkg-scripts" ]; then
+                "$PREFIX/bin/ivx-fix-dpkg-scripts" "$@"
+            else
+                err "ivx-fix-dpkg-scripts missing"
+                return 1
+            fi
+            ;;
+        dns|network)
+            cmd_network dns fix
+            cmd_network go wrap 2>/dev/null || true
+            ;;
+        opencode|opencode-net)
+            if [ -x "$PREFIX/bin/opencode-fix-net" ]; then
+                "$PREFIX/bin/opencode-fix-net" "$@"
+            else
+                err "opencode-fix-net missing — run opencode-setup"
+                return 1
+            fi
+            ;;
+        kilo)
+            cmd_setup kilo "$@"
+            ;;
+        paths|path|bashrc)
+            cmd_doctor
+            info "Doctor never edits ~/.bashrc — remove dead PATH lines yourself if WARN above"
+            ;;
+        -h|--help|help)
+            cat <<'EOF'
+ivx-fix — heal common InVxTermux breakage
+
+  ivx-fix                 interactive menu
+  ivx-fix dpkg            heal dpkg info/format + maintainer shebangs
+  ivx-fix dns             resolv.conf + optional go wrap
+  ivx-fix opencode        opencode-fix-net (DNS/CA/shim)
+  ivx-fix kilo            rewrite kilo wrappers / neutralize ~/.kilo/bin ELF
+  ivx-fix paths           doctor PATH / bashrc scan (read-only)
+EOF
+            ;;
+        *)
+            err "usage: ivx-fix [dpkg|dns|opencode|kilo|paths|help]"
+            return 2
             ;;
     esac
 }
@@ -1953,8 +2187,10 @@ COMMANDS
   network go status|wrap|unwrap  patch go ELF so netgo opens files/r.conf
   network apply                  print exports for: eval "$(… network apply)"
   network test                   opt-in DNS/curl/go smoke test
-  doctor [--strict] [--network]  read-only health report
+  doctor [--strict] [--network]  read-only health report (incl. PATH/bashrc)
   ai [status|opencode|agent]     OpenCode / Cursor Agent hints
+  setup [bun|opencode|kilo|…]    component install (same as ivx-setup)
+  fix [dpkg|dns|opencode|…]      heal common breakage (same as ivx-fix)
   reset                          remove user config + custom art
   help                           this text
 
@@ -2165,10 +2401,12 @@ menu_main() {
         printf '   2) Shell completions %s managed\n' "${_ivx_count:-0}"
         printf '   3) Basic packages    essentials / quality / build / network\n'
         printf '   4) Network           DNS / proxy / GOPROXY\n'
-        printf '   5) Doctor            read-only health report\n'
+        printf '   5) Doctor            read-only health (+ PATH/bashrc)\n'
         printf '   6) AI tools          opencode / cursor agent\n'
-        printf '   7) Preview banner\n'
-        printf '   8) Status\n'
+        printf '   7) Components        bun / opencode / kilo / linux (ivx-setup)\n'
+        printf '   8) Fix               dpkg / dns / opencode-net (ivx-fix)\n'
+        printf '   9) Preview banner\n'
+        printf '   s) Status\n'
         printf '   a) Advanced          reset config\n'
         printf '   q) Quit\n'
         ask '> '
@@ -2179,8 +2417,10 @@ menu_main() {
             4) network_menu ;;
             5) cmd_doctor; pause ;;
             6) ai_menu ;;
-            7) banner_preview; pause ;;
-            8) cmd_status; pause ;;
+            7) cmd_setup menu ;;
+            8) cmd_fix menu; pause ;;
+            9) banner_preview; pause ;;
+            s|S) cmd_status; pause ;;
             a|A)
                 ask 'Remove user config and custom art? [y/N] '
                 case "${IVX_REPLY:-}" in
@@ -2210,6 +2450,8 @@ case "$_ivx_cmd" in
     network|net) cmd_network "$@" ;;
     doctor) cmd_doctor "$@" ;;
     ai) cmd_ai "$@" ;;
+    setup) cmd_setup "$@" ;;
+    fix) cmd_fix "$@" ;;
     reset) cmd_reset ;;
     help|-h|--help) usage ;;
     version|-v|--version) printf 'ivx-configure %s\n' "$IVX_VERSION" ;;

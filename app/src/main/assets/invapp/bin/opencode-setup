@@ -213,6 +213,44 @@ if [ -f "\$PREFIX/etc/tls/cert.pem" ]; then
   export SSL_CERT_DIR="\$PREFIX/etc/tls/certs"
 fi
 export PATH="\$PREFIX/bin:\$PATH"
+# V2 CLI defaults to \`opencode service start\` (service.ensure). Under
+# glibc/ld-linux that looks for a native \`serve\` helper and dies with:
+#   serve: error while loading shared libraries: serve: …
+# Prefer an already-running foreground server (td-ai / opencode-server on
+# :4000), else --standalone (private server, no shared service).
+_oc_pw_file="\$PREFIX/var/lib/invapp/opencode-password"
+_oc_port="\${OPENCODE_PORT:-4000}"
+_oc_url="http://127.0.0.1:\$_oc_port"
+_oc_pw="\${OPENCODE_PASSWORD:-\${OPENCODE_SERVER_PASSWORD:-}}"
+if [ -z "\$_oc_pw" ] && [ -s "\$_oc_pw_file" ]; then
+  _oc_pw=\$(tr -d '[:space:]' < "\$_oc_pw_file")
+fi
+_oc_pass_through=0
+case "\${1:-}" in
+  serve|service|auth|upgrade|uninstall|mcp|github|pr|agent|import|export|models|stats|web)
+    _oc_pass_through=1 ;;
+esac
+for _a in "\$@"; do
+  case "\$_a" in
+    --server|--standalone|--help|-h|help) _oc_pass_through=1; break ;;
+  esac
+done
+if [ "\$_oc_pass_through" = 0 ]; then
+  _oc_curl_auth=""
+  if [ -n "\$_oc_pw" ]; then
+    _oc_curl_auth="-u opencode:\$_oc_pw"
+  fi
+  # shellcheck disable=SC2086
+  if curl -fsS \$_oc_curl_auth --connect-timeout 1 --max-time 2 \
+      "\$_oc_url/api/info" 2>/dev/null | grep -qi '"data"\|version'; then
+    [ -n "\$_oc_pw" ] && export OPENCODE_PASSWORD="\$_oc_pw" OPENCODE_SERVER_PASSWORD="\$_oc_pw"
+    set -- --server "\$_oc_url" "\$@"
+  else
+    echo "opencode: no healthy server on :\$_oc_port — using --standalone" >&2
+    echo "  (shared service is broken under glibc; prefer: td-ai then opencode)" >&2
+    set -- --standalone "\$@"
+  fi
+fi
 # shellcheck disable=SC2086
 exec "\$LD" --library-path "\$LIB" \$OC_PRELOAD_ARGS "\$OC_BIN" "\$@"
 EOF
@@ -437,7 +475,10 @@ if opencode --version 2>&1; then
     done
     ;;
   esac
-  echo "OK (v$OC_VER). Run: td-ai / opencode-server   # service 127.0.0.1:4000 (LAN: OPENCODE_HOST=0.0.0.0); Preview → http://127.0.0.1:4000/"
+  echo "OK (v$OC_VER)."
+  echo "  Server: td-ai / opencode-server   # foreground serve 127.0.0.1:4000"
+  echo "  TUI:    opencode                 # attaches to :4000, else --standalone"
+  echo "  Preview → http://127.0.0.1:4000/  (LAN: OPENCODE_HOST=0.0.0.0)"
   OC_PW=$(sed -n 's/.*"password"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$HOME/.config/opencode/service.json" 2>/dev/null | head -1)
   if [ -n "$OC_PW" ]; then echo "Verify: curl -u opencode:$OC_PW http://127.0.0.1:4000/api/info (JSON, not HTML)"; fi
   echo "If chat fails with 'typo in the url or port': rm -rf ~/.cache/opencode && opencode-fix-net && td-ai"

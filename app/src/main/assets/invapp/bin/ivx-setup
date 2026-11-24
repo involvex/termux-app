@@ -1,0 +1,5 @@
+#!@BASH@
+# ivx-setup — interactive / flagged component installer (aliases ivx-configure setup).
+#   ivx-setup
+#   ivx-setup bun|opencode|kilo|agent|linux|packages …
+exec "${PREFIX}/bin/ivx-configure" setup "$@"

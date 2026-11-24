@@ -289,8 +289,8 @@ td_udocker_stage_proot_libs() {
     _libs="${INVAPP_PROOT_LIBDIR:-$PREFIX/libexec/proot-libs}"
     mkdir -p "$_libs"
     [ -d "$PREFIX/lib" ] || return 0
-    # libandroid-glob: host tar under `proot --link2symlink tar` (rootfs extract).
-    for _pat in 'libtalloc.so*' 'libandroid-shmem.so*' 'libandroid-support.so*' 'libandroid-glob.so*'; do
+    # Host tar under `proot --link2symlink tar` (rootfs extract).
+    for _pat in 'libtalloc.so*' 'libandroid-shmem.so*' 'libandroid-support.so*' 'libandroid-glob.so*' 'libacl.so*'; do
         for _t in "$PREFIX/lib"/$_pat; do
             [ -e "$_t" ] || continue
             ln -sf "$_t" "$_libs/" 2>/dev/null || cp -f "$_t" "$_libs/" 2>/dev/null || true
