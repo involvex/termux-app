@@ -386,8 +386,9 @@
     <string name="msg_generating_report">Generating Report</string>
     <string name="msg_add_termux_debug_info">Add termux debug info to report?</string>
 
-    <string name="error_styling_not_installed">The &TERMUX_STYLING_APP_NAME; Plugin App is not installed.</string>
-    <string name="action_styling_install">Install</string>
+    <string name="error_styling_not_installed">The InVx-signed %1$s plugin (%2$s) is not installed. Stock Termux:Styling will not work with this app.</string>
+    <string name="error_styling_stock_installed">Stock %1$s (%2$s) is installed, but this fork needs the InVx-signed plugin (%3$s) with the same signature. Uninstall stock Styling and install the matching APK from GitHub Releases when available.</string>
+    <string name="action_styling_install">Open Releases</string>
 
 
 

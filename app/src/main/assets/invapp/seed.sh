@@ -28,7 +28,7 @@ SEED_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 # shellcheck source=/dev/null
 . "$SEED_DIR/env.sh"
 
-INVAPP_BUN_VERSION="${INVAPP_BUN_VERSION:-1.4.4}"
+INVAPP_BUN_VERSION="${INVAPP_BUN_VERSION:-1.4.5}"
 INVAPP_WITH_AI="${INVAPP_WITH_AI:-0}"
 
 log()  { printf '[invapp] %s\n' "$*"; }
@@ -195,10 +195,10 @@ install_bun() {
         return 0
     fi
 
-    # sha256 of the APK's bundles (bun 1.4.4)
+    # sha256 of the APK's bundles (bun 1.4.5)
     case "$(td_arch)" in
-        aarch64) asset=bun-linux-aarch64-android.zip; pinned=d72e42c60e895ccbc16144bb1e0e0ad7ee384841c35b5501a7ec28b4d6d759c9 ;;
-        x64)     asset=bun-linux-x64-android.zip;  pinned=c1d7819a84407701be1904d8733b9a2e009432c2b80135e11b482c217fa598a9 ;;
+        aarch64) asset=bun-linux-aarch64-android.zip; pinned=587471d26c8cc685debc5655cd5bf6d95d052a3b4a4956bdc922f8c6f1779396 ;;
+        x64)     asset=bun-linux-x64-android.zip;  pinned=73e963d3e332ac261ef3fad48735bc1b0b7e719142e4484ff7fc0f377412c281 ;;
     esac
     if [ "${INVAPP_BUN_BASELINE:-0}" = 1 ]; then
         asset=$(printf '%s' "$asset" | sed -e 's/\.zip$/-baseline.zip/')

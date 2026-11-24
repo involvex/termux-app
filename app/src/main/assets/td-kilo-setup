@@ -16,7 +16,9 @@ REDIRECTOR_SO="$PREFIX/lib/libinvapp-redirector.so"
 KILOCODE_DIR="$PREFIX/libexec/kilocode"
 KILOCODE_BIN="$KILOCODE_DIR/kilo"
 KILOCODE_VERSION_FILE="$PREFIX/var/lib/invapp/kilo.version"
-FALLBACK_VERSION="v1.0.0"
+# Real @kilocode/cli ships as kilo-linux-{arm64,x64}*.tar.gz under v7.x tags.
+# Never fall back to v1.x (VS Code / unrelated assets).
+FALLBACK_VERSION="v7.8.32"
 
 # Load commons if available
 if [ -f "$PREFIX/lib/invapp/bootstrap.sh" ] && [ -f "$PREFIX/lib/invapp/commons.sh" ]; then
@@ -72,8 +74,59 @@ _install_glibc() {
 }
 
 _get_latest_kilo_version() {
-  curl -fsSL "https://api.github.com/repos/Kilo-Org/kilocode/releases/latest" 2>/dev/null |
-    grep '"tag_name":' | sed -E 's/.*\"([^\"]+)\".*/\1/' | head -1
+  # Prefer a release that ships kilo-linux-* CLI tarballs (skip jetbrains/*
+  # and v0/v1 stubs). Fall back to /releases/latest, then reject bad tags.
+  local tag=""
+  local json
+  json=$(curl -fsSL --max-time 30 \
+    "https://api.github.com/repos/Kilo-Org/kilocode/releases?per_page=30" 2>/dev/null) || true
+  if [ -n "$json" ] && command -v node >/dev/null 2>&1; then
+    tag=$(printf '%s' "$json" | node -e '
+let d=""; process.stdin.on("data",c=>d+=c); process.stdin.on("end",()=>{
+  try {
+    for (const r of JSON.parse(d)) {
+      if (r.draft || r.prerelease) continue;
+      const name = r.tag_name || "";
+      if (!/^v[0-9]+\.[0-9]+/.test(name)) continue;
+      if (name.startsWith("jetbrains/") || name.startsWith("vscode")) continue;
+      const assets = (r.assets||[]).map(a=>a.name||"");
+      if (assets.some(a => a.startsWith("kilo-linux-") && a.endsWith(".tar.gz") && !a.includes(".cdx."))) {
+        process.stdout.write(name);
+        break;
+      }
+    }
+  } catch (_) {}
+});' 2>/dev/null) || true
+  fi
+  if [ -z "$tag" ]; then
+    # Portable: first non-prerelease-looking v2+ tag_name in the list feed.
+    tag=$(printf '%s' "$json" | tr ',' '\n' | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\(v[^"]*\)".*/\1/p' |
+      while read -r t; do
+        case "$t" in
+          jetbrains/*|v0.*|v1.*|"") continue ;;
+          v[2-9].*|v[1-9][0-9].*) printf '%s\n' "$t"; break ;;
+        esac
+      done)
+  fi
+  if [ -z "$tag" ]; then
+    tag=$(curl -fsSL --max-time 20 \
+      "https://api.github.com/repos/Kilo-Org/kilocode/releases/latest" 2>/dev/null |
+      grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | head -1)
+  fi
+  case "$tag" in
+    v1.*|v0.*|jetbrains/*|"") return 1 ;;
+  esac
+  printf '%s\n' "$tag"
+}
+
+_stamped_kilo_is_stale() {
+  [ ! -f "$KILOCODE_VERSION_FILE" ] && return 0
+  local stamped
+  stamped=$(tr -d '[:space:]' < "$KILOCODE_VERSION_FILE" 2>/dev/null || true)
+  case "$stamped" in
+    ""|v0.*|v1.*) return 0 ;;
+  esac
+  return 1
 }
 
 _needs_deps() {
@@ -97,28 +150,48 @@ _install_kilo_native() {
 
   local ver="${KILOCODE_VERSION:-}"
   if [ -z "$ver" ]; then
-    ver="$(_get_latest_kilo_version)"
+    ver="$(_get_latest_kilo_version)" || ver=""
     if [ -z "$ver" ]; then
-      log_warn "Could not fetch latest version, using $FALLBACK_VERSION"
+      log_warn "Could not fetch latest CLI release, using $FALLBACK_VERSION"
       ver="$FALLBACK_VERSION"
     fi
   fi
-  log_info "KiloCode version: $ver"
+  case "$ver" in
+    v1.*|v0.*)
+      log_warn "Refusing $ver (not @kilocode/cli) — using $FALLBACK_VERSION"
+      ver="$FALLBACK_VERSION"
+      ;;
+  esac
+  log_info "KiloCode CLI version: $ver"
 
   local arch="$(_arch_tag)"
-  local tarball="kilo-linux-${arch}.tar.gz"
-  local url="https://github.com/Kilo-Org/kilocode/releases/download/${ver}/${tarball}"
-
-  log_info "Downloading $tarball"
+  local tarball url tmp_tar
+  local candidates="kilo-linux-${arch}.tar.gz kilo-linux-${arch}-musl.tar.gz"
   rm -rf "${KILOCODE_DIR}.tmp"
   mkdir -p "${KILOCODE_DIR}.tmp"
-  local tmp_tar="$TMPDIR/$tarball"
-  if command -v curl >/dev/null 2>&1; then
-    curl -fL --retry 3 -o "$tmp_tar" "$url"
-  elif command -v wget >/dev/null 2>&1; then
-    wget -O "$tmp_tar" "$url"
-  else
-    log_error "Need curl or wget"
+  tmp_tar=""
+  for tarball in $candidates; do
+    url="https://github.com/Kilo-Org/kilocode/releases/download/${ver}/${tarball}"
+    log_info "Downloading $tarball"
+    tmp_tar="$TMPDIR/$tarball"
+    if command -v curl >/dev/null 2>&1; then
+      if curl -fL --retry 3 -o "$tmp_tar" "$url"; then
+        break
+      fi
+    elif command -v wget >/dev/null 2>&1; then
+      if wget -O "$tmp_tar" "$url"; then
+        break
+      fi
+    else
+      log_error "Need curl or wget"
+      return 1
+    fi
+    rm -f "$tmp_tar"
+    tmp_tar=""
+  done
+  if [ -z "$tmp_tar" ] || [ ! -s "$tmp_tar" ]; then
+    log_error "Failed to download kilo-linux-${arch}*.tar.gz for $ver"
+    rm -rf "${KILOCODE_DIR}.tmp"
     return 1
   fi
 
@@ -129,7 +202,7 @@ _install_kilo_native() {
   local found
   found=$(find "${KILOCODE_DIR}.tmp" -type f -name 'kilo' 2>/dev/null | head -1)
   if [ -z "$found" ]; then
-    log_error "Tarball did not contain kilo binary"
+    log_error "Tarball did not contain kilo binary (expected @kilocode/cli linux release)"
     rm -rf "${KILOCODE_DIR}.tmp"
     return 1
   fi
@@ -172,7 +245,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if [ "$FORCE_REINSTALL" -eq 0 ] && [ -x "$KILOCODE_BIN" ] && [ -f "$(_glibc_loader)" ]; then
+if [ "$FORCE_REINSTALL" -eq 0 ] && [ -x "$KILOCODE_BIN" ] && [ -f "$(_glibc_loader)" ] \
+    && ! _stamped_kilo_is_stale; then
   log_success "KiloCode CLI already installed"
   list_item "Binary: $KILOCODE_BIN"
   if [ -f "$KILOCODE_VERSION_FILE" ]; then
@@ -180,6 +254,9 @@ if [ "$FORCE_REINSTALL" -eq 0 ] && [ -x "$KILOCODE_BIN" ] && [ -f "$(_glibc_load
   fi
   list_item "Run: kilo --help"
   exit 0
+fi
+if [ -x "$KILOCODE_BIN" ] && _stamped_kilo_is_stale; then
+  log_warn "Stale/wrong Kilo stamp (v0/v1 or missing) — reinstalling real CLI"
 fi
 
 if _needs_glibc; then
