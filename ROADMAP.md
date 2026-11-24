@@ -274,7 +274,7 @@ https://github.com/involvex/termux-app
   `~/storage/shared/InVxTermux/diag-YYYYMMDD-HHmm.zip` (report.md + versions +
   AI stamps; no secrets; consent dialog; Log Level unchanged)
 
-### 23. CLI unification + extract / OpenCode TUI harden (in progress)
+### 23. CLI unification + extract / OpenCode TUI harden (done)
 
 - **`ivx-setup`** — component TUI / flags (`bun` / `opencode` / `kilo` /
   `agent` / `linux` / packages); wraps existing installers; `td-*` stay
@@ -288,6 +288,11 @@ https://github.com/involvex/termux-app
 - **Extract** — stage `libacl.so*` (+ prior `libandroid-glob`) into
   `proot-libs` for `td-resource-linux`
 - **Bun messaging** — `td-resource-bun` is read-only; APK pin only
+
+### Planned for 0.211.0 (stub)
+
+- Theme picker + font stepper (FEAT-015) and visual extra-keys reorder
+  (FEAT-016), then `targetSdk 34` + edge-to-edge (FEAT-001) on its own branch
 
 ## Non-goals (for now)
 
