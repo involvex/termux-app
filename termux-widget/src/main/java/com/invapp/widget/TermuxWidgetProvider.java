@@ -1,6 +1,5 @@
 package com.invapp.widget;
 
-import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
@@ -101,9 +100,9 @@ public final class TermuxWidgetProvider extends AppWidgetProvider {
         refreshIntent.setAction(TERMUX_WIDGET_PROVIDER.ACTION_REFRESH_WIDGET);
         refreshIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
         refreshIntent.setData(Uri.parse(refreshIntent.toUri(Intent.URI_INTENT_SCHEME)));
-        @SuppressLint("UnspecifiedImmutableFlag") // Must be mutable
+        // Must be mutable so extras survive; API 31+ requires FLAG_MUTABLE.
         PendingIntent refreshPendingIntent = PendingIntent.getBroadcast(context, 0, refreshIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT);
+                com.invapp.shared.android.PendingIntentUtils.mutable(PendingIntent.FLAG_UPDATE_CURRENT));
         remoteViews.setOnClickPendingIntent(R.id.refresh_button, refreshPendingIntent);
 
         // Here we setup the a pending intent template. Individuals items of a collection
@@ -114,9 +113,8 @@ public final class TermuxWidgetProvider extends AppWidgetProvider {
         toastIntent.setAction(TERMUX_WIDGET_PROVIDER.ACTION_WIDGET_ITEM_CLICKED);
         toastIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
         intent.setData(Uri.parse(intent.toUri(Intent.URI_INTENT_SCHEME)));
-        @SuppressLint("UnspecifiedImmutableFlag") // Must be mutable
         PendingIntent toastPendingIntent = PendingIntent.getBroadcast(context, 0, toastIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT);
+                com.invapp.shared.android.PendingIntentUtils.mutable(PendingIntent.FLAG_UPDATE_CURRENT));
         remoteViews.setPendingIntentTemplate(R.id.widget_list, toastPendingIntent);
 
         appWidgetManager.updateAppWidget(appWidgetId, remoteViews);

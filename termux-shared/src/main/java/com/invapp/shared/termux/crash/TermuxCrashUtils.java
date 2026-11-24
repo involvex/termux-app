@@ -13,6 +13,7 @@ import androidx.annotation.Nullable;
 
 import com.invapp.shared.activities.ReportActivity;
 import com.invapp.shared.android.AndroidUtils;
+import com.invapp.shared.android.PendingIntentUtils;
 import com.invapp.shared.crash.CrashHandler;
 import com.invapp.shared.data.DataUtils;
 import com.invapp.shared.errors.Error;
@@ -342,11 +343,13 @@ public class TermuxCrashUtils implements CrashHandler.CrashHandlerClient {
         // Must ensure result code for PendingIntents and id for notification are unique otherwise will override previous
         int nextNotificationId = TermuxNotificationUtils.getNextNotificationId(termuxPackageContext);
 
-        PendingIntent contentIntent = PendingIntent.getActivity(termuxPackageContext, nextNotificationId, result.contentIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent contentIntent = PendingIntent.getActivity(termuxPackageContext, nextNotificationId,
+            result.contentIntent, PendingIntentUtils.immutable(PendingIntent.FLAG_UPDATE_CURRENT));
 
         PendingIntent deleteIntent = null;
         if (result.deleteIntent != null)
-            deleteIntent = PendingIntent.getBroadcast(termuxPackageContext, nextNotificationId, result.deleteIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+            deleteIntent = PendingIntent.getBroadcast(termuxPackageContext, nextNotificationId,
+                result.deleteIntent, PendingIntentUtils.immutable(PendingIntent.FLAG_UPDATE_CURRENT));
 
         // Setup the notification channel if not already set up
         setupCrashReportsNotificationChannel(termuxPackageContext);

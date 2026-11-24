@@ -1,10 +1,11 @@
 package com.invapp.app.utils;
 
 import android.app.PendingIntent;
-import android.os.Build;
+
+import com.invapp.shared.android.PendingIntentUtils;
 
 /**
- * Immutable PendingIntent flags required when targeting API 31+.
+ * App-module facade over {@link PendingIntentUtils}.
  */
 public final class PendingIntentFlags {
 
@@ -12,18 +13,11 @@ public final class PendingIntentFlags {
 
     /** {@link PendingIntent#FLAG_UPDATE_CURRENT} plus IMMUTABLE on API 23+. */
     public static int mutableUpdate() {
-        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            flags |= PendingIntent.FLAG_IMMUTABLE;
-        }
-        return flags;
+        return PendingIntentUtils.immutable(PendingIntent.FLAG_UPDATE_CURRENT);
     }
 
     /** Fresh immutable intent (no update). */
     public static int immutable() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return PendingIntent.FLAG_IMMUTABLE;
-        }
-        return 0;
+        return PendingIntentUtils.immutable(0);
     }
 }
