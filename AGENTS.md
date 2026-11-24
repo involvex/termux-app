@@ -457,7 +457,9 @@ Native flags: `-std=c11 -Wall -Wextra -Werror -Os -fno-stack-protector
 
 - `debug_build.yml` — per-commit debug APKs (Artifacts; login required).
 - `run_tests.yml` — unit tests on PRs.
-- `attach_debug_apks_to_release.yml` — attaches APKs to GitHub Releases.
+- `attach_debug_apks_to_release.yml` — attaches main app + plugin APKs
+  (`termux-api_*`, `termux-widget_*`, `termux-terminal-widget_*`) to GitHub
+  Releases (plugins once on the `apt-android-7` matrix leg).
 - `docs.yml` — MkDocs → GitHub Pages (`https://involvex.github.io/termux-app/`).
 - `gradle-wrapper-validation.yml`, `dependency-submission.yml`.
 - Dependabot (`dependabot.yml`) for dependency bumps.
@@ -622,7 +624,8 @@ Manual:
 
 1. Bump `versionName` (semver) + `versionCode`; sync library publish versions.
 2. Tag `vX.Y.Z`; CI builds APKs; `attach_debug_apks_to_release.yml` attaches
-   universal + per-ABI APKs.
+   universal + per-ABI app APKs **and** Termux:API / Widget / Terminal Widget
+   plugin APKs.
 3. Update changelog (Keep a Changelog) + `README.md` latest-version line.
 4. Play Store is a separate repo (`termux-play-store`) — report its issues
    there, not here.

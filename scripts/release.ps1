@@ -441,8 +441,11 @@ if (-not $DryRun) {
     Write-Host "Release URL: $(gh release view $tag --json url -q .url)"
 }
 
+# apt-android-7/5 app APKs (5 + sha each) + 3 plugin APKs ≈ 15 assets when CI finishes both matrix legs.
+$script:MinReleaseAssets = 12
+
 if ($LocalBuild) {
-    Write-Step 'Local assembleDebug + upload (this can take a long time)'
+    Write-Step 'Local assembleDebug + upload (app + plugins; this can take a long time)'
     if (-not $DryRun) {
         $env:TERMUX_PACKAGE_VARIANT = 'apt-android-7'
         $env:TERMUX_APK_VERSION_TAG = "$tag+apt-android-7-github-debug"
@@ -464,30 +467,49 @@ if ($LocalBuild) {
                 throw "Missing APK: $f"
             }
         }
+
+        function Get-FirstApk([string] $Dir) {
+            $hit = Get-ChildItem -LiteralPath $Dir -Filter '*.apk' -ErrorAction SilentlyContinue |
+                Select-Object -First 1
+            if (-not $hit) { throw "Missing plugin APK under $Dir" }
+            return $hit.FullName
+        }
+
+        $apiSrc = Get-FirstApk (Join-Path $root 'termux-api/build/outputs/apk/debug')
+        $twSrc = Get-FirstApk (Join-Path $root 'termux-terminal-widget/build/outputs/apk/debug')
+        $widgetSrc = Get-FirstApk (Join-Path $root 'termux-widget/build/outputs/apk/debug')
+        $apiOut = Join-Path $root "termux-api_${tag}-github-debug.apk"
+        $twOut = Join-Path $root "termux-terminal-widget_${tag}-github-debug.apk"
+        $widgetOut = Join-Path $root "termux-widget_${tag}-github-debug.apk"
+        Copy-Item -LiteralPath $apiSrc -Destination $apiOut -Force
+        Copy-Item -LiteralPath $twSrc -Destination $twOut -Force
+        Copy-Item -LiteralPath $widgetSrc -Destination $widgetOut -Force
+        $files += @($apiOut, $twOut, $widgetOut)
+
         gh release upload $tag @files --clobber
         if ($LASTEXITCODE -ne 0) { throw 'gh release upload failed' }
     }
 }
 elseif ($WaitForApks -gt 0) {
-    Write-Step "Waiting up to $WaitForApks minute(s) for CI to attach APKs"
+    Write-Step "Waiting up to $WaitForApks minute(s) for CI to attach APKs (app + plugins)"
     if (-not $DryRun) {
         $deadline = (Get-Date).AddMinutes($WaitForApks)
         do {
             Start-Sleep -Seconds 30
             $count = [int](gh release view $tag --json assets -q '.assets | length')
             Write-Host "  assets: $count  ($(Get-Date -Format HH:mm:ss))"
-            if ($count -ge 5) {
+            if ($count -ge $script:MinReleaseAssets) {
                 Write-Host 'APKs attached.'
                 break
             }
         } while ((Get-Date) -lt $deadline)
         $final = [int](gh release view $tag --json assets -q '.assets | length')
-        if ($final -lt 5) {
-            Write-Warn "Timed out with $final assets. Check Actions: attach_debug_apks_to_release.yml"
+        if ($final -lt $script:MinReleaseAssets) {
+            Write-Warn "Timed out with $final assets (want >= $script:MinReleaseAssets). Check Actions: attach_debug_apks_to_release.yml"
         }
     }
 } else {
-    Write-Host 'CI will attach debug APKs shortly (attach_debug_apks_to_release.yml).'
+    Write-Host 'CI will attach debug APKs (app + api/widget/terminal-widget) shortly (attach_debug_apks_to_release.yml).'
     Write-Host 'Re-run with -WaitForApks 45 to poll, or -LocalBuild to upload from this PC.'
 }
 

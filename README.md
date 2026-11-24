@@ -57,17 +57,20 @@ source. Uninstall any other Termux / InVxTermux builds before switching sources
 ### Plugins (API / Widget)
 
 - **Termux:API** (`com.involvex.termux_app.api`) is built from `:termux-api` in this
-  repo. After installing that APK, run `pkg install termux-api` for shell CLIs
+  repo. Releases attach `termux-api_vX.Y.Z-github-debug.apk` beside the main app
+  APKs. After installing that APK, run `pkg install termux-api` for shell CLIs
   (`termux-clipboard-get`, `termux-tts-speak`, …).
 - **Termux:Widget** (`com.involvex.termux_app.widget`) — `:termux-widget`
   for classic `~/.shortcuts` one-tap scripts (same signature / `sharedUserId`).
-  Stock F-Droid `com.termux.widget` will **not** install beside InVxTermux.
+  Release asset: `termux-widget_vX.Y.Z-github-debug.apk`. Stock F-Droid
+  `com.termux.widget` will **not** install beside InVxTermux.
 - **InVx Terminal Widget** (`com.involvex.termux_app.terminalwidget`) —
   `:termux-terminal-widget` (command-output home widget). Grant **RUN_COMMAND**,
-  open the app once, then add the widget. Not the same as classic Termux:Widget.
-  Fork package/path names for intents: [docs/run-command.md](docs/run-command.md)
-  (includes an AI-agent copy-paste block). Cursor skills:
-  [`skills/ivx-termux-setup`](skills/ivx-termux-setup) +
+  open the app once, then add the widget. Release asset:
+  `termux-terminal-widget_vX.Y.Z-github-debug.apk`. Not the same as classic
+  Termux:Widget. Fork package/path names for intents:
+  [docs/run-command.md](docs/run-command.md) (includes an AI-agent copy-paste
+  block). Cursor skills: [`skills/ivx-termux-setup`](skills/ivx-termux-setup) +
   [`skills/ivx-termux-api`](skills/ivx-termux-api).
 - The app seeds `~/.shortcuts` templates on launch; manage via
   **Settings → Widget scripts** or the right-drawer **Widget scripts** button.
