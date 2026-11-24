@@ -81,21 +81,18 @@ import com.invapp.shared.termux.TermuxUtils;
 import com.invapp.shared.termux.settings.properties.TermuxAppSharedProperties;
 import com.invapp.shared.termux.theme.TermuxThemeUtils;
 import com.invapp.shared.theme.NightMode;
+import com.invapp.shared.view.KeyboardUtils;
 import com.invapp.shared.view.ViewUtils;
 import com.invapp.terminal.TerminalSession;
 import com.invapp.terminal.TerminalSessionClient;
 import com.invapp.view.TerminalView;
 import com.invapp.view.TerminalViewClient;
 
-import androidx.activity.EdgeToEdge;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
 import androidx.core.view.GravityCompat;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.viewpager.widget.ViewPager;
 
@@ -274,8 +271,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         super.onCreate(savedInstanceState);
 
-        EdgeToEdge.enable(this);
+        // Keep decor fitting system windows so ADJUST_RESIZE lifts the extra-keys
+        // bar above the IME and the drawer/settings gear stay below the status bar.
+        // (Edge-to-edge without consuming IME insets broke both on targetSdk 34.)
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
         setContentView(R.layout.activity_termux);
+        KeyboardUtils.setSoftInputModeAdjustResize(this);
 
         // Load termux shared preferences
         // This will also fail if TermuxConstants.TERMUX_PACKAGE_NAME does not equal applicationId
@@ -296,9 +297,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mTermuxActivityRootView.setOnApplyWindowInsetsListener(new TermuxActivityRootView.WindowInsetsListener());
 
         View content = findViewById(android.R.id.content);
-        ViewCompat.setOnApplyWindowInsetsListener(content, (v, insets) -> {
-            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            mNavBarHeight = bars.bottom;
+        content.setOnApplyWindowInsetsListener((v, insets) -> {
+            mNavBarHeight = insets.getSystemWindowInsetBottom();
             return insets;
         });
 
