@@ -62,6 +62,8 @@ import com.invapp.app.utils.ExtraKeysCustomizeUi;
 import com.invapp.app.utils.LanShareHelper;
 import com.invapp.app.utils.LaunchPrefs;
 import com.invapp.app.utils.LocalhostPortScanner;
+import com.invapp.app.utils.OnboardingPrefs;
+import com.invapp.app.utils.OnboardingWizardUi;
 import com.invapp.app.utils.PreferredPortWatcher;
 import com.invapp.app.utils.PreviewPortPrefs;
 import com.invapp.app.utils.SessionSnapshot;
@@ -246,6 +248,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private static final int CONTEXT_MENU_PASTE_ID = 12;
     private static final int CONTEXT_MENU_PREVIEW_ID = 13;
     private static final int CONTEXT_MENU_AI_ID = 14;
+    private static final int CONTEXT_MENU_ONBOARDING_ID = 15;
 
     private static final String ARG_TERMINAL_TOOLBAR_TEXT_INPUT = "terminal_toolbar_text_input";
     private static final String ARG_ACTIVITY_RECREATED = "activity_recreated";
@@ -583,6 +586,25 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         stashInjectShellCommand(intent);
         // Bootstrap may still be creating the first session — retry shortly.
         mMainHandler.postDelayed(this::flushPendingInjectShellCommand, 400);
+        maybeShowOnboardingWizard();
+    }
+
+    private void maybeShowOnboardingWizard() {
+        if (mIsActivityRecreated || mIsInvalidState || !mIsVisible) {
+            return;
+        }
+        if (!OnboardingPrefs.shouldShowOnColdStart(this)) {
+            return;
+        }
+        // After bootstrap/session settle so the dialog is not buried under install UI.
+        mMainHandler.postDelayed(() -> {
+            if (!mIsVisible || isFinishing()) {
+                return;
+            }
+            if (OnboardingPrefs.shouldShowOnColdStart(this)) {
+                OnboardingWizardUi.show(this);
+            }
+        }, 1200);
     }
 
     @Override
@@ -1718,6 +1740,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         addSheetAction(root, sheet, R.string.action_style_terminal, CONTEXT_MENU_STYLING_ID);
         addSheetAction(root, sheet, R.string.action_toggle_keep_screen_on, CONTEXT_MENU_TOGGLE_KEEP_SCREEN_ON);
         addSheetAction(root, sheet, R.string.action_open_help, CONTEXT_MENU_HELP_ID);
+        addSheetAction(root, sheet, R.string.action_onboarding_rerun, CONTEXT_MENU_ONBOARDING_ID);
         addSheetAction(root, sheet, R.string.action_open_settings, CONTEXT_MENU_SETTINGS_ID);
         addSheetAction(root, sheet, R.string.action_report_issue, CONTEXT_MENU_REPORT_ID);
 
@@ -1799,6 +1822,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 return;
             case CONTEXT_MENU_HELP_ID:
                 ActivityUtils.startActivity(this, new Intent(this, HelpActivity.class));
+                return;
+            case CONTEXT_MENU_ONBOARDING_ID:
+                OnboardingWizardUi.showFromStart(this);
                 return;
             case CONTEXT_MENU_SETTINGS_ID:
                 ActivityUtils.startActivity(this, new Intent(this, SettingsActivity.class));
