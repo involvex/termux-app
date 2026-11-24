@@ -1,6 +1,6 @@
 # InVxTermux — Feature Suggestions Report
 
-> Generated: 2026-09-22 · Updated: 2026-11-24 (Phase 23) · Scope: `com.involvex.termux_app`
+> Generated: 2026-09-22 · Updated: 2026-11-24 (Phase 23 done) · Scope: `com.involvex.termux_app`
 > Pillars: Terminal-first · PC ↔ phone (`~/repos`) · Preview (`127.0.0.1`) · AI CLI (`td-ai` → OpenCode `:4000`)
 > Non-goals respected: no full in-app IDE / multi-tab browser, no public tunnels by default, no per-npm wrappers.
 > Sources: `README.md`, `ROADMAP.md`, `AGENTS.md`, `docs/*.md`, `app/build.gradle`, `app/src/main/java/com/invapp/...`, `terminal-emulator`, `termux-shared`, `termux-api`.
@@ -27,6 +27,8 @@
 | FEAT-017 | **done (Phase 19)** | Widget Run… args/env dialog + optional `td-dev` catalog |
 | FEAT-023 | **done (Phase 22)** | Settings → Debugging → Export diagnostics zip (no secrets) |
 | FEAT-024 | **done (Phase 22, narrowed)** | Offline Markwon Help + Preview error Help → troubleshooting |
+| FEAT-026 | **done (Phase 23)** | `ivx-setup` / `ivx-fix` / doctor PATH / `ivx-backup`+`ivx-restore` |
+| FEAT-027 | **done (Phase 23)** | OpenCode TUI `--server`/`:4000` or `--standalone`; `libacl` proot-libs |
 
 ### High Priority Suggestions
 
@@ -214,15 +216,21 @@
 
 ## Suggested Next Steps (for maintainers)
 
+> Phase 23 done: `ivx-setup` / `ivx-fix` / doctor PATH / `ivx-backup` + OpenCode TUI
+> `--server`/`--standalone` + `libacl` proot-libs staging (PR #26).
 > Phase 22 shipped FEAT-014 / FEAT-023 / FEAT-024 (narrowed) as v0.210.0.
-> Phase 23: `ivx-setup` / `ivx-fix` / doctor PATH / `ivx-backup` + OpenCode TUI
-> `--server`/`--standalone` + `libacl` proot-libs staging.
 > Phase 21 shipped FEAT-009 → v0.209.0.
 > Phase 20 shipped FEAT-008 (narrowed) + FEAT-010 (narrowed) → v0.208.0.
 > Phase 19 shipped FEAT-006 / FEAT-012 / FEAT-017 + AI script asset unification.
 
-1. Next platform: FEAT-001 targetSdk 34/35 + edge-to-edge on its own branch + device matrix.
-2. Optional polish: FEAT-015 themes / FEAT-016 drag extra-keys (chrome only).
+### Release note stub — future `0.211.0` (not bumped yet)
+
+- Theme picker (Hacker / Matcha / Paper / System) + font-size stepper (FEAT-015)
+- Visual extra-keys drag reorder, presets, import/export (FEAT-016)
+- `targetSdk 34` + edge-to-edge / FGS types / `POST_NOTIFICATIONS` (FEAT-001)
+
+1. Chrome polish: FEAT-015 themes + FEAT-016 drag extra-keys (own PR; device verify).
+2. Platform: FEAT-001 `targetSdk 34` + edge-to-edge on its own branch + device matrix.
 3. File issues for FEAT-020 emulator FIXMEs individually with xterm vectors.
 
 ## Appendix — Where to Implement
