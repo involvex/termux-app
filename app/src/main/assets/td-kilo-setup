@@ -216,12 +216,85 @@ _install_kilo_native() {
   mkdir -p "$(dirname "$KILOCODE_VERSION_FILE")"
   echo "$ver" > "$KILOCODE_VERSION_FILE"
 
+  _install_wrappers
+
   log_success "KiloCode CLI installed"
   echo
   list_item "Version:  $ver"
   list_item "Binary:   $KILOCODE_BIN"
+  list_item "Wrapper:  $PREFIX/bin/kilo"
   list_item "Command:  kilo / kilocode"
   echo
+}
+
+# Write $PREFIX/bin/kilo (+ kilocode) glibc ld-linux wrappers and neutralize
+# any raw ELF left by the upstream installer under ~/.kilo/bin (that path
+# often wins PATH and yields "cannot execute: required file not found").
+_install_wrappers() {
+  local arch ld_name wrapper
+  arch="$(_arch_tag)"
+  if [ "$arch" = "x64" ]; then
+    ld_name="ld-linux-x86-64.so.2"
+  else
+    ld_name="ld-linux-aarch64.so.1"
+  fi
+
+  wrapper="$PREFIX/bin/kilo"
+  cat > "$wrapper" <<EOF
+#!$PREFIX/bin/bash
+# invapp-kilo-wrapper — KiloCode CLI via glibc ld-linux + DNS shim
+PREFIX="\${PREFIX:-$PREFIX}"
+KILOCODE_BIN="\$PREFIX/libexec/kilocode/kilo"
+LD_LOADER="\$PREFIX/glibc/lib/$ld_name"
+LIB="\$PREFIX/glibc/lib"
+export TMPDIR="\${TMPDIR:-\$PREFIX/tmp}"
+mkdir -p "\$TMPDIR" 2>/dev/null || true
+if [ ! -x "\$KILOCODE_BIN" ]; then
+  echo "kilo: binary missing - run td-kilo-setup" >&2
+  exit 127
+fi
+if [ ! -x "\$LD_LOADER" ]; then
+  echo "kilo: glibc missing - run td-kilo-setup" >&2
+  exit 127
+fi
+# Keep LD_PRELOAD empty so termux-exec does NOT reinject Bionic
+# libinvapp-redirector.so (that causes version LIBC not found).
+# Load DNS shim via ld-linux --preload instead.
+export LD_PRELOAD=
+OC_SHIM="\$PREFIX/lib/libinvapp-opencode-shim.so"
+OC_PRELOAD_ARGS=""
+if [ -f "\$OC_SHIM" ]; then
+  OC_PRELOAD_ARGS="--preload \$OC_SHIM"
+elif [ -f "\$PREFIX/lib/libinvapp-getifaddrs.so" ]; then
+  OC_PRELOAD_ARGS="--preload \$PREFIX/lib/libinvapp-getifaddrs.so"
+fi
+export LD_LIBRARY_PATH=
+export PATH="\$PREFIX/bin:\$PATH"
+# shellcheck disable=SC2086
+exec "\$LD_LOADER" \$OC_PRELOAD_ARGS --library-path "\$LIB" "\$KILOCODE_BIN" "\$@"
+EOF
+  chmod 700 "$wrapper"
+  cp -f "$wrapper" "$PREFIX/bin/kilocode"
+  chmod 700 "$PREFIX/bin/kilocode"
+
+  # Upstream / npm-style installs drop a raw glibc ELF here and prepend
+  # ~/.kilo/bin to PATH — replace with a redirect so "kilo" always works.
+  if [ -e "$HOME/.kilo/bin/kilo" ] || [ -d "$HOME/.kilo/bin" ]; then
+    mkdir -p "$HOME/.kilo/bin"
+    if [ -f "$HOME/.kilo/bin/kilo" ] && ! head -c 2 "$HOME/.kilo/bin/kilo" 2>/dev/null | grep -q '#!'; then
+      log_warn "Replacing raw ~/.kilo/bin/kilo (glibc ELF) with redirect to \$PREFIX/bin/kilo"
+    fi
+    cat > "$HOME/.kilo/bin/kilo" <<EOF
+#!$PREFIX/bin/bash
+exec "$PREFIX/bin/kilo" "\$@"
+EOF
+    chmod 700 "$HOME/.kilo/bin/kilo"
+    cp -f "$HOME/.kilo/bin/kilo" "$HOME/.kilo/bin/kilocode" 2>/dev/null || true
+    chmod 700 "$HOME/.kilo/bin/kilocode" 2>/dev/null || true
+  fi
+
+  hash -r 2>/dev/null || true
+  log_success "Wrappers installed → $PREFIX/bin/kilo"
 }
 
 KILOCODE_VERSION=""
@@ -252,7 +325,8 @@ if [ "$FORCE_REINSTALL" -eq 0 ] && [ -x "$KILOCODE_BIN" ] && [ -f "$(_glibc_load
   if [ -f "$KILOCODE_VERSION_FILE" ]; then
     list_item "Version: $(cat "$KILOCODE_VERSION_FILE")"
   fi
-  list_item "Run: kilo --help"
+  _install_wrappers
+  list_item "Run: hash -r && kilo --help"
   exit 0
 fi
 if [ -x "$KILOCODE_BIN" ] && _stamped_kilo_is_stale; then
@@ -267,5 +341,5 @@ fi
 
 _install_kilo_native
 echo
-log_info "Done. Run: kilo"
+log_info "Done. Run: hash -r && kilo -v"
 echo

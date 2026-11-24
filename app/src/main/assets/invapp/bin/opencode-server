@@ -195,36 +195,36 @@ do_start() {
     echo "  Override OPENCODE_HOST / OPENCODE_PORT / OPENCODE_SERVER_PASSWORD"
     echo ""
 
-    # Prefer foreground `opencode serve` on Android. V2 `service start` often
-    # fails with exit 127 ("serve: cannot open shared object file") under
-    # glibc/ld-linux — the service helper looks for a native `serve` binary.
-    if opencode serve --help >/dev/null 2>&1; then
-        if opencode service --help >/dev/null 2>&1; then
-            opencode service set hostname "$host" 2>/dev/null || true
-            opencode service set port "$port" 2>/dev/null || true
-            if [ -n "$pw" ]; then
-                opencode service set password "$pw" 2>/dev/null \
-                    || export OPENCODE_SERVER_PASSWORD="$pw"
-            fi
-            set +e
-            opencode service start
-            svc_rc=$?
-            set -e
-            if [ "$svc_rc" -eq 0 ]; then
-                if wait_healthy "$port" "$auth"; then
-                    echo "opencode-server: ready → $local/"
-                    echo "  auth: opencode:$pw"
-                    return 0
-                fi
-                echo "opencode-server: started but /api/info not ready yet — open Preview and Reload" >&2
+    # Never use `opencode service start` on this fork unless opted in.
+    # Under glibc/ld-linux the V2 service helper looks for a native `serve`
+    # binary and fails with:
+    #   serve: error while loading shared libraries: serve: cannot open
+    #   shared object file
+    # (exit 127 / service.ensure). Foreground `opencode serve` is the reliable
+    # path. Opt in: OPENCODE_USE_SERVICE=1.
+    if [ "${OPENCODE_USE_SERVICE:-0}" = "1" ] && opencode service --help >/dev/null 2>&1; then
+        opencode service set hostname "$host" 2>/dev/null || true
+        opencode service set port "$port" 2>/dev/null || true
+        if [ -n "$pw" ]; then
+            opencode service set password "$pw" 2>/dev/null \
+                || export OPENCODE_SERVER_PASSWORD="$pw"
+        fi
+        set +e
+        opencode service start
+        svc_rc=$?
+        set -e
+        if [ "$svc_rc" -eq 0 ]; then
+            if wait_healthy "$port" "$auth"; then
+                echo "opencode-server: ready → $local/"
+                echo "  auth: opencode:$pw"
                 return 0
             fi
-            if [ "$svc_rc" -eq 127 ]; then
-                echo "opencode-server: service start exit 127 (missing serve helper under glibc) — using foreground serve" >&2
-            else
-                echo "opencode-server: service start failed (rc=$svc_rc) — trying foreground serve" >&2
-            fi
+            echo "opencode-server: started but /api/info not ready yet — open Preview and Reload" >&2
+            return 0
         fi
+        echo "opencode-server: service start failed (rc=$svc_rc) — using foreground serve" >&2
+    fi
+    if opencode serve --help >/dev/null 2>&1; then
         echo "opencode-server: foreground opencode serve on $host:$port"
         exec opencode serve --port "$port" --hostname "$host" --print-logs
     fi

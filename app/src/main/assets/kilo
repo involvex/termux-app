@@ -35,5 +35,7 @@ if [ -f "$OC_SHIM" ]; then
 elif [ -f "$PREFIX/lib/libinvapp-getifaddrs.so" ]; then
   OC_PRELOAD_ARGS="--preload $PREFIX/lib/libinvapp-getifaddrs.so"
 fi
-
+export LD_LIBRARY_PATH=
+export PATH="$PREFIX/bin:$PATH"
+# shellcheck disable=SC2086
 exec "$LD_LOADER" $OC_PRELOAD_ARGS --library-path "$LIB" "$KILOCODE_BIN" "$@"
