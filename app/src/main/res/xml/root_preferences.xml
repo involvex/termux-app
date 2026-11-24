@@ -35,6 +35,12 @@
         app:fragment="com.invapp.app.fragments.settings.TermuxWidgetPreferencesFragment"/>
 
     <Preference
+        app:key="setup_checklist"
+        app:title="@string/title_onboarding_preference"
+        app:summary="@string/summary_onboarding_preference"
+        app:persistent="false"/>
+
+    <Preference
         app:key="about"
         app:title="@string/about_preference_title"
         app:persistent="false"/>

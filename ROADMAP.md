@@ -304,6 +304,11 @@ https://github.com/involvex/termux-app
 - Edge-to-edge + `WindowInsetsCompat` IME/fullscreen; OnBackPressedDispatcher
 - Scoped storage: legacy flags kept for minSdk path; document target-34 behavior
 
+### 26. First-launch setup checklist (done)
+
+- **FEAT-018** — Skippable 4-step wizard (storage / ~/repos / Preview / AI);
+  re-run from Help actions sheet or Settings → Setup checklist
+
 ## Non-goals (for now)
 
 - Full in-app IDE / multi-tab browser

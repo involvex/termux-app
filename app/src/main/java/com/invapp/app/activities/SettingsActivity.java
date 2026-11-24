@@ -18,6 +18,7 @@ import androidx.preference.PreferenceFragmentCompat;
 
 import com.invapp.R;
 import com.invapp.app.fragments.settings.AiPreferencesFragment;
+import com.invapp.app.utils.OnboardingWizardUi;
 import com.invapp.app.utils.SettingsSearchHelper;
 import com.invapp.shared.activities.ReportActivity;
 import com.invapp.shared.file.FileUtils;
@@ -92,6 +93,16 @@ public class SettingsActivity extends AppCompatActivity {
             if (context == null) return;
 
             setPreferencesFromResource(R.xml.root_preferences, rootKey);
+
+            Preference setupChecklist = findPreference("setup_checklist");
+            if (setupChecklist != null) {
+                setupChecklist.setOnPreferenceClickListener(preference -> {
+                    if (getActivity() != null) {
+                        OnboardingWizardUi.showFromStart(getActivity());
+                    }
+                    return true;
+                });
+            }
 
             new Thread() {
                 @Override

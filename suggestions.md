@@ -1,6 +1,6 @@
 # InVxTermux — Feature Suggestions Report
 
-> Generated: 2026-09-22 · Updated: 2026-11-24 (Phase 23 done) · Scope: `com.involvex.termux_app`
+> Generated: 2026-09-22 · Updated: 2026-11-24 (v0.211.0) · Scope: `com.involvex.termux_app`
 > Pillars: Terminal-first · PC ↔ phone (`~/repos`) · Preview (`127.0.0.1`) · AI CLI (`td-ai` → OpenCode `:4000`)
 > Non-goals respected: no full in-app IDE / multi-tab browser, no public tunnels by default, no per-npm wrappers.
 > Sources: `README.md`, `ROADMAP.md`, `AGENTS.md`, `docs/*.md`, `app/build.gradle`, `app/src/main/java/com/invapp/...`, `terminal-emulator`, `termux-shared`, `termux-api`.
@@ -42,7 +42,7 @@
 |----|----------|-------------|--------|--------|
 | FEAT-015 | Terminal UX | Theme picker + font stepper (Phase 24) | Medium | Medium |
 | FEAT-016 | Keys | Visual extra-keys editor drag/presets/import (Phase 24) | Medium | Medium |
-| FEAT-018 | Onboarding | First-launch checklist wizard | Medium | Medium |
+| FEAT-018 | Onboarding | First-launch checklist wizard (Phase 26) | Medium | Medium |
 | FEAT-019 | Deps | Dependabot + AGP/JDK audit, `commons-io:2.5` cap review | Medium | Low |
 
 ### Low Priority Suggestions
@@ -216,15 +216,15 @@
 > Phase 20 shipped FEAT-008 (narrowed) + FEAT-010 (narrowed) → v0.208.0.
 > Phase 19 shipped FEAT-006 / FEAT-012 / FEAT-017 + AI script asset unification.
 
-### Release note stub — future `0.211.0` (not bumped yet)
+### Shipped in `0.211.0`
 
-- Theme picker (Hacker / Matcha / Paper / System) + font-size stepper (FEAT-015)
-- Visual extra-keys drag reorder, presets, import/export (FEAT-016)
+- Theme picker + font stepper (FEAT-015); visual extra-keys editor (FEAT-016)
 - `targetSdk 34` + edge-to-edge / FGS types / `POST_NOTIFICATIONS` (FEAT-001)
+- Phase 23 ivx CLI + OpenCode TUI + libacl (already on master before bump)
 
-1. Device matrix for FEAT-001 / Phase 25: Android 8 / 12 / 14 / 15 (sessions, Preview, AI, Widget, keyboard).
-2. Optional later: targetSdk 35, FEAT-018 onboarding, FEAT-019 deps audit.
-3. File issues for FEAT-020 emulator FIXMEs individually with xterm vectors.
+1. Device matrix for `0.211.0` / targetSdk 34 (you): sessions, Preview, AI, Widget, keyboard.
+2. Phase 26: FEAT-018 first-launch checklist (in progress).
+3. Optional later: targetSdk 35, FEAT-019 deps audit; file FEAT-020 emulator issues.
 
 ## Appendix — Where to Implement
 
