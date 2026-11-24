@@ -1,41 +1,67 @@
 package com.invapp.app.terminal.io;
 
+import android.graphics.Rect;
 import android.view.View;
 import android.view.ViewGroup;
-
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
 
 import com.invapp.app.TermuxActivity;
 
 /**
- * Keep ExtraKeysView visible above the IME in fullscreen by applying
- * {@link WindowInsetsCompat} IME + system-bar padding (replaces the old
- * global-layout height hack).
+ * Work around for fullscreen mode in Termux to fix ExtraKeysView not being visible.
+ * This class is derived from:
+ * https://stackoverflow.com/questions/7417123/android-how-to-adjust-layout-in-full-screen-mode-when-softkeyboard-is-visible
+ * and has some additional tweaks
+ * ---
+ * For more information, see https://issuetracker.google.com/issues/36911528
  */
-public final class FullScreenWorkAround {
+public class FullScreenWorkAround {
+    private final View mChildOfContent;
+    private int mUsableHeightPrevious;
+    private final ViewGroup.LayoutParams mViewGroupLayoutParams;
 
-    private FullScreenWorkAround() {}
+    private final int mNavBarHeight;
+
 
     public static void apply(TermuxActivity activity) {
-        ViewGroup content = activity.findViewById(android.R.id.content);
-        if (content == null || content.getChildCount() == 0) {
-            return;
-        }
-        View child = content.getChildAt(0);
-        final int initialLeft = child.getPaddingLeft();
-        final int initialTop = child.getPaddingTop();
-        final int initialRight = child.getPaddingRight();
-        final int initialBottom = child.getPaddingBottom();
-        ViewCompat.setOnApplyWindowInsetsListener(child, (v, insets) -> {
-            Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
-            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            int bottom = Math.max(ime.bottom, bars.bottom);
-            v.setPadding(initialLeft + bars.left, initialTop + bars.top,
-                initialRight + bars.right, initialBottom + bottom);
-            return insets;
-        });
-        ViewCompat.requestApplyInsets(child);
+        new FullScreenWorkAround(activity);
     }
+
+    private FullScreenWorkAround(TermuxActivity activity) {
+        ViewGroup content = activity.findViewById(android.R.id.content);
+        mChildOfContent = content.getChildAt(0);
+        mViewGroupLayoutParams = mChildOfContent.getLayoutParams();
+        mNavBarHeight = activity.getNavBarHeight();
+        mChildOfContent.getViewTreeObserver().addOnGlobalLayoutListener(this::possiblyResizeChildOfContent);
+    }
+
+    private void possiblyResizeChildOfContent() {
+        int usableHeightNow = computeUsableHeight();
+        if (usableHeightNow != mUsableHeightPrevious) {
+            int usableHeightSansKeyboard = mChildOfContent.getRootView().getHeight();
+            int heightDifference = usableHeightSansKeyboard - usableHeightNow;
+            if (heightDifference > (usableHeightSansKeyboard / 4)) {
+                // keyboard probably just became visible
+
+                // ensures that usable layout space does not extend behind the
+                // soft keyboard, causing the extra keys to not be visible
+                mViewGroupLayoutParams.height = (usableHeightSansKeyboard - heightDifference) + getNavBarHeight();
+            } else {
+                // keyboard probably just became hidden
+                mViewGroupLayoutParams.height = usableHeightSansKeyboard;
+            }
+            mChildOfContent.requestLayout();
+            mUsableHeightPrevious = usableHeightNow;
+        }
+    }
+
+    private int getNavBarHeight() {
+        return mNavBarHeight;
+    }
+
+    private int computeUsableHeight() {
+        Rect r = new Rect();
+        mChildOfContent.getWindowVisibleDisplayFrame(r);
+        return (r.bottom - r.top);
+    }
+
 }

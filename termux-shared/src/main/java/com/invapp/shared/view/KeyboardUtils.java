@@ -105,15 +105,11 @@ public class KeyboardUtils {
     }
 
     public static void setSoftInputModeAdjustResize(final Activity activity) {
-        if (activity == null || activity.getWindow() == null) {
-            return;
-        }
-        // API 30+: decor no longer fits system windows; IME handled via WindowInsets.
-        // Pre-R keeps SOFT_INPUT_ADJUST_RESIZE for older resize behavior.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            androidx.core.view.WindowCompat.setDecorFitsSystemWindows(activity.getWindow(), false);
-            activity.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
-        } else {
+        // TermuxActivityRootView + extra-keys layout rely on ADJUST_RESIZE so the
+        // toolbar rides above the IME. Do not switch to ADJUST_NOTHING / edge-to-edge
+        // here — that leaves the keybar under the keyboard on API 30+.
+        if (activity != null && activity.getWindow() != null) {
+            androidx.core.view.WindowCompat.setDecorFitsSystemWindows(activity.getWindow(), true);
             activity.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         }
     }
