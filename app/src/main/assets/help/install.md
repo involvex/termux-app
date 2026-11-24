@@ -46,7 +46,7 @@ as the main app.
 
 | Plugin | Package id | In this repo |
 |---|---|---|
-| Termux:API | `com.involvex.termux_app.api` | `:termux-api` module (build/ship with releases) |
+| Termux:API | `com.involvex.termux_app.api` | `:termux-api` module (build/ship with releases; use **0.53.1+** for Android 11+ `termux-toast` crash fix) |
 | Termux:Widget | `com.involvex.termux_app.widget` | `:termux-widget` — classic `~/.shortcuts` one-tap scripts |
 | InVx Terminal Widget | `com.involvex.termux_app.terminalwidget` | `:termux-terminal-widget` — command-output home widget |
 
