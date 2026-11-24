@@ -404,12 +404,12 @@ without testing bootstrap + all ABIs.
 | Layer | Version / tool |
 |-------|----------------|
 | `minSdkVersion` | `21` (Android 5; 5–6 deprecated, no package updates) |
-| `targetSdkVersion` | `28` |
+| `targetSdkVersion` | `34` |
 | `compileSdkVersion` | `36` |
 | AGP | `9.4.0` (`com.android.tools.build:gradle`, root `build.gradle`) |
 | NDK | `29.0.14206865`, `ndk-build` (`Android.mk` per module) |
 | JDK (build) | `17` (Android Studio Flamingo+) |
-| Java compat | `1.8` + `coreLibraryDesugaring` (`desugar_jdk_libs:1.1.5`) |
+| Java compat | `1.8` + `coreLibraryDesugaring` (`desugar_jdk_libs:2.1.5`) |
 | App version | `versionCode 211`, `versionName 0.210.0` (semver-enforced at build) |
 | Bootstrap | `2026.02.12-r1+apt.android-7` (aarch64/arm/i686/x86_64, SHA-256 verified); android-5: `2022.04.28-r6` |
 | Bun | `1.4.5` official `bun-linux-{aarch64,x64}-android.zip` (SHA-256 verified, `.incbin` into `libinvapp-bun`, extracted by `TermuxBunInstaller`) |

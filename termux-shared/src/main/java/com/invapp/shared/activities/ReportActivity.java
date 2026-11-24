@@ -1,5 +1,6 @@
 package com.invapp.shared.activities;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
@@ -75,6 +76,14 @@ public class ReportActivity extends AppCompatActivity {
         Logger.logVerbose(LOG_TAG, "onCreate");
 
         AppCompatActivityUtils.setNightMode(this, NightMode.getAppNightMode().getName(), true);
+
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                // Remove activity from recents menu on back button press
+                finishAndRemoveTask();
+            }
+        });
 
         setContentView(R.layout.activity_report);
 
@@ -201,12 +210,6 @@ public class ReportActivity extends AppCompatActivity {
         }
 
         return true;
-    }
-
-    @Override
-    public void onBackPressed() {
-        // Remove activity from recents menu on back button press
-        finishAndRemoveTask();
     }
 
     @Override

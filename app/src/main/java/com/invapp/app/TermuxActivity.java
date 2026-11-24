@@ -1,5 +1,6 @@
 package com.invapp.app;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
@@ -84,10 +85,15 @@ import com.invapp.terminal.TerminalSessionClient;
 import com.invapp.view.TerminalView;
 import com.invapp.view.TerminalViewClient;
 
+import androidx.activity.EdgeToEdge;
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
 import androidx.core.view.GravityCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.viewpager.widget.ViewPager;
 
@@ -265,6 +271,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         super.onCreate(savedInstanceState);
 
+        EdgeToEdge.enable(this);
         setContentView(R.layout.activity_termux);
 
         // Load termux shared preferences
@@ -277,6 +284,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         setMargins();
+        maybeRequestPostNotifications();
+        registerOnBackPressedHandler();
 
         mTermuxActivityRootView = findViewById(R.id.activity_termux_root_view);
         mTermuxActivityRootView.setActivity(this);
@@ -284,8 +293,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mTermuxActivityRootView.setOnApplyWindowInsetsListener(new TermuxActivityRootView.WindowInsetsListener());
 
         View content = findViewById(android.R.id.content);
-        content.setOnApplyWindowInsetsListener((v, insets) -> {
-            mNavBarHeight = insets.getSystemWindowInsetBottom();
+        ViewCompat.setOnApplyWindowInsetsListener(content, (v, insets) -> {
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            mNavBarHeight = bars.bottom;
             return insets;
         });
 
@@ -1597,22 +1607,36 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
 
 
+    private void registerOnBackPressedHandler() {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                DrawerLayout drawer = getDrawer();
+                if (drawer != null && (drawer.isDrawerOpen(GravityCompat.START)
+                    || drawer.isDrawerOpen(GravityCompat.END))) {
+                    drawer.closeDrawers();
+                    return;
+                }
+                finishActivityIfNotFinishing();
+            }
+        });
+    }
+
+    private void maybeRequestPostNotifications() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return;
+        }
+        if (PermissionUtils.checkPermission(this, Manifest.permission.POST_NOTIFICATIONS)) {
+            return;
+        }
+        PermissionUtils.requestPermission(this, Manifest.permission.POST_NOTIFICATIONS, 2001);
+    }
+
+    /** @deprecated Use {@link #registerOnBackPressedHandler()} / OnBackPressedDispatcher. */
+    @Deprecated
     @Override
     public void onBackPressed() {
-        DrawerLayout drawer = getDrawer();
-        if (drawer != null && (drawer.isDrawerOpen(GravityCompat.START) || drawer.isDrawerOpen(GravityCompat.END))) {
-            drawer.closeDrawers();
-            return;
-        }
-        if (isFinishing()) {
-            return;
-        }
-        // Avoid breaking the custom back behavior; still satisfy lint by calling super
-        try {
-            super.onBackPressed();
-        } catch (Throwable ignored) {
-        }
-        finishActivityIfNotFinishing();
+        getOnBackPressedDispatcher().onBackPressed();
     }
 
     public void finishActivityIfNotFinishing() {

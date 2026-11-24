@@ -105,12 +105,17 @@ public class KeyboardUtils {
     }
 
     public static void setSoftInputModeAdjustResize(final Activity activity) {
-        // TODO: The flag is deprecated for API 30 and WindowInset API should be used
-        // https://developer.android.com/reference/android/view/WindowManager.LayoutParams#SOFT_INPUT_ADJUST_RESIZE
-        // https://medium.com/androiddevelopers/animating-your-keyboard-fb776a8fb66d
-        // https://stackoverflow.com/a/65194077/14686958
-        if (activity != null && activity.getWindow() != null)
+        if (activity == null || activity.getWindow() == null) {
+            return;
+        }
+        // API 30+: decor no longer fits system windows; IME handled via WindowInsets.
+        // Pre-R keeps SOFT_INPUT_ADJUST_RESIZE for older resize behavior.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            androidx.core.view.WindowCompat.setDecorFitsSystemWindows(activity.getWindow(), false);
+            activity.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+        } else {
             activity.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        }
     }
 
     /**
