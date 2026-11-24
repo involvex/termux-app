@@ -44,11 +44,22 @@ InVxTermux uses `sharedUserId` / package family `com.involvex.termux_app*`.
 Plugins must be built for **this** package id and signed with the **same** key
 as the main app.
 
-| Plugin | Package id | In this repo |
+Each GitHub Release attaches **separate** plugin APKs (same workflow as the
+main app: `attach_debug_apks_to_release.yml`). Root `./gradlew assembleDebug`
+builds them too, but they are **not** inside the main APK — install each
+plugin you need.
+
+| Plugin | Package id | Release asset (example `v0.211.2`) |
 |---|---|---|
-| Termux:API | `com.involvex.termux_app.api` | `:termux-api` module (build/ship with releases; use **0.53.1+** for Android 11+ `termux-toast` crash fix) |
-| Termux:Widget | `com.involvex.termux_app.widget` | `:termux-widget` — classic `~/.shortcuts` one-tap scripts |
-| InVx Terminal Widget | `com.involvex.termux_app.terminalwidget` | `:termux-terminal-widget` — command-output home widget |
+| Termux:API | `com.involvex.termux_app.api` | `termux-api_vX.Y.Z-github-debug.apk` (use **0.53.1+** for Android 11+ `termux-toast` crash fix) |
+| Termux:Widget | `com.involvex.termux_app.widget` | `termux-widget_vX.Y.Z-github-debug.apk` |
+| InVx Terminal Widget | `com.involvex.termux_app.terminalwidget` | `termux-terminal-widget_vX.Y.Z-github-debug.apk` |
+
+Local outputs after `assembleDebug`:
+
+- `termux-api/build/outputs/apk/debug/termux-api-debug.apk`
+- `termux-widget/build/outputs/apk/debug/*.apk`
+- `termux-terminal-widget/build/outputs/apk/debug/*.apk`
 
 Clipboard / TTS from the shell needs both:
 
