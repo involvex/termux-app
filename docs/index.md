@@ -7,7 +7,7 @@ optionally attach an AI CLI.
 | | |
 |---|---|
 | Package id | `com.involvex.termux_app` |
-| Latest | **v0.211.2** |
+| Latest | **v0.211.3** |
 | Repo | [involvex/termux-app](https://github.com/involvex/termux-app) |
 | Releases | [GitHub Releases](https://github.com/involvex/termux-app/releases) |
 
