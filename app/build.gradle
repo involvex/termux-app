@@ -49,8 +49,8 @@ android {
         applicationId "com.involvex.termux_app"
         minSdkVersion project.properties.minSdkVersion.toInteger()
         targetSdkVersion project.properties.targetSdkVersion.toInteger()
-        versionCode 213
-        versionName "0.211.1"
+        versionCode 214
+        versionName "0.211.2"
 
         if (appVersionName) versionName = appVersionName
         validateVersionName(versionName)
