@@ -127,16 +127,16 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
 
         int[] sizes = new int[3];
 
-        // This is a bit arbitrary and sub-optimal. We want to give a sensible default for minimum font size
-        // to prevent invisible text due to zoom be mistake:
-        sizes[1] = (int) (4f * dipInPixels); // min
-
         // http://www.google.com/design/spec/style/typography.html#typography-line-height
         int defaultFontSize = Math.round(12 * dipInPixels);
         // Make it divisible by 2 since that is the minimal adjustment step:
         if (defaultFontSize % 2 == 1) defaultFontSize--;
 
         sizes[0] = defaultFontSize; // default
+        // A11y floor ~12sp (was 4dp); keep even so ±2 stepping stays aligned.
+        int minFontSize = defaultFontSize;
+        if (minFontSize % 2 == 1) minFontSize--;
+        sizes[1] = Math.max(2, minFontSize); // min
 
         sizes[2] = 256; // max
 

@@ -103,4 +103,46 @@ public class ExtraKeysBarHelperTest {
         assertEquals("none",
             com.invapp.shared.termux.settings.properties.TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS_STYLE);
     }
+
+    @Test
+    public void mergeCheckedPreservingOrderKeepsRelativeOrder() {
+        List<String> previous = Arrays.asList(
+            ExtraKeysBarHelper.ID_AI, ExtraKeysBarHelper.ID_PULL, ExtraKeysBarHelper.ID_DEV);
+        boolean[] checked = ExtraKeysBarHelper.checkedFlags(
+            Arrays.asList(ExtraKeysBarHelper.ID_PULL, ExtraKeysBarHelper.ID_AI,
+                ExtraKeysBarHelper.ID_NEW));
+        List<String> out = ExtraKeysBarHelper.mergeCheckedPreservingOrder(previous, checked);
+        assertEquals(Arrays.asList(
+            ExtraKeysBarHelper.ID_AI, ExtraKeysBarHelper.ID_PULL, ExtraKeysBarHelper.ID_NEW), out);
+    }
+
+    @Test
+    public void moveIdReorders() {
+        List<String> order = Arrays.asList(
+            ExtraKeysBarHelper.ID_PULL, ExtraKeysBarHelper.ID_BUNI, ExtraKeysBarHelper.ID_DEV);
+        assertEquals(Arrays.asList(
+            ExtraKeysBarHelper.ID_BUNI, ExtraKeysBarHelper.ID_PULL, ExtraKeysBarHelper.ID_DEV),
+            ExtraKeysBarHelper.moveId(order, 1, 0));
+    }
+
+    @Test
+    public void page2JsonRoundTripAndPresets() {
+        List<String> ids = Arrays.asList(ExtraKeysBarHelper.PRESET_AI);
+        String json = ExtraKeysBarHelper.page2IdsToJson(ids);
+        assertEquals(ids, ExtraKeysBarHelper.page2IdsFromJson(json));
+        assertTrue(ExtraKeysBarHelper.isValidExtraKeysJson(
+            ExtraKeysBarHelper.buildExtraKeysJson(ids)));
+        assertTrue(ExtraKeysBarHelper.isValidExtraKeysJson(
+            ExtraKeysBarHelper.buildExtraKeysJson(
+                Arrays.asList(ExtraKeysBarHelper.PRESET_MINIMAL))));
+        assertTrue(ExtraKeysBarHelper.isValidExtraKeysJson(
+            ExtraKeysBarHelper.buildExtraKeysJson(
+                Arrays.asList(ExtraKeysBarHelper.PRESET_BUN_DEV))));
+    }
+
+    @Test
+    public void page2IdsFromJsonRejectsGarbage() {
+        assertEquals(null, ExtraKeysBarHelper.page2IdsFromJson("not-json"));
+        assertEquals(Collections.emptyList(), ExtraKeysBarHelper.page2IdsFromJson("[]"));
+    }
 }

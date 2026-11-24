@@ -1,4 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory
+        app:key="theme"
+        app:title="@string/termux_terminal_view_theme_title">
+
+        <ListPreference
+            app:defaultValue="hacker"
+            app:entries="@array/invapp_theme_labels"
+            app:entryValues="@array/invapp_theme_ids"
+            app:key="terminal_theme"
+            app:summary="@string/termux_terminal_view_theme_summary"
+            app:title="@string/termux_terminal_view_theme_title"
+            app:useSimpleSummaryProvider="true" />
+
+        <Preference
+            app:key="terminal_theme_reset"
+            app:summary="@string/termux_terminal_view_theme_reset_summary"
+            app:title="@string/termux_terminal_view_theme_reset_title" />
+
+        <Preference
+            app:key="terminal_font_size"
+            app:summary="@string/termux_terminal_view_font_size_summary"
+            app:title="@string/termux_terminal_view_font_size_title" />
+
+    </PreferenceCategory>
 
     <PreferenceCategory
         app:key="view"

@@ -55,6 +55,24 @@ public final class ExtraKeysBarHelper {
         ID_DRAWER, ID_DRAWER_RIGHT, ID_KEYBOARD, ID_PASTE
     };
 
+    /** Preset: minimal navigation chrome. */
+    public static final String[] PRESET_MINIMAL = {
+        ID_KEYBOARD, ID_PASTE, ID_DRAWER
+    };
+
+    /** Preset: Bun / Vite workflow. */
+    public static final String[] PRESET_BUN_DEV = {
+        ID_PULL, ID_BUNI, ID_DEV, ID_REPOS, ID_CLONE, ID_NEW,
+        ID_KEYBOARD, ID_PASTE
+    };
+
+    /** Preset: AI-focused workflow. */
+    public static final String[] PRESET_AI = {
+        ID_AI, ID_PULL, ID_DEV, ID_REPOS, ID_KEYBOARD, ID_PASTE, ID_DRAWER_RIGHT
+    };
+
+    public static final String KEYS_DIR_NAME = "keys";
+
     private static final String PREFS = "invapp_extra_keys_bar";
     private static final String KEY_ORDER = "page2_order";
     private static final String SEP = ",";
@@ -170,6 +188,148 @@ public final class ExtraKeysBarHelper {
             }
         }
         return out;
+    }
+
+    /**
+     * Keep relative order of {@code previous} for still-checked ids; append newly
+     * checked catalog ids in catalog order.
+     */
+    @NonNull
+    public static List<String> mergeCheckedPreservingOrder(@NonNull List<String> previous,
+                                                           @NonNull boolean[] checked) {
+        LinkedHashSet<String> wanted = new LinkedHashSet<>();
+        for (int i = 0; i < ALL_PAGE2_IDS.length && i < checked.length; i++) {
+            if (checked[i]) {
+                wanted.add(ALL_PAGE2_IDS[i]);
+            }
+        }
+        List<String> out = new ArrayList<>();
+        for (String id : previous) {
+            if (wanted.remove(id)) {
+                out.add(id);
+            }
+        }
+        for (String id : ALL_PAGE2_IDS) {
+            if (wanted.contains(id)) {
+                out.add(id);
+            }
+        }
+        return out;
+    }
+
+    @NonNull
+    public static List<String> moveId(@NonNull List<String> order, int from, int to) {
+        if (from < 0 || to < 0 || from >= order.size() || to >= order.size() || from == to) {
+            return new ArrayList<>(order);
+        }
+        List<String> out = new ArrayList<>(order);
+        String id = out.remove(from);
+        out.add(to, id);
+        return out;
+    }
+
+    @NonNull
+    public static File keysDirectory() {
+        return new File(BackupHelper.backupDirectory(), KEYS_DIR_NAME);
+    }
+
+    @NonNull
+    public static String exportFileName() {
+        return "extra-keys-page2.json";
+    }
+
+    /**
+     * Serialize page-2 ids as a JSON string array for import/export.
+     */
+    @NonNull
+    public static String page2IdsToJson(@NonNull List<String> ids) {
+        StringBuilder sb = new StringBuilder("[");
+        boolean first = true;
+        for (String id : ids) {
+            if (!isKnown(id)) {
+                continue;
+            }
+            if (!first) {
+                sb.append(',');
+            }
+            first = false;
+            sb.append('"').append(id).append('"');
+        }
+        sb.append(']');
+        return sb.toString();
+    }
+
+    /**
+     * Parse a JSON string array of page-2 ids. Unknown ids skipped.
+     * @return null if not a valid JSON array
+     */
+    @Nullable
+    public static List<String> page2IdsFromJson(@Nullable String json) {
+        if (json == null) {
+            return null;
+        }
+        String trimmed = json.trim();
+        if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
+            return null;
+        }
+        String inner = trimmed.substring(1, trimmed.length() - 1).trim();
+        List<String> out = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        if (inner.isEmpty()) {
+            return out;
+        }
+        // Lightweight parse: "ID",'ID',ID
+        int i = 0;
+        while (i < inner.length()) {
+            while (i < inner.length() && (inner.charAt(i) == ',' || Character.isWhitespace(inner.charAt(i)))) {
+                i++;
+            }
+            if (i >= inner.length()) {
+                break;
+            }
+            char q = inner.charAt(i);
+            String token;
+            if (q == '"' || q == '\'') {
+                int end = inner.indexOf(q, i + 1);
+                if (end < 0) {
+                    return null;
+                }
+                token = inner.substring(i + 1, end);
+                i = end + 1;
+            } else {
+                int end = i;
+                while (end < inner.length() && inner.charAt(end) != ','
+                    && !Character.isWhitespace(inner.charAt(end))) {
+                    end++;
+                }
+                token = inner.substring(i, end);
+                i = end;
+            }
+            if (isKnown(token) && seen.add(token)) {
+                out.add(token);
+            }
+        }
+        return out;
+    }
+
+    /** Validate that built extra-keys JSON parses via a minimal brace check. */
+    public static boolean isValidExtraKeysJson(@NonNull String json) {
+        if (json.isEmpty() || json.charAt(0) != '[') {
+            return false;
+        }
+        int depth = 0;
+        for (int i = 0; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (c == '[') {
+                depth++;
+            } else if (c == ']') {
+                depth--;
+                if (depth < 0) {
+                    return false;
+                }
+            }
+        }
+        return depth == 0;
     }
 
     /** Build multi-page {@code extra-keys} JSON. */
@@ -310,7 +470,7 @@ public final class ExtraKeysBarHelper {
 
     /** Insert or replace an unquoted {@code key = value} line (for simple tokens). */
     @NonNull
-    static String upsertRawProperty(@NonNull String text, @NonNull String key, @NonNull String value) {
+    public static String upsertRawProperty(@NonNull String text, @NonNull String key, @NonNull String value) {
         return upsertLine(text, key, key + " = " + value);
     }
 

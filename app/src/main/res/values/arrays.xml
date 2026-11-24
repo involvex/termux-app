@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="invapp_theme_ids">
+        <item>hacker</item>
+        <item>matcha</item>
+        <item>paper</item>
+        <item>system</item>
+    </string-array>
+    <string-array name="invapp_theme_labels">
+        <item>Hacker</item>
+        <item>Matcha</item>
+        <item>Paper</item>
+        <item>System</item>
+    </string-array>
+</resources>
