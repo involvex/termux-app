@@ -346,11 +346,12 @@ public class NotificationAPI {
                 .build();
 
         // Build a PendingIntent for the reply action to trigger.
+        // RemoteInput requires a mutable PendingIntent on API 31+.
         PendingIntent replyPendingIntent =
                 PendingIntent.getBroadcast(context,
                         buttonNum,
                         getMessageReplyIntent((Intent)intent.clone(), buttonText, buttonAction, notificationId),
-                        PendingIntent.FLAG_UPDATE_CURRENT);
+                        com.invapp.shared.android.PendingIntentUtils.mutable(PendingIntent.FLAG_UPDATE_CURRENT));
 
         // Create the reply action and add the remote input.
         return new NotificationCompat.Action.Builder(R.drawable.ic_event_note_black_24dp,

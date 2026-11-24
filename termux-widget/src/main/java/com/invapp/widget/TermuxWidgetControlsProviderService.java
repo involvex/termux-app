@@ -208,7 +208,8 @@ public class TermuxWidgetControlsProviderService extends ControlsProviderService
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         addShortcutFileExtrasToIntent(file, intent);
 
-        return PendingIntent.getActivity(getBaseContext(), WIDGET_REQUEST_CODE, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        return PendingIntent.getActivity(getBaseContext(), WIDGET_REQUEST_CODE, intent,
+            com.invapp.shared.android.PendingIntentUtils.immutable(PendingIntent.FLAG_UPDATE_CURRENT));
     }
 
     private void addShortcutFileExtrasToIntent(File file, Intent intent) {
