@@ -53,7 +53,7 @@ See `ROADMAP.md`.
 | Default cwd | `~/repos` (exec-capable). `~/storage/shared` is browse/sync only (**noexec**) |
 | Preview | Drawer **Preview** → Scan + chips (loopback by default); any `http`/`https` URL in the bar/WebView; **Copy LAN** / **QR LAN** / long-press chip → `http://<wifi-ip>:<port>` when bound on `0.0.0.0` |
 | AI helper | `opencode-setup` / `td-ai` → `opencode-server` → OpenCode V2 on `:4000` (binds **`127.0.0.1`** by default; LAN via `OPENCODE_HOST=0.0.0.0` or AI Doctor). Tries `service start`, then **foreground `opencode serve`** on exit 127 / failure (glibc often lacks the service `serve` helper). Preview uses `127.0.0.1`. Removes legacy `opencode-v2*` shims. Setup downloads official V2 `opencode-linux-*.tar.gz` from `opencode.ai/files/bin` (live lookup, fallback `2.0.6`), then `glibc` + ld-linux wrapper with **`LD_PRELOAD=` empty** and DNS shim via **`ld-linux --preload $PREFIX/lib/libinvapp-opencode-shim.so`**. Drawer **AI** probes missing/installed/ready (`GET /api/info` + Basic auth); **Stop AI** / `opencode-server stop`. On-demand into `$PREFIX`, not baked into APK |
-| Kilo CLI | `td-kilo-setup` → official `kilo-linux-{arm64,x64}*.tar.gz` from `Kilo-Org/kilocode` releases (**v7.x** `@kilocode/cli`; never v1.x stubs). Wrapper `$PREFIX/bin/kilo` uses same empty `LD_PRELOAD=` + `ld-linux --preload` DNS shim as OpenCode. Fallback pin `v7.8.32`; stamped v0/v1 forces reinstall |
+| Kilo CLI | `td-kilo-setup` → official `kilo-linux-{arm64,x64}*.tar.gz` from `Kilo-Org/kilocode` releases (**v7.x** `@kilocode/cli`; never v1.x stubs). Wrapper `$PREFIX/bin/kilo` uses same empty `LD_PRELOAD=` + `ld-linux --preload` DNS shim as OpenCode. Fallback pin `v7.8.32`; stamped v0/v1 forces reinstall. Setup also rewrites `$PREFIX/bin/kilo`/`kilocode` and replaces any raw glibc ELF at `~/.kilo/bin/kilo` (upstream PATH prepend) with a redirect — otherwise bash hits that ELF and fails with `cannot execute: required file not found` |
 | Cursor Agent | `cursor-agent-setup` → official `agent-cli-package.tar.gz` (glibc Node 24; **never** Bun / `curl\|bash`). `$PREFIX/bin/agent` runs bundled `node` via `ld-linux` + same DNS shim. Cloud My Machines: `agent login` then `td-agent-worker start` → https://cursor.com/agents. Pin `CURSOR_AGENT_VERSION=…`; after `agent update` run `cursor-agent-setup --wrap-only`. Stack refresh: `td-upgrade` (pkg + opencode + agent rewrap + Bun stamp; no `bun upgrade`) |
 | Dev server | `td-dev [script]` → `bun run` with Preview/LAN hints |
 | Scaffold | `td-scaffold [name] [template]` → Vite under `~/repos` (host `0.0.0.0`); `pwa` / `pwa-react` add `vite-plugin-pwa` |
@@ -123,6 +123,16 @@ See `ROADMAP.md`.
   never use `--mdns`. Default bind is already `127.0.0.1`; LAN is
   `OPENCODE_HOST=0.0.0.0 td-ai`. Firewall/VPN may block LAN clients;
   Preview defaults to loopback and can open any http(s) URL.
+- `serve: error while loading shared libraries: serve` /
+  `service.ensure` exit 127 — OpenCode V2 `service start` looks for a
+  native `serve` helper that does not exist under glibc/ld-linux on this
+  fork. `opencode-server` / `td-ai` skip `service start` by default and
+  run foreground `opencode serve` (opt in: `OPENCODE_USE_SERVICE=1`).
+- `CANNOT LINK EXECUTABLE "tar": library "libandroid-glob.so"` /
+  `td-resource-linux: extract failed (no bin/sh)` — host `tar` under
+  `proot --link2symlink` inherits the wrapper’s narrow
+  `LD_LIBRARY_PATH=…/proot-libs`. Stage `libandroid-glob.so*` into
+  proot-libs (reopen app or `ln -sf $PREFIX/lib/libandroid-glob.so* $PREFIX/libexec/proot-libs/`), then re-run; setup also falls back to plain tar with `$PREFIX/lib`.
 - Banner missing / duplicated / in the wrong place — the hook is
   `$PREFIX/etc/profile.d/invapp-banner.sh`, the renderer
   `$PREFIX/lib/invapp/banner.sh`, and the art is **pre-rendered** (no figlet,
@@ -537,10 +547,11 @@ termux-app/
   (classic `~/.shortcuts` one-tap scripts; same `sharedUserId` + test key).
   Stock `com.termux.widget` will not install. Main app seeds templates via
   `WidgetScriptsInstaller` (Settings / right drawer).
-- **Termux:Styling** (`com.involvex.termux_app.styling`) — not built in this
-  repo today; long-press → Style needs an InVx-signed plugin APK. Stock
-  `com.termux.styling` (F-Droid) will not resolve — dialog points at this
-  fork’s GitHub Releases, not F-Droid.
+- **Termux:Styling** (`com.involvex.termux_app.styling`) — built from
+  [`involvex/termux-styling`](https://github.com/involvex/termux-styling)
+  (local `I:\dev\termux-styling`); same `sharedUserId` + test key as the
+  main app. Stock `com.termux.styling` (F-Droid) will not install alongside
+  this fork — dialog points at InVx Releases / the styling fork, not F-Droid.
 - **InVx Terminal Widget** (`com.involvex.termux_app.terminalwidget`) —
   `:termux-terminal-widget` (gardockt fork): command-output home widget via
   `RUN_COMMAND` (not classic Termux:Widget).
