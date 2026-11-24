@@ -94,7 +94,7 @@ _ivx_configure() {
     esac
 
     if [ "$COMP_CWORD" -eq 1 ]; then
-        COMPREPLY=( $(compgen -W "status banner completions packages network doctor ai reset help" -- "$cur") )
+        COMPREPLY=( $(compgen -W "status banner completions packages network doctor ai setup fix reset help" -- "$cur") )
         return
     fi
 
@@ -102,12 +102,53 @@ _ivx_configure() {
 }
 complete -F _ivx_configure ivx-configure
 
+_ivx_setup() {
+    local cur
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    if [ "$COMP_CWORD" -eq 1 ]; then
+        COMPREPLY=( $(compgen -W "bun opencode kilo agent linux packages help" -- "$cur") )
+        return
+    fi
+    COMPREPLY=()
+}
+complete -F _ivx_setup ivx-setup
+
+_ivx_fix() {
+    local cur
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    if [ "$COMP_CWORD" -eq 1 ]; then
+        COMPREPLY=( $(compgen -W "dpkg dns opencode kilo paths help" -- "$cur") )
+        return
+    fi
+    COMPREPLY=()
+}
+complete -F _ivx_fix ivx-fix
+
 _ivx_doctor() {
     local cur
     cur="${COMP_WORDS[COMP_CWORD]}"
     COMPREPLY=( $(compgen -W "--strict --network" -- "$cur") )
 }
 complete -F _ivx_doctor ivx-doctor
+
+_ivx_backup() {
+    local cur
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    COMPREPLY=( $(compgen -W "--all --secrets --out --help" -- "$cur") )
+}
+complete -F _ivx_backup ivx-backup
+
+_ivx_restore() {
+    local cur
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    if [ "$COMP_CWORD" -eq 1 ]; then
+        COMPREPLY=( $(compgen -W "--all --latest --help" -- "$cur") )
+        COMPREPLY+=( $(compgen -f -X '!*.zip' -- "$cur") )
+        return
+    fi
+    COMPREPLY=( $(compgen -f -- "$cur") )
+}
+complete -F _ivx_restore ivx-restore
 
 _ivx_cleanup() {
     local cur

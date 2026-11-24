@@ -1,6 +1,6 @@
 # InVxTermux — Feature Suggestions Report
 
-> Generated: 2026-09-22 · Updated: 2026-11-22 (Phase 22) · Scope: `com.involvex.termux_app`
+> Generated: 2026-09-22 · Updated: 2026-11-24 (Phase 23) · Scope: `com.involvex.termux_app`
 > Pillars: Terminal-first · PC ↔ phone (`~/repos`) · Preview (`127.0.0.1`) · AI CLI (`td-ai` → OpenCode `:4000`)
 > Non-goals respected: no full in-app IDE / multi-tab browser, no public tunnels by default, no per-npm wrappers.
 > Sources: `README.md`, `ROADMAP.md`, `AGENTS.md`, `docs/*.md`, `app/build.gradle`, `app/src/main/java/com/invapp/...`, `terminal-emulator`, `termux-shared`, `termux-api`.
@@ -214,7 +214,9 @@
 
 ## Suggested Next Steps (for maintainers)
 
-> Phase 22 shipped FEAT-014 / FEAT-023 / FEAT-024 (narrowed) — cut as v0.210.0 when ready.
+> Phase 22 shipped FEAT-014 / FEAT-023 / FEAT-024 (narrowed) as v0.210.0.
+> Phase 23: `ivx-setup` / `ivx-fix` / doctor PATH / `ivx-backup` + OpenCode TUI
+> `--server`/`--standalone` + `libacl` proot-libs staging.
 > Phase 21 shipped FEAT-009 → v0.209.0.
 > Phase 20 shipped FEAT-008 (narrowed) + FEAT-010 (narrowed) → v0.208.0.
 > Phase 19 shipped FEAT-006 / FEAT-012 / FEAT-017 + AI script asset unification.

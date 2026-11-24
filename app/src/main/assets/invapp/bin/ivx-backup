@@ -1,0 +1,100 @@
+#!@BASH@
+# ivx-backup — zip ~/.termux, ~/.shortcuts, and a ~/repos remote manifest
+# into ~/storage/shared/InVxTermux/ (same tree as Settings → Backup).
+# Workflow SharedPreferences are Settings-only; this CLI covers portable trees.
+#
+#   ivx-backup [--all] [--secrets] [--out FILE]
+set -u
+
+if [ -z "${PREFIX:-}" ]; then
+    PREFIX=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd -P) || PREFIX=''
+fi
+: "${PREFIX:?PREFIX is not set}"
+: "${HOME:?HOME is not set}"
+export PATH="$PREFIX/bin:$PATH"
+export LD_LIBRARY_PATH="$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+INCLUDE_SECRETS=0
+OUT=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --all|-a) shift ;; # default set; symmetry with ivx-restore --all
+        --secrets) INCLUDE_SECRETS=1; shift ;;
+        --out) OUT="${2:-}"; shift 2 ;;
+        --out=*) OUT="${1#--out=}"; shift ;;
+        -h|--help)
+            cat <<'EOF'
+ivx-backup — export InVxTermux portable config
+
+  ivx-backup [--all] [--secrets] [--out FILE]
+
+Writes ~/storage/shared/InVxTermux/backup-YYYYMMDD.zip (or --out).
+Includes: repos-manifest.json, ~/.termux, ~/.shortcuts.
+Optional --secrets: .npmrc, .git-credentials, OpenCode auth files.
+Does not zip ~/repos trees. Workflow bar prefs: use Settings → Backup.
+EOF
+            exit 0
+            ;;
+        *) echo "unknown: $1" >&2; exit 2 ;;
+    esac
+done
+
+STORAGE="${HOME}/storage/shared/InVxTermux"
+mkdir -p "$STORAGE" 2>/dev/null || true
+if [ ! -d "$STORAGE" ]; then
+    STORAGE="${HOME}/InVxTermux-backups"
+    mkdir -p "$STORAGE"
+    echo "ivx-backup: shared storage missing — using $STORAGE" >&2
+    echo "  tip: termux-setup-storage" >&2
+fi
+
+if [ -z "$OUT" ]; then
+    OUT="$STORAGE/backup-$(date +%Y%m%d).zip"
+fi
+
+TMP=$(mktemp -d "$PREFIX/tmp/ivx-backup.XXXXXX") || exit 1
+trap 'rm -rf "$TMP"' EXIT
+
+{
+    printf '[\n'
+    first=1
+    if [ -d "$HOME/repos" ]; then
+        for d in "$HOME/repos"/*/; do
+            [ -d "$d/.git" ] || continue
+            name=$(basename "${d%/}")
+            url=$(git -C "$d" remote get-url origin 2>/dev/null || true)
+            branch=$(git -C "$d" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+            [ "$first" = 1 ] || printf ',\n'
+            first=0
+            printf '  {"name":"%s","url":"%s","branch":"%s"}' \
+                "$name" "${url//\"/\\\"}" "${branch}"
+        done
+    fi
+    printf '\n]\n'
+} > "$TMP/repos-manifest.json"
+
+mkdir -p "$TMP/home"
+[ -d "$HOME/.termux" ] && cp -a "$HOME/.termux" "$TMP/home/" 2>/dev/null || true
+[ -d "$HOME/.shortcuts" ] && cp -a "$HOME/.shortcuts" "$TMP/home/" 2>/dev/null || true
+
+if [ "$INCLUDE_SECRETS" = 1 ]; then
+    for rel in .npmrc .git-credentials \
+        .config/opencode/service.json .config/opencode/auth.json; do
+        src="$HOME/$rel"
+        [ -e "$src" ] || continue
+        mkdir -p "$TMP/home/$(dirname "$rel")"
+        cp -a "$src" "$TMP/home/$rel" 2>/dev/null || true
+    done
+fi
+
+rm -f "$OUT"
+if command -v zip >/dev/null 2>&1; then
+    (cd "$TMP" && zip -qr "$OUT" .) || exit 1
+else
+    OUT="${OUT%.zip}.tar.gz"
+    (cd "$TMP" && tar -czf "$OUT" .) || exit 1
+    echo "ivx-backup: zip not installed — wrote tar.gz (pkg install zip)" >&2
+fi
+
+echo "OK: $OUT"
+ls -lh "$OUT" 2>/dev/null || true

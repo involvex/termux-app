@@ -44,13 +44,14 @@ PROOT_LIBS="${INVAPP_PROOT_LIBDIR:-$PREFIX/libexec/proot-libs}"
 # Host-only deps for proot-bin (keep out of guest by never using full $PREFIX/lib).
 if [ -d "$PREFIX/lib" ]; then
     mkdir -p "$PROOT_LIBS" 2>/dev/null || true
-    # libandroid-glob: host tar (proot --link2symlink tar …) needs it; without
-    # it extract dies: CANNOT LINK EXECUTABLE "tar": library "libandroid-glob.so"
+    # Host tar under `proot --link2symlink tar` needs these (narrow LD_LIBRARY_PATH):
+    # libandroid-glob / libacl — else CANNOT LINK EXECUTABLE "tar".
     for _pat in \
         'libtalloc.so*' \
         'libandroid-shmem.so*' \
         'libandroid-support.so*' \
-        'libandroid-glob.so*'
+        'libandroid-glob.so*' \
+        'libacl.so*'
     do
         for _t in "$PREFIX/lib"/$_pat; do
             [ -e "$_t" ] || continue

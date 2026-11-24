@@ -1306,12 +1306,13 @@ public final class TermuxBunInstaller {
         if (!libDir.isDirectory()) {
             return;
         }
-        // libandroid-glob: host tar under `proot --link2symlink tar` (rootfs extract).
+        // Host tar under `proot --link2symlink tar` (rootfs extract).
         final String[] prefixes = {
             "libtalloc.so",
             "libandroid-shmem.so",
             "libandroid-support.so",
             "libandroid-glob.so",
+            "libacl.so",
         };
         File[] matches = libDir.listFiles((dir, name) -> {
             for (String p : prefixes) {

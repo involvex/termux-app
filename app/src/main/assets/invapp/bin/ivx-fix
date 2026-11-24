@@ -1,0 +1,5 @@
+#!@BASH@
+# ivx-fix — heal common InVxTermux breakage (aliases ivx-configure fix).
+#   ivx-fix
+#   ivx-fix dpkg|dns|opencode|kilo|paths
+exec "${PREFIX}/bin/ivx-configure" fix "$@"

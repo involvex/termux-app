@@ -11,8 +11,10 @@
 | `dpkg: too-long line or missing newline in …/*.triggers` | Corrupt `info/*.triggers` (often a glued shebang from older fixers). Run `ivx-fix-dpkg-scripts`, then `rm -f "$PREFIX/var/lib/dpkg/info/<pkg>.triggers" && pkg install -f <pkg>` |
 | `pd run` / proot → guest `libc.so` / host `libtalloc` / `libandroid-shmem` / `execve(bash)` ENOENT | Stage host deps into `$PREFIX/libexec/proot-libs` (not full `$PREFIX/lib`); wrapper shebang `#!/system/bin/sh` + `LD_PRELOAD=`. After `pkg reinstall proot`, rewrap (ELF overwrote `bin/proot`). Then `pd reset ubuntu && pd install ubuntu` if rootfs is incomplete. |
 | `td-resource-linux --run` → `libandroid-support` / `libtalloc` / `libandroid-shmem` | Same proot-libs staging; `export LD_LIBRARY_PATH=$PREFIX/lib` for host shell; reopen app to rewrite `run.sh` |
-| `tar`: `libandroid-glob.so` not found / extract failed (no bin/sh) | Stage glob into `$PREFIX/libexec/proot-libs` (reopen app); or `ln -sf $PREFIX/lib/libandroid-glob.so* $PREFIX/libexec/proot-libs/` then `td-resource-linux --reinstall` |
-| `serve: … shared libraries: serve` / `service.ensure` | Use `td-ai` / `opencode-server` (foreground serve). Do not rely on `opencode service start` |
+| `tar`: `libandroid-glob.so` / `libacl.so` not found / extract failed | Stage into `$PREFIX/libexec/proot-libs` (reopen app); or `ln -sf $PREFIX/lib/lib{android-glob,acl}.so* $PREFIX/libexec/proot-libs/` then `td-resource-linux --reinstall` |
+| `serve: … shared libraries: serve` / `service.ensure` | `td-ai` / `opencode-server` for the server; `opencode` TUI attaches to `:4000` or uses `--standalone`. Re-run `opencode-setup` after update |
+| `kilo: cannot execute: required file not found` | Often dead/`~/.kilo/bin` PATH in `~/.bashrc` — `ivx-doctor` warns; `ivx-fix kilo` / `td-kilo-setup --reinstall` |
+| Bun shows old version after “upgrade” | APK pin only; `td-resource-bun` does not install. Reopen app / newer APK. Never `curl\|bash bun.sh` |
 | Host bash → `libandroid-support` / `libreadline` not found after proot | `LD_LIBRARY_PATH` was left as `libexec/proot-libs` only. Run `export LD_LIBRARY_PATH=$PREFIX/lib` (new sessions auto-heal via `profile.d/invapp.sh`) |
 | `pd login kali-rolling` → `execve("/usr/bin/bash")` ENOENT | Unsupported on this fork. Use `td-proot-nethunter setup` (kali.download), not Hub/`pd` |
 | Global tool clutter (pkg / cargo / bun / npm / pip / uv) | `ivx-cleanup` interactive menu |

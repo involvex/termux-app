@@ -1,0 +1,95 @@
+#!@BASH@
+# ivx-restore — restore portable trees from ivx-backup / Settings backup zip.
+#
+#   ivx-restore [--all] [FILE]
+#   ivx-restore --latest
+set -u
+
+if [ -z "${PREFIX:-}" ]; then
+    PREFIX=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd -P) || PREFIX=''
+fi
+: "${PREFIX:?PREFIX is not set}"
+: "${HOME:?HOME is not set}"
+export PATH="$PREFIX/bin:$PATH"
+export LD_LIBRARY_PATH="$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+ZIP=""
+LATEST=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --all|-a) shift ;;
+        --latest) LATEST=1; shift ;;
+        -h|--help)
+            cat <<'EOF'
+ivx-restore — restore InVxTermux portable config
+
+  ivx-restore [--all] [FILE]
+  ivx-restore --latest
+
+Restores home/.termux and home/.shortcuts from a backup zip/tar.gz.
+Prints repos-manifest.json hints for missing remotes (td-clone).
+Workflow SharedPreferences: use Settings → Backup → Restore.
+EOF
+            exit 0
+            ;;
+        *)
+            if [ -z "$ZIP" ]; then ZIP=$1; shift; else echo "unknown: $1" >&2; exit 2; fi
+            ;;
+    esac
+done
+
+STORAGE="${HOME}/storage/shared/InVxTermux"
+[ -d "$STORAGE" ] || STORAGE="${HOME}/InVxTermux-backups"
+
+if [ "$LATEST" = 1 ] || [ -z "$ZIP" ]; then
+    ZIP=$(ls -1t "$STORAGE"/backup-*.zip "$STORAGE"/backup-*.tar.gz 2>/dev/null | head -1 || true)
+fi
+if [ -z "$ZIP" ] || [ ! -f "$ZIP" ]; then
+    echo "ivx-restore: no backup file (pass PATH or --latest under $STORAGE)" >&2
+    exit 1
+fi
+
+TMP=$(mktemp -d "$PREFIX/tmp/ivx-restore.XXXXXX") || exit 1
+trap 'rm -rf "$TMP"' EXIT
+
+case "$ZIP" in
+    *.zip)
+        if command -v unzip >/dev/null 2>&1; then
+            unzip -q "$ZIP" -d "$TMP" || exit 1
+        else
+            echo "ivx-restore: need unzip (pkg install unzip)" >&2
+            exit 1
+        fi
+        ;;
+    *.tar.gz|*.tgz)
+        tar -xzf "$ZIP" -C "$TMP" || exit 1
+        ;;
+    *)
+        echo "ivx-restore: unsupported archive: $ZIP" >&2
+        exit 1
+        ;;
+esac
+
+n=0
+if [ -d "$TMP/home/.termux" ]; then
+    mkdir -p "$HOME/.termux"
+    cp -a "$TMP/home/.termux/." "$HOME/.termux/" && n=$((n + 1))
+fi
+if [ -d "$TMP/home/.shortcuts" ]; then
+    mkdir -p "$HOME/.shortcuts"
+    cp -a "$TMP/home/.shortcuts/." "$HOME/.shortcuts/" && n=$((n + 1))
+fi
+# Optional secrets if present in the archive
+for rel in .npmrc .git-credentials \
+    .config/opencode/service.json .config/opencode/auth.json; do
+    [ -e "$TMP/home/$rel" ] || continue
+    mkdir -p "$HOME/$(dirname "$rel")"
+    cp -a "$TMP/home/$rel" "$HOME/$rel" && n=$((n + 1))
+done
+
+echo "OK: restored from $ZIP ($n tree(s))"
+if [ -f "$TMP/repos-manifest.json" ]; then
+    echo "Repos manifest:"
+    cat "$TMP/repos-manifest.json"
+    echo "Clone missing remotes with: td-clone <url> [name]"
+fi

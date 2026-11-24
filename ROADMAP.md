@@ -274,6 +274,21 @@ https://github.com/involvex/termux-app
   `~/storage/shared/InVxTermux/diag-YYYYMMDD-HHmm.zip` (report.md + versions +
   AI stamps; no secrets; consent dialog; Log Level unchanged)
 
+### 23. CLI unification + extract / OpenCode TUI harden (in progress)
+
+- **`ivx-setup`** — component TUI / flags (`bun` / `opencode` / `kilo` /
+  `agent` / `linux` / packages); wraps existing installers; `td-*` stay
+- **`ivx-fix`** — `dpkg` / `dns` / `opencode` / `kilo` / `paths`
+- **`ivx-doctor`** — PATH / `~/.bashrc` dead-entry + `~/.kilo/bin` ELF shadow
+  WARN (read-only; never edits bashrc)
+- **`ivx-backup` / `ivx-restore`** — portable zip of `~/.termux`, shortcuts,
+  repos manifest (Settings Backup still owns SharedPreferences)
+- **OpenCode TUI** — `$PREFIX/bin/opencode` attaches to `:4000` via `--server`
+  or falls back to `--standalone` (skips broken `service.ensure` / `serve`)
+- **Extract** — stage `libacl.so*` (+ prior `libandroid-glob`) into
+  `proot-libs` for `td-resource-linux`
+- **Bun messaging** — `td-resource-bun` is read-only; APK pin only
+
 ## Non-goals (for now)
 
 - Full in-app IDE / multi-tab browser
