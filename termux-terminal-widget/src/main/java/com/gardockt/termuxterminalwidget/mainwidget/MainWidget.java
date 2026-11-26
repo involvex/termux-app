@@ -271,8 +271,24 @@ public class MainWidget extends AppWidgetProvider {
     @Override
     public void onRestored(Context context, int[] oldWidgetIds, int[] newWidgetIds) {
         Log.d(TAG, "onRestored");
-        // TODO
         super.onRestored(context, oldWidgetIds, newWidgetIds);
+        // Backup restore renumbers App Widget ids; migrate SharedPreferences keys so
+        // command / colors / refresh interval survive the remapping.
+        if (context == null || oldWidgetIds == null || newWidgetIds == null) {
+            return;
+        }
+        int count = Math.min(oldWidgetIds.length, newWidgetIds.length);
+        for (int i = 0; i < count; i++) {
+            int oldId = oldWidgetIds[i];
+            int newId = newWidgetIds[i];
+            if (oldId == newId) {
+                continue;
+            }
+            Log.d(TAG, "Migrating widget prefs " + oldId + " → " + newId);
+            MainWidgetPreferencesManager.migrate(context, oldId, newId);
+            cancelUpdateWork(context, oldId);
+            resetUpdateWork(context, newId);
+        }
     }
 
     @Override

@@ -309,6 +309,13 @@ https://github.com/involvex/termux-app
 - **FEAT-018** — Skippable 4-step wizard (storage / ~/repos / Preview / AI);
   re-run from Help actions sheet or Settings → Setup checklist
 
+### 27. Deps + deprecation hygiene (done)
+
+- **FEAT-019** — Pin `commons-io` back to **2.5** (minSdk 21 / no `Path`); Gradle
+  Dependabot grouped minor/patch (ignore AGP major + `commons-io` >2.5)
+- **FEAT-021** — Notification channel sound/vibrate/lights on API 26+ (keep
+  `setDefaults` below O); Terminal Widget `onRestored` migrates prefs by id
+
 ## Non-goals (for now)
 
 - Full in-app IDE / multi-tab browser
