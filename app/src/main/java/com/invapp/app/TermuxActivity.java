@@ -92,6 +92,7 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.viewpager.widget.ViewPager;
@@ -1656,8 +1657,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     /** @deprecated Use {@link #registerOnBackPressedHandler()} / OnBackPressedDispatcher. */
     @Deprecated
+    @SuppressLint("MissingSuperCall")
     @Override
     public void onBackPressed() {
+        // Route through OnBackPressedDispatcher (callback registered above); do not call
+        // super.onBackPressed() or the deprecated Activity path double-finishes.
         getOnBackPressedDispatcher().onBackPressed();
     }
 
@@ -2098,12 +2102,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         intentFilter.addAction(TERMUX_ACTIVITY.ACTION_REQUEST_PERMISSIONS);
 
         // Shell tools (termux-setup-storage → am/termux-am) send these; must be exported.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(mTermuxActivityBroadcastReceiver, intentFilter,
-                Context.RECEIVER_EXPORTED);
-        } else {
-            registerReceiver(mTermuxActivityBroadcastReceiver, intentFilter);
-        }
+        ContextCompat.registerReceiver(this, mTermuxActivityBroadcastReceiver, intentFilter,
+            ContextCompat.RECEIVER_EXPORTED);
     }
 
     private void unregisterTermuxActivityBroadcastReceiver() {
