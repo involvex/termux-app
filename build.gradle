@@ -8,18 +8,18 @@ buildscript {
 
         // Security: pin patched versions of AGP/lint transitive build-classpath deps
         // (never shipped in the APK). Keeps Dependabot alerts closed until AGP itself
-        // bumps them. kotlin-gradle-plugin 2.4.20 is forced since its fix graduated
+        // bumps them. kotlin-gradle-plugin 2.4.21 is forced since its fix graduated
         // from beta to stable (2026-09-07).
         constraints {
-            classpath 'org.bitbucket.b_c:jose4j:0.9.6'
+            classpath 'org.bitbucket.b_c:jose4j:0.9.7'
             classpath 'org.jdom:jdom2:2.0.6.1'
             classpath 'org.apache.httpcomponents:httpclient:4.5.14'
-            classpath 'org.apache.commons:commons-lang3:3.18.0'
-            classpath 'org.bouncycastle:bcprov-jdk18on:1.85'
-            classpath 'org.bouncycastle:bcpkix-jdk18on:1.85'
-            classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.20'
+            classpath 'org.apache.commons:commons-lang3:3.22.0'
+            classpath 'org.bouncycastle:bcprov-jdk18on:1.87'
+            classpath 'org.bouncycastle:bcpkix-jdk18on:1.87'
+            classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.21'
             // GHSA-xxph-c9ww-hj94 — AGP/lint pull guava-jre transitively
-            classpath 'com.google.guava:guava:33.7.2-jre'
+            classpath 'com.google.guava:guava:33.8.0-jre'
         }
     }
 }
@@ -45,17 +45,17 @@ subprojects {
     // The root buildscript constraints above do not cover AGP's per-module
     // androidLintTool classpath (which resolves its own bcpkix/httpclient/commons-lang3
     // copies) or Robolectric's bcprov 1.72 on the test classpath (test JVM only,
-    // never shipped). Keeps Dependabot alerts closed. kotlin-gradle-plugin 2.4.20
+    // never shipped). Keeps Dependabot alerts closed. kotlin-gradle-plugin 2.4.21
     // (stable) is forced since the lint classpath resolves 2.2.10 transitively.
     configurations.configureEach {
         resolutionStrategy.force(
-            'org.bitbucket.b_c:jose4j:0.9.6',
+            'org.bitbucket.b_c:jose4j:0.9.7',
             'org.jdom:jdom2:2.0.6.1',
             'org.apache.httpcomponents:httpclient:4.5.14',
-            'org.apache.commons:commons-lang3:3.18.0',
-            'org.bouncycastle:bcprov-jdk18on:1.85',
-            'org.bouncycastle:bcpkix-jdk18on:1.85',
-            'org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.20'
+            'org.apache.commons:commons-lang3:3.22.0',
+            'org.bouncycastle:bcprov-jdk18on:1.87',
+            'org.bouncycastle:bcpkix-jdk18on:1.87',
+            'org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.21'
         )
         // GHSA-xxph-c9ww-hj94: keep Android modules on guava-android, build/test
         // classpath (AGP lint / Robolectric) on patched guava-jre. Dependabot
@@ -65,10 +65,10 @@ subprojects {
                     && details.requested.name == 'guava') {
                 def ver = details.requested.version ?: ''
                 if (ver.endsWith('-android')) {
-                    details.useVersion '33.7.2-android'
+                    details.useVersion '33.8.0-android'
                     details.because 'GHSA-xxph-c9ww-hj94'
                 } else {
-                    details.useVersion '33.7.2-jre'
+                    details.useVersion '33.8.0-jre'
                     details.because 'GHSA-xxph-c9ww-hj94'
                 }
             }

@@ -6,7 +6,7 @@ android {
     compileSdkVersion project.properties.compileSdkVersion.toInteger()
 
     dependencies {
-        implementation "androidx.annotation:annotation:1.9.0"
+        implementation "androidx.annotation:annotation:1.11.0"
         api project(":terminal-emulator")
     }
 
@@ -54,7 +54,7 @@ afterEvaluate {
                 from components.default
                 groupId = 'com.invapp'
                 artifactId = 'terminal-view'
-                version = '0.211.3'
+                version = '0.211.4'
                 artifact(sourceJar)
             }
         }

@@ -415,37 +415,42 @@ without testing bootstrap + all ABIs.
 | NDK | `29.0.14206865`, `ndk-build` (`Android.mk` per module) |
 | JDK (build) | `17` (Android Studio Flamingo+) |
 | Java compat | `1.8` + `coreLibraryDesugaring` (`desugar_jdk_libs:2.1.5`) |
-| App version | `versionCode 215`, `versionName 0.211.3` (semver-enforced at build) |
+| App version | `versionCode 216`, `versionName 0.211.4` (semver-enforced at build) |
 | Bootstrap | `2026.02.12-r1+apt.android-7` (aarch64/arm/i686/x86_64, SHA-256 verified); android-5: `2022.04.28-r6` |
 | Bun | `1.4.5` official `bun-linux-{aarch64,x64}-android.zip` (SHA-256 verified, `.incbin` into `libinvapp-bun`, extracted by `TermuxBunInstaller`) |
 | Editor | 4-space, LF, UTF-8, final newline (`.editorconfig`); 2-space for `*.yaml` |
 
 ### Dependencies (current)
 
-**`app`:** `annotation:1.9.0`, `core:1.13.1`, `drawerlayout:1.2.0`,
-`preference:1.2.1`, `viewpager:1.0.0`, `material:1.12.0`,
-`guava:33.7.2-android` (+ `listenablefuture:9999.0-empty…`), Markwon
-`4.6.2` (`core`, `ext-strikethrough`, `linkify`, `recycler`).
+**`app`:** `annotation:1.11.0`, `core:1.13.1`, `drawerlayout:1.2.0`,
+`preference:1.2.1`, `recyclerview:1.4.0`, `viewpager:1.1.0`,
+`swiperefreshlayout:1.2.0`, `material:1.12.0` (1.14+ needs minSdk 23),
+`guava:33.8.0-android` (+ `listenablefuture:9999.0-empty…`), ZXing
+`core:3.5.4`, Markwon `4.6.2` (`core`, `ext-strikethrough`, `linkify`,
+`recycler`).
 
-**`termux-shared`:** `appcompat:1.6.1`, above core/material/guava/markwon, plus
-`hiddenapibypass:6.1` (Android 10+ hidden API), `window:1.1.0`,
-`commons-io:2.5` (**do not exceed 2.5** — `java.nio.file.Path` missing on
-Android < 8; Dependabot `#2`/`#11` dismissed `tolerable_risk`, revisit at
-minSdk 26), `termux-am-library:v2.0.0`, `terminal-view`.
+**`termux-shared`:** `appcompat:1.6.1` (1.8+ needs minSdk 23), above
+core/material/guava/markwon, plus `hiddenapibypass:6.1` (6.2 needs
+compileSdk 37; Android 10+ hidden API), `window:1.1.0`, `commons-io:2.5` (**do not exceed 2.5** —
+`java.nio.file.Path` missing on Android < 8; Dependabot `#2`/`#11`
+dismissed `tolerable_risk`, revisit at minSdk 26),
+`termux-am-library:v2.0.0`, `terminal-view`.
 
 **Build classpath (root `build.gradle`, never shipped in APK):** buildscript
-`constraints` + `subprojects` `resolutionStrategy.force` pin `jose4j:0.9.6`,
-`jdom2:2.0.6.1`, `httpclient:4.5.14`, `commons-lang3:3.18.0`,
-`bcprov-jdk18on:1.85`, `bcpkix-jdk18on:1.85` (covers AGP's per-module
+`constraints` + `subprojects` `resolutionStrategy.force` pin `jose4j:0.9.7`,
+`jdom2:2.0.6.1`, `httpclient:4.5.14`, `commons-lang3:3.22.0`,
+`bcprov-jdk18on:1.87`, `bcpkix-jdk18on:1.87` (covers AGP's per-module
 `androidLintTool` copies + Robolectric's `bcprov` on the test classpath) and
-`kotlin-gradle-plugin:2.4.20` (stable; lint classpath resolves `2.2.10`
+`kotlin-gradle-plugin:2.4.21` (stable; lint classpath resolves `2.2.10`
 transitively; Dependabot `#19` dismissed `tolerable_risk` before the stable
-fix shipped).
+fix shipped). Guava force keeps `-android` modules on `33.8.0-android`
+and lint/test on `33.8.0-jre`.
 
-**`terminal-emulator`:** `annotation:1.9.0` only + JNI, `abiFilters` all four.
+**`terminal-emulator`:** `annotation:1.11.0` only + JNI, `abiFilters` all four.
 
-**Tests:** `junit:4.13.2`, `robolectric:4.10` (`app`), `androidx.test.ext:junit:1.1.5`
-(`termux-shared`); `terminal-emulator` sets `unitTests.returnDefaultValues=true`.
+**Tests:** `junit:4.13.2`, `robolectric:4.10` (`app`; 4.18+ drops SDK below 24),
+`androidx.test.ext:junit:1.1.5` (`termux-shared`); `terminal-emulator` sets
+`unitTests.returnDefaultValues=true`.
 
 Native flags: `-std=c11 -Wall -Wextra -Werror -Os -fno-stack-protector
 -Wl,--gc-sections`; `jniLibs.useLegacyPackaging true`; release uses
@@ -509,8 +514,8 @@ termux-app/
 - Format `major.minor.patch(-prerelease)(+buildmetadata)`, always with patch:
   `0.200.0`, `0.201.0-beta.1`, never `v0.1`. Tag as `v0.200.0`.
 - `app/build.gradle:validateVersionName()` fails the build on bad versions.
-  - Keep `termux-shared`/`terminal-emulator` versions (`0.211.3`) in
-    sync when cutting releases.
+  - Keep `termux-shared`/`terminal-emulator` versions (`0.211.4`) in
+ sync when cutting releases.
 
 ### Code style / quality
 
