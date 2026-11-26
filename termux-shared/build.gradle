@@ -22,10 +22,10 @@ android {
 
         implementation "androidx.window:window:1.1.0"
 
-        // Do not increment version higher than 2.5 or there
-        // will be runtime exceptions on android < 8
-        // due to missing classes like java.nio.file.Path.
-        implementation "commons-io:commons-io:2.14.0"
+        // Cap at 2.5: commons-io > 2.5 references java.nio.file.Path
+        // which is missing on Android < 8 (minSdk 21). Dependabot
+        // #2/#11 dismissed tolerable_risk; revisit only at minSdk 26.
+        implementation "commons-io:commons-io:2.5"
 
         implementation project(":terminal-view")
 

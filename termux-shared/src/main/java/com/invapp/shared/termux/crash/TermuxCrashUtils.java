@@ -408,7 +408,8 @@ public class TermuxCrashUtils implements CrashHandler.CrashHandlerClient {
     public static void setupCrashReportsNotificationChannel(final Context context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         NotificationUtils.setupNotificationChannel(context, TermuxConstants.TERMUX_CRASH_REPORTS_NOTIFICATION_CHANNEL_ID,
-            TermuxConstants.TERMUX_CRASH_REPORTS_NOTIFICATION_CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH);
+            TermuxConstants.TERMUX_CRASH_REPORTS_NOTIFICATION_CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH,
+            NotificationUtils.NOTIFICATION_MODE_VIBRATE);
     }
 
 }

@@ -7,3 +7,26 @@ updates:
   commit-message:
     # Prefix all commit messages with "Changed: "
     prefix: "Changed"
+
+- package-ecosystem: gradle
+  directory: /
+  schedule:
+    interval: weekly
+  commit-message:
+    prefix: "Changed"
+  # Group minor/patch only so Dependabot does not open noisy major PRs.
+  groups:
+    gradle-minor-patch:
+      applies-to: version-updates
+      update-types:
+      - minor
+      - patch
+  # Block majors that need an all-ABI bootstrap rebuild or break minSdk 21.
+  ignore:
+  - dependency-name: "com.android.tools.build:gradle"
+    update-types: ["version-update:semver-major"]
+  - dependency-name: "commons-io:commons-io"
+    # Cap at 2.5 for Android < 8 (java.nio.file.Path). Revisit at minSdk 26.
+    versions: [">2.5"]
+  # NDK is pinned in gradle.properties (ndkVersion), not a Maven artifact;
+  # AGP major bumps are ignored above. No separate NDK ignore entry needed.

@@ -5,7 +5,9 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
+import android.media.AudioAttributes;
 import android.os.Build;
+import android.provider.Settings;
 
 import androidx.annotation.Nullable;
 
@@ -89,7 +91,7 @@ public class NotificationUtils {
 
     /**
      * Setup the notification channel if Android version is greater than or equal to
-     * {@link Build.VERSION_CODES#O}.
+     * {@link Build.VERSION_CODES#O}. Sound / vibrate / lights stay silent (foreground-service style).
      *
      * @param context The {@link Context} for operations.
      * @param channelId The id of the channel. Must be unique per package.
@@ -98,22 +100,114 @@ public class NotificationUtils {
      *                   posted to this channel are.
      */
     public static void setupNotificationChannel(final Context context, final String channelId, final CharSequence channelName, final int importance) {
+        setupNotificationChannel(context, channelId, channelName, importance, NOTIFICATION_MODE_SILENT);
+    }
+
+    /**
+     * Setup the notification channel if Android version is greater than or equal to
+     * {@link Build.VERSION_CODES#O}, applying {@code notificationMode} as channel sound / vibrate /
+     * lights (API 26+ ignores {@link Notification.Builder#setDefaults(int)}).
+     *
+     * @param context The {@link Context} for operations.
+     * @param channelId The id of the channel. Must be unique per package.
+     * @param channelName The user visible name of the channel.
+     * @param importance The importance of the channel. This controls how interruptive notifications
+     *                   posted to this channel are.
+     * @param notificationMode The notification mode. It must be one of {@code NotificationUtils.NOTIFICATION_MODE_*}.
+     */
+    public static void setupNotificationChannel(final Context context, final String channelId,
+                                                final CharSequence channelName, final int importance,
+                                                final int notificationMode) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
 
         NotificationChannel channel = new NotificationChannel(channelId, channelName, importance);
+        applyNotificationModeToChannel(channel, notificationMode);
 
         NotificationManager notificationManager = getNotificationManager(context);
         if (notificationManager != null)
             notificationManager.createNotificationChannel(channel);
     }
 
-    public static Notification.Builder setNotificationDefaults(Notification.Builder builder, final int notificationMode) {
+    /**
+     * Apply sound / vibrate / lights from {@code notificationMode} onto a channel.
+     * No-op for {@link #NOTIFICATION_MODE_NONE} (caller should not create a channel for that mode).
+     */
+    private static void applyNotificationModeToChannel(final NotificationChannel channel,
+                                                       final int notificationMode) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
 
-        // TODO: setDefaults() is deprecated and should also implement setting notification mode via notification channel
+        boolean sound = false;
+        boolean vibrate = false;
+        boolean lights = false;
+
         switch (notificationMode) {
             case NOTIFICATION_MODE_NONE:
-                Logger.logWarn(LOG_TAG, "The NOTIFICATION_MODE_NONE passed to setNotificationDefaults(), force setting builder to null.");
-                return null; // return null since notification is not supposed to be shown
+            case NOTIFICATION_MODE_SILENT:
+                break;
+            case NOTIFICATION_MODE_SOUND:
+                sound = true;
+                break;
+            case NOTIFICATION_MODE_VIBRATE:
+                vibrate = true;
+                break;
+            case NOTIFICATION_MODE_LIGHTS:
+                lights = true;
+                break;
+            case NOTIFICATION_MODE_SOUND_AND_VIBRATE:
+                sound = true;
+                vibrate = true;
+                break;
+            case NOTIFICATION_MODE_SOUND_AND_LIGHTS:
+                sound = true;
+                lights = true;
+                break;
+            case NOTIFICATION_MODE_VIBRATE_AND_LIGHTS:
+                vibrate = true;
+                lights = true;
+                break;
+            case NOTIFICATION_MODE_ALL:
+                sound = true;
+                vibrate = true;
+                lights = true;
+                break;
+            default:
+                Logger.logError(LOG_TAG, "Invalid notificationMode: \"" + notificationMode
+                    + "\" passed to applyNotificationModeToChannel()");
+                break;
+        }
+
+        if (sound) {
+            channel.setSound(Settings.System.DEFAULT_NOTIFICATION_URI,
+                new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build());
+        } else {
+            channel.setSound(null, null);
+        }
+        channel.enableVibration(vibrate);
+        channel.enableLights(lights);
+    }
+
+    /**
+     * Apply {@code notificationMode} to a pre-O {@link Notification.Builder} via
+     * {@link Notification.Builder#setDefaults(int)}. On API 26+ the channel owns sound / vibrate /
+     * lights (see {@link #setupNotificationChannel}), so this only handles {@link #NOTIFICATION_MODE_NONE}.
+     */
+    @SuppressWarnings("deprecation")
+    public static Notification.Builder setNotificationDefaults(Notification.Builder builder, final int notificationMode) {
+
+        if (notificationMode == NOTIFICATION_MODE_NONE) {
+            Logger.logWarn(LOG_TAG, "The NOTIFICATION_MODE_NONE passed to setNotificationDefaults(), force setting builder to null.");
+            return null; // return null since notification is not supposed to be shown
+        }
+
+        // On Oreo+, NotificationChannel controls sound / vibrate / lights; setDefaults is ignored.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            return builder;
+        }
+
+        switch (notificationMode) {
             case NOTIFICATION_MODE_SILENT:
                 break;
             case NOTIFICATION_MODE_SOUND:

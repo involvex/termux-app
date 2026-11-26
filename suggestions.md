@@ -1,6 +1,6 @@
 # InVxTermux — Feature Suggestions Report
 
-> Generated: 2026-09-22 · Updated: 2026-11-24 (v0.211.0) · Scope: `com.involvex.termux_app`
+> Generated: 2026-09-22 · Updated: 2026-11-26 (v0.211.3 / Phase 27) · Scope: `com.involvex.termux_app`
 > Pillars: Terminal-first · PC ↔ phone (`~/repos`) · Preview (`127.0.0.1`) · AI CLI (`td-ai` → OpenCode `:4000`)
 > Non-goals respected: no full in-app IDE / multi-tab browser, no public tunnels by default, no per-npm wrappers.
 > Sources: `README.md`, `ROADMAP.md`, `AGENTS.md`, `docs/*.md`, `app/build.gradle`, `app/src/main/java/com/invapp/...`, `terminal-emulator`, `termux-shared`, `termux-api`.
@@ -29,28 +29,30 @@
 | FEAT-024 | **done (Phase 22, narrowed)** | Offline Markwon Help + Preview error Help → troubleshooting |
 | FEAT-026 | **done (Phase 23)** | `ivx-setup` / `ivx-fix` / doctor PATH / `ivx-backup`+`ivx-restore` |
 | FEAT-027 | **done (Phase 23)** | OpenCode TUI `--server`/`:4000` or `--standalone`; `libacl` proot-libs |
+| FEAT-001 | **done (Phase 25)** | `targetSdk` 34 + FGS `specialUse` + edge-to-edge / IME insets |
+| FEAT-015 | **done (Phase 24)** | Theme picker + font stepper |
+| FEAT-016 | **done (Phase 24)** | Visual extra-keys editor (drag / presets / import) |
+| FEAT-018 | **done (Phase 26)** | First-launch setup checklist wizard |
+| FEAT-019 | **done (Phase 27)** | `commons-io:2.5` pin restored; Gradle Dependabot grouped minor/patch |
+| FEAT-021 | **done (Phase 27, narrowed)** | Channel sound/vibrate/lights on O+; widget `onRestored` prefs migrate |
 
 ### High Priority Suggestions
 
 | ID | Category | Description | Impact | Effort |
 |----|----------|-------------|--------|--------|
-| FEAT-001 | Platform / Maintainability | Bump `targetSdkVersion` 28 → 34 + edge-to-edge (Phase 25) | High | High |
+| — | — | No open high-priority items | — | — |
 
 ### Medium Priority Suggestions
 
 | ID | Category | Description | Impact | Effort |
 |----|----------|-------------|--------|--------|
-| FEAT-015 | Terminal UX | Theme picker + font stepper (Phase 24) | Medium | Medium |
-| FEAT-016 | Keys | Visual extra-keys editor drag/presets/import (Phase 24) | Medium | Medium |
-| FEAT-018 | Onboarding | First-launch checklist wizard (Phase 26) | Medium | Medium |
-| FEAT-019 | Deps | Dependabot + AGP/JDK audit, `commons-io:2.5` cap review | Medium | Low |
+| — | — | No open medium-priority items (FEAT-019 shipped in Phase 27) | — | — |
 
 ### Low Priority Suggestions
 
 | ID | Category | Description | Impact | Effort |
 |----|----------|-------------|--------|--------|
 | FEAT-020 | Emulator | xterm conformance pass (reverse-wrap, ECH attrs, DECOM rect) | Medium | High |
-| FEAT-021 | Maintainability | Fix deprecated APIs (`NotificationUtils`, `KeyboardUtils`, back dispatcher) | Low | Low |
 | FEAT-022 | Accessibility/i18n | TalkBack labels, font-scale, RTL, string audit | Medium | Medium |
 | FEAT-025 | Tunnels (opt-in) | Explicit opt-in LAN-only helpers (Tailscale/Cloudflared guard-railed) | Low | High |
 
@@ -58,8 +60,7 @@
 
 ## Details
 
-### FEAT-001 — Target SDK 28 → 34 + edge-to-edge (Confidence: 95%) — **Phase 25**
-- **Files:** `gradle.properties`, `AndroidManifest.xml`, `TermuxService`, `RunCommandService`, `KeyboardUtils`, `FullScreenWorkAround`, activities.
+### FEAT-001 — Target SDK 28 → 34 + edge-to-edge (Confidence: 95%) — **done Phase 25**
 - **Shipped (narrowed to 34):** `targetSdk 34`, FGS `specialUse`, `POST_NOTIFICATIONS`, immutable PendingIntents, edge-to-edge + IME insets, OnBackPressedDispatcher. Legacy storage flags kept for minSdk 21; target-34 scoped-storage still relies on `termux-setup-storage` / MANAGE_EXTERNAL_STORAGE where granted.
 - **Deferred:** bump to 35, full storage-model rewrite, biometric lock.
 
@@ -140,13 +141,13 @@
 ### FEAT-014 — WebView diagnostics (Confidence: 78%) — **done Phase 22**
 - **Shipped:** Settings → Show Preview console + Desktop site; console sheet + Debug logcat when on; Clear data already present.
 
-### FEAT-015 — Theme + font controls (Confidence: 75%)
+### FEAT-015 — Theme + font controls (Confidence: 75%) — **done Phase 24**
 - **Files:** `TermuxHackerThemeInstaller.java`, `~/.termux/colors.properties`, `TerminalViewPreferencesFragment.java`.
 - **Current:** Hacker green-on-black v1/v2; green-bar `ls` clash fixed in v2 but still one theme.
 - **Suggestion:** Theme picker (Hacker / Matcha / Paper / System) writing `colors.properties` + `font.ttf` size stepper + pinch-to-zoom in terminal (scale `TerminalView` text, persist). Preview theme before apply; "Reset to Hacker v2" escape hatch.
 - **A11y:** Honor system font-scale minimum 12sp.
 
-### FEAT-016 — Visual extra-keys editor (Confidence: 72%)
+### FEAT-016 — Visual extra-keys editor (Confidence: 72%) — **done Phase 24**
 - **Files:** `ExtraKeysBarHelper.java`, `TermuxTerminalExtraKeys.java`, `~/.termux/termux.properties` (`extra-keys` writer).
 - **Current:** 2-row nav + swipe workflow page; Customize via list.
 - **Suggestion:** Drag-reorder grid + live preview + import/export JSON (`~/storage/shared/InVxTermux/keys/*.json`). Keep quoted `extra-keys` writer; validate syntax before save; preset: Minimal / Bun Dev / AI.
@@ -158,17 +159,12 @@
 - **Suggestion:** Run-once dialog with args field (`$1…`) + env (`PORT=…`) for `td-dev`/`td-ai` tasks; add `stop-ai` + `preview-5173` to optional catalog; surface missing-prereq hints (Widget APK / API APK / `pkg termux-api` / `tesseract`) inline, not just toast.
 - **Security:** Quote args via existing `shellSingleQuote`; block `;|&$()` injection in args field.
 
-### FEAT-018 — First-launch wizard (Confidence: 81%)
-- **Files:** `TermuxInstaller.java`, `TermuxApplication.java`, `docs/install.md`, `docs/workflow.md`.
-- **Current:** Direct boot into `~/repos`; helpers discovered via drawer.
-- **Suggestion:** 4-step checklist: (1) Storage (`termux-setup-storage` explainer, noexec warning), (2) Init `~/repos` + sample `td-scaffold demo react`, (3) Preview tour (Scan → 5173 → Copy LAN guard), (4) AI opt-in (`opencode-setup` size warning, glibc ~200MB). Skip-able, re-runnable from Help. Reduces "Permission denied bins" + "Preview blank" issues.
-- **Effort:** Medium — mostly intents + prefs.
+### FEAT-018 — First-launch wizard (Confidence: 81%) — **done Phase 26**
+- **Shipped:** Skippable 4-step checklist (storage / `~/repos` / Preview / AI); re-run from Help or Settings → Setup checklist.
 
-### FEAT-019 — Dependency + NDK hygiene (Confidence: 88%)
-- **Files:** `app/build.gradle:25-37`, `termux-shared/build.gradle`, `gradle.properties`, `.github/workflows/*`, `dependabot.yml`.
-- **Current:** Pinned `material:1.12.0`, `guava:24.1-jre`, `markwon:4.6.2`, `commons-io:2.5` (capped — `Path` missing < API 26), `desugar:1.1.5`.
-- **Suggestion:** Enable Dependabot grouped minors; quarterly `AGP 9.4 → latest`, `compileSdk 36` check, NDK `29.x` bump with all-ABI bootstrap rebuild test; document why `commons-io` stays ≤2.5; add `dependency-submission` + OSV scan to CI gate.
-- **Security:** Audit before any major bump (per `AGENTS.md §4`).
+### FEAT-019 — Dependency + NDK hygiene (Confidence: 88%) — **done Phase 27 (narrowed)**
+- **Shipped:** Restored `commons-io:2.5` pin (2.14 had drifted past the minSdk-21 `Path` cap); Gradle Dependabot with grouped minor/patch, AGP major ignored, `commons-io` >2.5 ignored. `dependency-submission.yml` already present.
+- **Deferred (quarterly):** AGP / compileSdk / NDK bumps that need an all-ABI bootstrap rebuild.
 
 ### FEAT-020 — Emulator conformance (Confidence: 70%)
 - **Files:** `terminal-emulator/.../TerminalEmulator.java:814,849,967,1826,2287,3426`, `TerminalRow.java:218`, `src/test/...`.
@@ -176,10 +172,9 @@
 - **Suggestion:** Parameterized tests vs https://invisible-island.net/xterm/ctlseqs/ctlseqs.html vectors; fix one per PR (start with ECH + DECOM, lowest risk); add fuzz for CSI parser. Keep `unitTests.returnDefaultValues` + hermetic fast tests.
 - **Effort high, risk low** if incremental.
 
-### FEAT-021 — Deprecated API sweep (Confidence: 90%)
-- **Files:** `NotificationUtils.java:112` (`setDefaults`), `KeyboardUtils.java:108`, `LocalhostPreviewActivity:296` (`onBackPressed`), `MainWidget.java:274` (TODO).
-- **Suggestion:** Notification channels per type (Preview/AI/Widget) with importance picker; `WindowInsets` migration (see FEAT-001); `OnBackPressedDispatcher`; document `MainWidget` TODO or file issue. `./gradlew lint` must stay clean.
-- **Effort:** Low.
+### FEAT-021 — Deprecated API sweep (Confidence: 90%) — **done Phase 27 (narrowed)**
+- **Shipped:** `NotificationUtils` maps sound/vibrate/lights onto the channel on API 26+ and keeps `setDefaults` only below O; crash/plugin channels pass `NOTIFICATION_MODE_VIBRATE`. Terminal Widget `onRestored` migrates SharedPreferences keys old→new id.
+- **Already done earlier:** `OnBackPressedDispatcher` (Phase 25). FGS / Preview channels stay silent via the 4-arg `setupNotificationChannel` overload.
 
 ### FEAT-022 — Accessibility + i18n (Confidence: 74%)
 - **Files:** `res/values/strings.xml`, drawer layouts, `TerminalToolbarViewPager.java`, `KeyboardShortcut.java`.
@@ -209,22 +204,26 @@
 
 ## Suggested Next Steps (for maintainers)
 
+> Phase 26 shipped FEAT-018 (first-launch checklist) in PR #30 / v0.211.0+.
+> Phase 25–24 shipped FEAT-001 / FEAT-015 / FEAT-016.
 > Phase 23 done: `ivx-setup` / `ivx-fix` / doctor PATH / `ivx-backup` + OpenCode TUI
 > `--server`/`--standalone` + `libacl` proot-libs staging (PR #26).
-> Phase 22 shipped FEAT-014 / FEAT-023 / FEAT-024 (narrowed) as v0.210.0.
-> Phase 21 shipped FEAT-009 → v0.209.0.
-> Phase 20 shipped FEAT-008 (narrowed) + FEAT-010 (narrowed) → v0.208.0.
-> Phase 19 shipped FEAT-006 / FEAT-012 / FEAT-017 + AI script asset unification.
 
-### Shipped in `0.211.0`
+### Shipped in `0.211.x`
 
 - Theme picker + font stepper (FEAT-015); visual extra-keys editor (FEAT-016)
 - `targetSdk 34` + edge-to-edge / FGS types / `POST_NOTIFICATIONS` (FEAT-001)
+- First-launch setup checklist (FEAT-018)
 - Phase 23 ivx CLI + OpenCode TUI + libacl (already on master before bump)
+- Patches: PendingIntent `FLAG_IMMUTABLE`, IME insets, Termux:API toast NPE, plugin APK docs
 
-1. Device matrix for `0.211.0` / targetSdk 34 (you): sessions, Preview, AI, Widget, keyboard.
-2. Phase 26: FEAT-018 first-launch checklist (in progress).
-3. Optional later: targetSdk 35, FEAT-019 deps audit; file FEAT-020 emulator issues.
+### Phase 27 (this batch)
+
+- FEAT-019: `commons-io:2.5` pin + Gradle Dependabot grouped minor/patch
+- FEAT-021: channel notification defaults on O+; widget `onRestored` prefs migrate
+
+1. Device smoke for notification channels (crash / plugin vibrate; FGS silent) and widget backup restore.
+2. Optional later: targetSdk 35; FEAT-020 emulator conformance (one fix per PR); FEAT-022 a11y/i18n.
 
 ## Appendix — Where to Implement
 

@@ -113,6 +113,19 @@ public class MainWidgetPreferencesManager {
         editor.apply();
     }
 
+    /**
+     * Copy prefs from {@code oldWidgetId} to {@code newWidgetId} and remove the old keys.
+     * Used when the system restores a widget backup and assigns new App Widget ids.
+     */
+    public static void migrate(@NonNull Context context, int oldWidgetId, int newWidgetId) {
+        if (oldWidgetId == newWidgetId) {
+            return;
+        }
+        MainWidgetPreferences preferences = load(context, oldWidgetId);
+        save(context, newWidgetId, preferences);
+        delete(context, oldWidgetId);
+    }
+
     @NonNull
     private static String generateKey(int widgetId, @NonNull String valueName) {
         return widgetId + "_" + valueName;
