@@ -24,22 +24,22 @@ android {
 
     dependencies {
         implementation "androidx.activity:activity:1.9.3"
-        implementation "androidx.annotation:annotation:1.9.0"
+        implementation "androidx.annotation:annotation:1.11.0"
         implementation "androidx.core:core:1.13.1"
         implementation "androidx.drawerlayout:drawerlayout:1.2.0"
         implementation "androidx.preference:preference:1.2.1"
-        implementation "androidx.recyclerview:recyclerview:1.3.2"
-        implementation "androidx.viewpager:viewpager:1.0.0"
-        implementation "com.google.android.material:material:1.12.0"
-        implementation "com.google.guava:guava:33.7.2-android"
-        implementation "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0"
+        implementation "androidx.recyclerview:recyclerview:1.4.0"
+        implementation "androidx.viewpager:viewpager:1.1.0"
+        implementation "com.google.android.material:material:1.14.0"
+        implementation "com.google.guava:guava:33.8.0-android"
+        implementation "androidx.swiperefreshlayout:swiperefreshlayout:1.2.0"
         implementation "io.noties.markwon:core:$markwonVersion"
         implementation "io.noties.markwon:ext-strikethrough:$markwonVersion"
         implementation "io.noties.markwon:linkify:$markwonVersion"
         implementation "io.noties.markwon:recycler:$markwonVersion"
         implementation 'com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava'
         // QR encoder only (Preview LAN share) — no camera / no zxing-android-embedded
-        implementation "com.google.zxing:core:3.5.3"
+        implementation "com.google.zxing:core:3.5.4"
 
         implementation project(":terminal-view")
         implementation project(":termux-shared")
@@ -185,7 +185,7 @@ tasks.configureEach { task ->
 
 dependencies {
     testImplementation "junit:junit:4.13.2"
-    testImplementation "org.robolectric:robolectric:4.10"
+    testImplementation "org.robolectric:robolectric:4.18.1"
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.5"
 }
 
